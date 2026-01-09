@@ -854,14 +854,111 @@
 
         // Cell7: reverse query by label pattern (6 chars, _ wildcard)
         function renderCell7() {
-            const body = sectionShell("cell7", "Cell7 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Ví dụ: 1_3___ tìm kỳ có cột 1 ở V1, cột 3 ở V3.");
+            const body = sectionShell("cell7", "Cell7 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Có thể kéo thả giữa các vị trí.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; return inp; });
+
+            // Create draggable containers for inputs
+            const containers = inputs.map((inp, idx) => {
+                const container = document.createElement("div");
+                container.className = "drag-input-container";
+                container.style.cssText = "position:relative;display:inline-block;";
+                container.draggable = false;
+
+                const dragHandle = document.createElement("div");
+                dragHandle.className = "drag-handle";
+                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+
+                inp.style.position = "relative";
+                inp.style.zIndex = "2";
+
+                container.appendChild(inp);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
+
+                const updateDraggable = () => {
+                    const hasValue = inp.value.trim() !== "" && inp.value.trim() !== "_";
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
+                    container.style.opacity = hasValue ? "1" : "0.7";
+                    if (hasValue) {
+                        container.style.border = "2px solid var(--accent)";
+                        container.style.borderRadius = "10px";
+                        container.style.padding = "2px";
+                    } else {
+                        container.style.border = "none";
+                        container.style.padding = "0";
+                    }
+                };
+
+                inp.addEventListener("input", updateDraggable);
+                updateDraggable();
+
+                return container;
+            });
+
+            // Drag and drop logic
+            let draggedIndex = null;
+
+            containers.forEach((container, idx) => {
+                container.addEventListener("dragstart", (e) => {
+                    draggedIndex = idx;
+                    container.style.opacity = "0.4";
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", inputs[idx].value);
+                });
+
+                container.addEventListener("dragend", (e) => {
+                    container.style.opacity = "";
+                    containers.forEach(c => {
+                        c.style.backgroundColor = "";
+                        c.style.transform = "";
+                    });
+                });
+
+                container.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                        container.style.transform = "scale(1.05)";
+                    }
+                });
+
+                container.addEventListener("dragleave", (e) => {
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                });
+
+                container.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        const tempValue = inputs[idx].value;
+                        inputs[idx].value = inputs[draggedIndex].value;
+                        inputs[draggedIndex].value = tempValue;
+
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                        run();
+                    }
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                    draggedIndex = null;
+                });
+            });
+
             const wrapInputs = document.createElement("div"); wrapInputs.className = "controls";
             const labelText = document.createElement("span"); labelText.textContent = "Label:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             wrapInputs.appendChild(labelText);
-            inputs.forEach(i => wrapInputs.appendChild(i)); body.appendChild(wrapInputs);
+            containers.forEach(c => wrapInputs.appendChild(c)); body.appendChild(wrapInputs);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; wrapInputs.appendChild(clearBtn);
+
+            const hint = document.createElement("div");
+            hint.className = "muted";
+            hint.style.cssText = "margin-top:8px;font-size:12px;";
+            hint.innerHTML = "💡 Mẹo: Kéo thả giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
+            wrapInputs.appendChild(hint);
 
             function run() {
                 const pattern = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : "_"; }).join("");
@@ -1010,15 +1107,112 @@
 
         // Cell9: draws containing user set
         function renderCell9() {
-            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số", "Nhập tối đa 6 số (1-45) để tìm các kỳ có chứa những số này. Chọn 'Liền kề' nếu muốn các số phải nằm liên tiếp nhau.");
+            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số", "Nhập tối đa 6 số (1-45) để tìm các kỳ có chứa những số này. Có thể kéo thả số giữa các vị trí.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+
+            // Create draggable containers for inputs
+            const containers = inputs.map((inp, idx) => {
+                const container = document.createElement("div");
+                container.className = "drag-input-container";
+                container.style.cssText = "position:relative;display:inline-block;";
+                container.draggable = false;
+
+                const dragHandle = document.createElement("div");
+                dragHandle.className = "drag-handle";
+                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+
+                inp.style.position = "relative";
+                inp.style.zIndex = "2";
+
+                container.appendChild(inp);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
+
+                const updateDraggable = () => {
+                    const hasValue = inp.value.trim() !== "";
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
+                    container.style.opacity = hasValue ? "1" : "0.7";
+                    if (hasValue) {
+                        container.style.border = "2px solid var(--accent)";
+                        container.style.borderRadius = "10px";
+                        container.style.padding = "2px";
+                    } else {
+                        container.style.border = "none";
+                        container.style.padding = "0";
+                    }
+                };
+
+                inp.addEventListener("input", updateDraggable);
+                updateDraggable();
+
+                return container;
+            });
+
+            // Drag and drop logic
+            let draggedIndex = null;
+
+            containers.forEach((container, idx) => {
+                container.addEventListener("dragstart", (e) => {
+                    draggedIndex = idx;
+                    container.style.opacity = "0.4";
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", inputs[idx].value);
+                });
+
+                container.addEventListener("dragend", (e) => {
+                    container.style.opacity = "";
+                    containers.forEach(c => {
+                        c.style.backgroundColor = "";
+                        c.style.transform = "";
+                    });
+                });
+
+                container.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                        container.style.transform = "scale(1.05)";
+                    }
+                });
+
+                container.addEventListener("dragleave", (e) => {
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                });
+
+                container.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        const tempValue = inputs[idx].value;
+                        inputs[idx].value = inputs[draggedIndex].value;
+                        inputs[draggedIndex].value = tempValue;
+
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                        run();
+                    }
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                    draggedIndex = null;
+                });
+            });
+
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
             const controls = document.createElement("div"); controls.className = "controls";
             const labelText = document.createElement("span"); labelText.textContent = "Bộ số:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             controls.appendChild(labelText);
-            inputs.forEach(i => controls.appendChild(i)); controls.append(consecLabel); body.appendChild(controls);
+            containers.forEach(c => controls.appendChild(c)); controls.append(consecLabel); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            const hint = document.createElement("div");
+            hint.className = "muted";
+            hint.style.cssText = "margin-top:8px;font-size:12px;";
+            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
+            controls.appendChild(hint);
 
             function run() {
                 const vals = inputs.map(i => parseInt(i.value, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 45);
@@ -1066,11 +1260,108 @@
 
         // Cell10: analyze other positions given value at order
         function renderCell10() {
-            const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 số vào 1 ô để xem phân bố cột ở vị trí còn lại.");
+            const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 số vào 1 ô để xem phân bố cột ở vị trí còn lại. Có thể kéo thả số giữa các vị trí.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
-            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
+
+            // Create draggable containers for inputs
+            const containers = inputs.map((inp, idx) => {
+                const container = document.createElement("div");
+                container.className = "drag-input-container";
+                container.style.cssText = "position:relative;display:inline-block;";
+                container.draggable = false;
+
+                const dragHandle = document.createElement("div");
+                dragHandle.className = "drag-handle";
+                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+
+                inp.style.position = "relative";
+                inp.style.zIndex = "2";
+
+                container.appendChild(inp);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
+
+                const updateDraggable = () => {
+                    const hasValue = inp.value.trim() !== "";
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
+                    container.style.opacity = hasValue ? "1" : "0.7";
+                    if (hasValue) {
+                        container.style.border = "2px solid var(--accent)";
+                        container.style.borderRadius = "10px";
+                        container.style.padding = "2px";
+                    } else {
+                        container.style.border = "none";
+                        container.style.padding = "0";
+                    }
+                };
+
+                inp.addEventListener("input", updateDraggable);
+                updateDraggable();
+
+                return container;
+            });
+
+            // Drag and drop logic
+            let draggedIndex = null;
+
+            containers.forEach((container, idx) => {
+                container.addEventListener("dragstart", (e) => {
+                    draggedIndex = idx;
+                    container.style.opacity = "0.4";
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", inputs[idx].value);
+                });
+
+                container.addEventListener("dragend", (e) => {
+                    container.style.opacity = "";
+                    containers.forEach(c => {
+                        c.style.backgroundColor = "";
+                        c.style.transform = "";
+                    });
+                });
+
+                container.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                        container.style.transform = "scale(1.05)";
+                    }
+                });
+
+                container.addEventListener("dragleave", (e) => {
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                });
+
+                container.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        const tempValue = inputs[idx].value;
+                        inputs[idx].value = inputs[draggedIndex].value;
+                        inputs[draggedIndex].value = tempValue;
+
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                        run(idx);
+                    }
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                    draggedIndex = null;
+                });
+            });
+
+            const controls = document.createElement("div"); controls.className = "controls"; containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            const hint = document.createElement("div");
+            hint.className = "muted";
+            hint.style.cssText = "margin-top:8px;font-size:12px;";
+            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
+            controls.appendChild(hint);
 
             function run(changeIdx) {
                 const filled = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).filter(x => !isNaN(x.val));
@@ -1116,14 +1407,128 @@
 
         // Cell11: pattern search 6 positions with commas, _ wildcard
         function renderCell11() {
-            const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern số", "Nhập số (1-45) vào từng vị trí để tìm kỳ khớp. Bỏ trống vị trí nào thì vị trí đó chấp nhận số bất kỳ. Ví dụ: điền 4 vào V2 và 37 vào V4 → tìm kỳ có số 4 ở V2 và số 37 ở V4.");
+            const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern số", "Nhập số (1-45) vào từng vị trí để tìm kỳ khớp. Có thể kéo thả số giữa các vị trí bằng chuột. Bỏ trống vị trí nào thì vị trí đó chấp nhận số bất kỳ.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+
+            // Create draggable containers for inputs
+            const containers = inputs.map((inp, idx) => {
+                const container = document.createElement("div");
+                container.className = "drag-input-container";
+                container.style.cssText = "position:relative;display:inline-block;";
+                container.draggable = false; // Container không drag, chỉ nội dung bên trong
+
+                // Wrap input in a draggable area
+                const dragHandle = document.createElement("div");
+                dragHandle.className = "drag-handle";
+                dragHandle.style.cssText = `
+                    position:absolute;
+                    top:0;
+                    left:0;
+                    right:0;
+                    bottom:0;
+                    cursor:move;
+                    z-index:1;
+                    pointer-events:none;
+                `;
+
+                inp.style.position = "relative";
+                inp.style.zIndex = "2";
+
+                container.appendChild(inp);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
+
+                // Enable drag only when there's a value
+                const updateDraggable = () => {
+                    const hasValue = inp.value.trim() !== "";
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
+                    container.style.opacity = hasValue ? "1" : "0.7";
+                    if (hasValue) {
+                        container.style.border = "2px solid var(--accent)";
+                        container.style.borderRadius = "10px";
+                        container.style.padding = "2px";
+                    } else {
+                        container.style.border = "none";
+                        container.style.padding = "0";
+                    }
+                };
+
+                inp.addEventListener("input", updateDraggable);
+                updateDraggable();
+
+                return container;
+            });
+
+            // Drag and drop logic
+            let draggedIndex = null;
+
+            containers.forEach((container, idx) => {
+                container.addEventListener("dragstart", (e) => {
+                    draggedIndex = idx;
+                    container.style.opacity = "0.4";
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", inputs[idx].value);
+                });
+
+                container.addEventListener("dragend", (e) => {
+                    container.style.opacity = "";
+                    containers.forEach(c => {
+                        c.style.backgroundColor = "";
+                        c.style.transform = "";
+                    });
+                });
+
+                container.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                        container.style.transform = "scale(1.05)";
+                    }
+                });
+
+                container.addEventListener("dragleave", (e) => {
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                });
+
+                container.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    if (draggedIndex !== null && draggedIndex !== idx) {
+                        // Swap values
+                        const tempValue = inputs[idx].value;
+                        inputs[idx].value = inputs[draggedIndex].value;
+                        inputs[draggedIndex].value = tempValue;
+
+                        // Update draggable state for both
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                        // Trigger search
+                        run();
+                    }
+                    container.style.backgroundColor = "";
+                    container.style.transform = "";
+                    draggedIndex = null;
+                });
+            });
+
             const controls = document.createElement("div"); controls.className = "controls";
             const labelText = document.createElement("span"); labelText.textContent = "Pattern:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             controls.appendChild(labelText);
-            inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
+            containers.forEach(c => controls.appendChild(c));
+            body.appendChild(controls);
+
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            // Add hint text
+            const hint = document.createElement("div");
+            hint.className = "muted";
+            hint.style.cssText = "margin-top:8px;font-size:12px;";
+            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại pattern. Dùng phím ← → để di chuyển giữa các ô.";
+            controls.appendChild(hint);
 
             function run(changeIdx) {
                 const pattern = inputs.map(inp => {
