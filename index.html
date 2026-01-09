@@ -854,9 +854,12 @@
 
         // Cell7: reverse query by label pattern (6 chars, _ wildcard)
         function renderCell7() {
-            const body = sectionShell("cell7", "Cell7 · Tìm kiếm label 6 ký tự", "Điền 6 ký tự (0-9 hoặc _) để lọc.");
+            const body = sectionShell("cell7", "Cell7 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Ví dụ: 1_3___ tìm kỳ có cột 1 ở V1, cột 3 ở V3.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; return inp; });
-            const wrapInputs = document.createElement("div"); wrapInputs.className = "controls"; inputs.forEach(i => wrapInputs.appendChild(i)); body.appendChild(wrapInputs);
+            const wrapInputs = document.createElement("div"); wrapInputs.className = "controls";
+            const labelText = document.createElement("span"); labelText.textContent = "Label:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
+            wrapInputs.appendChild(labelText);
+            inputs.forEach(i => wrapInputs.appendChild(i)); body.appendChild(wrapInputs);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; wrapInputs.appendChild(clearBtn);
 
@@ -875,7 +878,10 @@
                 for (let i = 0; i < records.length; i += chunk) {
                     html += "<div class='card'><table><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th></tr></thead><tbody>";
                     records.slice(i, i + chunk).forEach(r => {
-                        const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        const nums = r.nums.map((v, idx) => pattern[idx] !== "_"
+                            ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
+                            : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`
+                        ).join(" ");
                         const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
                         html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
@@ -1004,10 +1010,13 @@
 
         // Cell9: draws containing user set
         function renderCell9() {
-            const body = sectionShell("cell9", "Cell9 · Các kỳ chứa bộ số", "Điền tùy ý tối đa 6 số (1-45), tùy chọn liền kề.");
+            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số", "Nhập tối đa 6 số (1-45) để tìm các kỳ có chứa những số này. Chọn 'Liền kề' nếu muốn các số phải nằm liên tiếp nhau.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
-            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); controls.append(consecLabel); body.appendChild(controls);
+            const controls = document.createElement("div"); controls.className = "controls";
+            const labelText = document.createElement("span"); labelText.textContent = "Bộ số:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
+            controls.appendChild(labelText);
+            inputs.forEach(i => controls.appendChild(i)); controls.append(consecLabel); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
 
@@ -1107,9 +1116,12 @@
 
         // Cell11: pattern search 6 positions with commas, _ wildcard
         function renderCell11() {
-            const body = sectionShell("cell11", "Cell11 · Pattern số (1-45 hoặc _)", "Điền tối đa 6 ô; tự sinh pattern dạng _,4,_,37,_,_.");
+            const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern số", "Nhập số (1-45) vào từng vị trí để tìm kỳ khớp. Bỏ trống vị trí nào thì vị trí đó chấp nhận số bất kỳ. Ví dụ: điền 4 vào V2 và 37 vào V4 → tìm kỳ có số 4 ở V2 và số 37 ở V4.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
-            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
+            const controls = document.createElement("div"); controls.className = "controls";
+            const labelText = document.createElement("span"); labelText.textContent = "Pattern:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
+            controls.appendChild(labelText);
+            inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
 
