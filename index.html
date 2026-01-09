@@ -319,6 +319,11 @@
             color: #0b1220;
         }
 
+        [data-theme="dark"] #cell4 tbody tr:nth-child(n+4) td[style*="background:linear-gradient"] {
+            background: linear-gradient(135deg, rgba(56, 239, 125, 0.15) 0%, rgba(56, 239, 125, 0.25) 100%) !important;
+            color: #fff !important;
+        }
+
         .pill {
             display: inline-block;
             padding: 3px 7px;
@@ -642,7 +647,7 @@
                     html += `<tr class="${rankClass}" style="background:${bg};">` +
                         `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
                         row.pcts.map(p => `<td>${fmtPctCustom(p, decimals)}</td>`).join("") +
-                        `<td><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
+                        `<td style="background:linear-gradient(135deg, rgba(56, 239, 125, 0.2) 0%, rgba(56, 239, 125, 0.35) 100%);color:#0f172a;font-weight:700;"><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
