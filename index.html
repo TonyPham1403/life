@@ -714,6 +714,40 @@
                     html += `<tr style="background:${bg};"><td>#${rank + 1}</td>${cells.join("")}</tr>`;
                 }
                 html += "</tbody></table></div>";
+
+                // Thêm bảng mới: Xếp hạng cột theo vị trí (6x6)
+                html += "<h3 style='margin-top: 24px; margin-bottom: 12px;'>Xếp hạng cột theo vị trí</h3>";
+                html += "<div><table><thead><tr><th>Rank</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th></tr></thead><tbody>";
+
+                // Tính toán: với mỗi vị trí, xếp hạng các cột (1-6) theo số lần xuất hiện
+                for (let rank = 1; rank <= 6; rank++) {
+                    const cells = [];
+                    for (let pos = 0; pos < 6; pos++) {
+                        // Đếm mỗi cột (1-6) xuất hiện ở vị trí này
+                        const colCounts = {};
+                        for (let col = 1; col <= 6; col++) colCounts[col] = 0;
+
+                        rows.forEach(r => {
+                            const v = r.nums[pos];
+                            const col = getCol(v);
+                            colCounts[col]++;
+                        });
+
+                        // Sắp xếp các cột theo số lần xuất hiện (giảm dần)
+                        const sortedCols = Object.entries(colCounts)
+                            .map(([col, count]) => ({ col: parseInt(col), count }))
+                            .sort((a, b) => b.count - a.count);
+
+                        // Lấy cột ở rank này (rank - 1 vì rank bắt đầu từ 1)
+                        const { col: topCol, count: topCount } = sortedCols[rank - 1];
+                        const pct = rows.length ? (topCount / rows.length) : 0;
+                        cells.push(`<td><div><strong>C${topCol}</strong></div><div class='muted'>${fmtPctCustom(pct, parseInt(decimalSel.value, 10))}</div></td>`);
+                    }
+                    const bg = rank <= 3 ? (rank === 1 ? "#134e4a" : rank === 2 ? "#42340a" : "#0f1b2d") : (rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)");
+                    html += `<tr style="background:${bg};"><td>#${rank}</td>${cells.join("")}</tr>`;
+                }
+                html += "</tbody></table></div>";
+
                 wrap.innerHTML = html;
             }
             topSel.onchange = hiSel.onchange = decimalSel.onchange = draw;
