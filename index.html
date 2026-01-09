@@ -30,8 +30,8 @@
             --card: #fafafa;
             --text: #333;
             --text-strong: #000;
-            --highlight-bg: #e6f4ea;
-            --highlight-text: #0b8a60;
+            --highlight-bg: #4CAF50;
+            --highlight-text: #fff;
         }
 
         * {
@@ -335,6 +335,24 @@
             white-space: nowrap;
             margin: 1px;
             font-family: monospace;
+        }
+
+        .label-chip {
+            display: inline-block;
+            min-width: 18px;
+            padding: 2px 5px;
+            margin: 1px 2px 1px 0;
+            border-radius: 4px;
+            text-align: center;
+            font-family: monospace;
+            font-weight: 700;
+            background: transparent;
+            color: inherit;
+        }
+
+        .label-chip.highlight {
+            background: var(--highlight-bg);
+            color: var(--highlight-text);
         }
 
         [data-theme="dark"] .pill {
@@ -850,13 +868,14 @@
                 let html = `<div class='muted'>${arr.length} nhóm (>=2 kỳ)</div><div class='grid-centered'>`;
                 arr.forEach(([key, list]) => {
                     html += `<div class='card'><div class='flex' style='justify-content:space-between'><strong>{${key.replace(/-/g, ',')}}</strong><span class='badge'>${list.length} kỳ</span></div>`;
-                    html += "<div><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    html += "<div><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
                     list.slice(0, 20).forEach(r => {
                         const setValues = new Set(key.split("-").map(Number));
-                        const nums = consec.checked ? highlightBlock(r.nums, setValues, x) : r.nums.map(v => setValues.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                        const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
+                        const labelHtml = renderHighlightedLabel(r.label, positions);
+                        html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
-                    if (list.length > 20) html += `<tr><td colspan='2' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
+                    if (list.length > 20) html += `<tr><td colspan='3' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
                     html += "</tbody></table></div></div>";
                 });
                 html += "</div>";
@@ -880,14 +899,34 @@
             for (let i = 0; i < Math.min(pa.length, pb.length); i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; }
             return pa.length - pb.length;
         }
-        function highlightBlock(nums, setValues, blockSize) {
-            for (let i = 0; i <= nums.length - blockSize; i++) {
-                const block = nums.slice(i, i + blockSize);
-                if (block.length === blockSize && block.every(v => setValues.has(v)) && new Set(block).size === setValues.size) {
-                    return nums.map((v, idx) => idx >= i && idx < i + blockSize ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+        function findHighlightPositions(nums, setValues, blockSize, requireConsecutive) {
+            if (requireConsecutive) {
+                for (let i = 0; i <= nums.length - blockSize; i++) {
+                    const block = nums.slice(i, i + blockSize);
+                    if (block.length === blockSize && block.every(v => setValues.has(v)) && new Set(block).size === setValues.size) {
+                        return Array.from({ length: blockSize }, (_, k) => i + k);
+                    }
                 }
             }
-            return nums.map(v => setValues.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+            const positions = [];
+            nums.forEach((v, idx) => { if (setValues.has(v)) positions.push(idx); });
+            return positions;
+        }
+        function renderHighlightedNums(nums, setValues, blockSize, requireConsecutive) {
+            const positions = findHighlightPositions(nums, setValues, blockSize, requireConsecutive);
+            const posSet = new Set(positions);
+            const html = nums.map((v, idx) => posSet.has(idx)
+                ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
+                : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`
+            ).join(" ");
+            return { html, positions };
+        }
+        function renderHighlightedLabel(labelStr, highlightPositions) {
+            const posSet = new Set(highlightPositions);
+            return labelStr.split("").map((ch, idx) => posSet.has(idx)
+                ? `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`
+                : `<span>${ch}</span>`
+            ).join(" ");
         }
 
         // Cell9: draws containing user set
@@ -912,10 +951,11 @@
                 let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < records.length; i += chunk) {
-                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
                     records.slice(i, i + chunk).forEach(r => {
-                        const nums = consec.checked ? highlightBlock(r.nums, setVals, setVals.size) : r.nums.map(v => setVals.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                        const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
+                        const labelHtml = renderHighlightedLabel(r.label, positions);
+                        html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -1015,10 +1055,12 @@
                 let html = `<div class='muted'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < results.length; i += chunk) {
-                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
                     results.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                        const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
+                        const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
+                        html += `<tr><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
