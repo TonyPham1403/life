@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Life Notebook → Web</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --muted: #94a3b8;
+            --accent: #38ef7d;
+            --accent-2: #667eea;
+            --border: #1e293b;
+            --card: #0b1220;
+            --text: #e2e8f0;
+            --text-strong: #fff;
+            --highlight-bg: #4CAF50;
+            --highlight-text: #0b1220;
+        }
+
+        [data-theme="light"] {
+            --bg: #f8f9ff;
+            --panel: #ffffff;
+            --muted: #666;
+            --accent: #38ef7d;
+            --accent-2: #11998e;
+            --border: #eee;
+            --card: #fafafa;
+            --text: #333;
+            --text-strong: #000;
+            --highlight-bg: #e6f4ea;
+            --highlight-text: #0b8a60;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Inter", "Segoe UI", Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        [data-theme="dark"] body {
+            background: radial-gradient(circle at 20% 20%, rgba(56, 239, 125, 0.08), transparent 35%),
+                radial-gradient(circle at 80% 10%, rgba(102, 126, 234, 0.12), transparent 40%),
+                var(--bg);
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid var(--border);
+        }
+
+        [data-theme="light"] header {
+            background: rgba(248, 250, 252, 0.9);
+        }
+
+        .theme-toggle {
+            margin-left: auto;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 18px;
+            transition: transform 0.2s;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+
+        .brand {
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: var(--text-strong);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand span {
+            padding: 4px 8px;
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--highlight-text);
+            font-weight: 900;
+        }
+
+        nav {
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        .nav-btn {
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .nav-btn.active {
+            border-color: var(--accent);
+            color: var(--highlight-text);
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
+            font-weight: 800;
+        }
+
+        main {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        section h2 {
+            margin: 0 0 12px;
+            color: var(--text-strong);
+            letter-spacing: 0.3px;
+        }
+
+        section p.lead {
+            margin: 6px 0 16px;
+            color: var(--muted);
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="dark"] .card {
+            background: var(--card);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        select,
+        input,
+        button {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        select:focus,
+        input:focus {
+            outline: 1px solid var(--accent);
+        }
+
+        /* Hide number input spinner arrows */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100());
+            border: none;
+            color: var(--highlight-text);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button.ghost {
+            background: var(--card);
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: white;
+        }
+
+        [data-theme="dark"] table {
+            background: var(--panel);
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            z-index: 1;
+        }
+
+        th {
+            padding: 8px 6px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            white-space: nowrap;
+        }
+
+        th:last-child {
+            border-right: none;
+        }
+
+        td {
+            padding: 5px 6px;
+            text-align: center;
+            border-right: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+        }
+
+        [data-theme="dark"] td {
+            border-color: var(--border);
+        }
+
+        td:last-child {
+            border-right: none;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f8f9ff;
+        }
+
+        tbody tr:nth-child(odd) {
+            background: white;
+        }
+
+        [data-theme="dark"] tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        [data-theme="dark"] tbody tr:nth-child(odd) {
+            background: transparent;
+        }
+
+        tbody tr:hover {
+            background: #ffe6b3 !important;
+        }
+
+        [data-theme="dark"] tbody tr:hover {
+            background: rgba(255, 230, 179, 0.2) !important;
+        }
+
+        /* Top rank colors from notebook */
+        tbody tr:first-child {
+            background: #c8e6c9 !important;
+        }
+
+        tbody tr:nth-child(2) {
+            background: #fff9c4 !important;
+        }
+
+        tbody tr:nth-child(3) {
+            background: #b3e5fc !important;
+        }
+
+        /* Keep text legible on light rank backgrounds, especially in dark theme */
+        tbody tr:nth-child(-n+3) td {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        [data-theme="dark"] tbody tr:nth-child(-n+3) td {
+            color: #0b1220;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            background: #e6f4ea;
+            color: #0b8a60;
+            white-space: nowrap;
+            margin: 1px;
+            font-family: monospace;
+        }
+
+        [data-theme="dark"] .pill {
+            background: rgba(56, 239, 125, 0.15);
+            color: #38ef7d;
+        }
+
+        /* Prevent pill containers from wrapping */
+        td:has(.pill) {
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .pill {
+                font-size: 10px;
+                padding: 2px 5px;
+                margin: 1px;
+            }
+
+            th,
+            td {
+                padding: 4px 6px;
+                font-size: 11px;
+            }
+        }
+
+        .grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .grid>* {
+            flex: 1 1 350px;
+            min-width: 0;
+        }
+
+        .grid-centered {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .grid-centered>* {
+            flex: 0 1 calc(33.333% - 10px);
+            max-width: 600px;
+            min-width: 280px;
+        }
+
+        @media (max-width: 768px) {
+            .grid>* {
+                flex: 1 1 100%;
+            }
+
+            .grid-centered>* {
+                flex: 1 1 100%;
+                max-width: none;
+            }
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 8px;
+            background: var(--accent-2);
+            color: white;
+            font-weight: 700;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        main {
+            padding: 16px 12px 32px;
+        }
+
+        section {
+            margin: 20px 0;
+            padding: 16px;
+        }
+
+        @media (min-width: 768px) {
+            main {
+                padding: 24px 18px 48px;
+            }
+
+            section {
+                margin: 32px 0;
+                padding: 22px;
+            }
+        }
+
+        .error {
+            color: #fca5a5;
+            font-weight: 600;
+        }
+
+        .success {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        .loader {
+            text-align: center;
+            color: var(--muted);
+            padding: 16px 0;
+        }
+
+        .flex {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        a.anchor {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="topbar">
+            <div class="brand">Life Notebook <span>HTML</span></div>
+            <nav id="nav"></nav>
+            <button class="theme-toggle" id="themeToggle" title="Chuyển giao diện">🌓</button>
+        </div>
+    </header>
+    <main>
+        <div id="status" class="card" style="margin-bottom:18px;">Đang tải dữ liệu...</div>
+        <!-- Sections injected by JS -->
+    </main>
+
+    <script>
+        // ===== Helpers from notebook =====
+        const COL_MAP = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 2, 10: 2, 11: 2, 12: 2, 13: 2, 14: 2, 15: 2, 16: 2, 17: 3, 18: 3, 19: 3, 20: 3, 21: 3, 22: 3, 23: 3, 24: 3, 25: 4, 26: 4, 27: 4, 28: 4, 29: 4, 30: 4, 31: 4, 32: 5, 33: 5, 34: 5, 35: 5, 36: 5, 37: 5, 38: 5, 39: 6, 40: 6, 41: 6, 42: 6, 43: 6, 44: 6, 45: 6 };
+        const getCol = (v) => COL_MAP[v] ?? 0;
+
+        // ===== Data Loading =====
+        let rows = [];
+        async function loadData() {
+            const status = document.getElementById("status");
+            try {
+                // Expect data.json in format: [{"date": "2024-01-01", "Result": "1,2,3,4,5,6"}, ...]
+                const res = await fetch("data.json");
+                if (!res.ok) throw new Error("Không tìm thấy data.json. Hãy xuất từ Excel trước.");
+                const raw = await res.json();
+                rows = raw
+                    .map(r => {
+                        if (!r.Result || typeof r.Result !== "string") return null;
+                        const nums = r.Result.split(",").map(x => parseInt(x.trim(), 10)).filter(Number.isInteger);
+                        if (nums.length !== 6) return null;
+                        return { date: r.date ?? "", nums, label: nums.map(getCol).join("") };
+                    })
+                    .filter(Boolean);
+                status.innerHTML = `<span class="success">Đã tải ${rows.length} dòng</span> · file: data.json`;
+            } catch (err) {
+                status.innerHTML = `<span class="error">${err.message}</span><br/><span class="muted">Tạo file data.json từ Excel bằng script python: <code>python - <<'PY'\nimport pandas as pd, json\ndf = pd.read_excel('data.xlsx')\nout = df[['date','Result']]\nout.to_json('data.json', orient='records', force_ascii=False, indent=2)\nPY</code></span>`;
+            }
+        }
+
+        // ===== Utilities =====
+        const fmtPct = (v) => `${(v * 100).toFixed(2)}%`;
+        const MATCH_STYLE = "background:#2e7d32;color:#fff;"; // dark green with white text for matched values
+        const anchorNav = [
+            { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
+            { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
+            { id: "cell6", label: "Cell6 · Nhóm label" },
+            { id: "cell7", label: "Cell7 · Tìm label" },
+            { id: "cell8", label: "Cell8 · Nhóm bộ số" },
+            { id: "cell9", label: "Cell9 · Bộ số tùy chọn" },
+            { id: "cell10", label: "Cell10 · Phân tích vị trí" },
+            { id: "cell11", label: "Cell11 · Pattern số" },
+        ];
+
+        function buildNav(showSection) {
+            const nav = document.getElementById("nav");
+            anchorNav.forEach(item => {
+                const btn = document.createElement("button");
+                btn.className = "nav-btn";
+                btn.textContent = item.label;
+                btn.dataset.target = item.id;
+                btn.onclick = () => {
+                    showSection(item.id);
+                    history.replaceState(null, "", `#${item.id}`);
+                };
+                nav.appendChild(btn);
+            });
+        }
+
+        // ===== Renderers =====
+        function sectionShell(id, title, lead = "") {
+            const sec = document.createElement("section");
+            sec.id = id;
+            sec.dataset.section = id;
+            const h2 = document.createElement("h2");
+            h2.textContent = title;
+            sec.appendChild(h2);
+            if (lead) {
+                const p = document.createElement("p");
+                p.className = "lead";
+                p.textContent = lead;
+                sec.appendChild(p);
+            }
+            const body = document.createElement("div");
+            sec.appendChild(body);
+            document.querySelector("main").appendChild(sec);
+            return body;
+        }
+
+        // Quản lý hiển thị từng "trang" (section) mà không mất state
+        function createSectionSwitcher() {
+            const main = document.querySelector("main");
+            const buttons = () => Array.from(document.querySelectorAll(".nav-btn"));
+            const sections = () => Array.from(main.querySelectorAll("section"));
+            const scrollPositions = new Map(); // Lưu vị trí scroll cho từng section
+
+            function setActive(id) {
+                // Lưu vị trí scroll hiện tại trước khi chuyển
+                const currentSection = sections().find(sec => !sec.classList.contains("hidden"));
+                if (currentSection) {
+                    scrollPositions.set(currentSection.id, window.scrollY);
+                }
+
+                buttons().forEach(btn => {
+                    const active = btn.dataset.target === id;
+                    btn.classList.toggle("active", active);
+                });
+                sections().forEach(sec => {
+                    sec.classList.toggle("hidden", sec.id !== id);
+                });
+
+                // Restore vị trí scroll của section mới
+                requestAnimationFrame(() => {
+                    const savedPosition = scrollPositions.get(id);
+                    if (savedPosition !== undefined) {
+                        window.scrollTo(0, savedPosition);
+                    } else {
+                        window.scrollTo(0, 0); // Scroll về đầu nếu chưa có lịch sử
+                    }
+                });
+            }
+
+            function showSection(id) {
+                const target = sections().find(sec => sec.id === id);
+                const fallback = "cell4";
+                const finalId = target ? id : fallback;
+                setActive(finalId);
+            }
+
+            return showSection;
+        }
+
+        // Cell4: tỷ lệ theo vị trí
+        function renderCell4() {
+            const body = sectionShell("cell4", "Cell4 · Tỷ lệ theo vị trí (home)", "Top/Sort tương tự notebook: hiển thị tỷ lệ từng số theo 6 vị trí.");
+            const controls = document.createElement("div");
+            controls.className = "controls";
+            const topSel = document.createElement("select");
+            [[10, "Top 10"], [20, "Top 20"], [30, "Top 30"], [45, "Tất cả (45)"]].forEach(([v, l]) => {
+                const o = document.createElement("option"); o.value = v; o.textContent = l; topSel.appendChild(o);
+            });
+            topSel.value = "45";
+            const sortSel = document.createElement("select");
+            [["default", "Mặc định (1→45)"], ["total_desc", "Theo tổng % giảm dần"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            controls.append("Hiển thị:", topSel, "Sắp xếp:", sortSel);
+            body.appendChild(controls);
+            const wrap = document.createElement("div");
+            wrap.className = "card";
+            body.appendChild(wrap);
+
+            function draw() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                const counts = Array.from({ length: 46 }, () => Array(6).fill(0));
+                let total = 0;
+                rows.forEach(r => {
+                    if (r.nums.length !== 6) return;
+                    total++;
+                    r.nums.forEach((v, i) => { counts[v][i]++; });
+                });
+                let data = [];
+                for (let v = 1; v <= 45; v++) {
+                    const pcts = counts[v].map(c => total ? c / total : 0);
+                    data.push({ v, pcts, sum: pcts.reduce((a, b) => a + b, 0) });
+                }
+                if (sortSel.value === "total_desc") data.sort((a, b) => b.sum - a.sum); else data.sort((a, b) => a.v - b.v);
+                data = data.slice(0, parseInt(topSel.value, 10));
+
+                let html = "<div><table><thead><tr>" +
+                    "<th>Rank</th><th>Số</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th><th>Tổng %</th></tr></thead><tbody>";
+                data.forEach((row, idx) => {
+                    const bg = idx === 0 ? "#134e4a" : idx === 1 ? "#422006" : idx === 2 ? "#0f172a" : (idx % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)");
+                    html += `<tr style="background:${bg};">` +
+                        `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
+                        row.pcts.map(p => `<td>${fmtPct(p)}</td>`).join("") +
+                        `<td><strong>${fmtPct(row.sum)}</strong></td></tr>`;
+                });
+                html += "</tbody></table></div>";
+                wrap.innerHTML = html;
+            }
+            topSel.onchange = sortSel.onchange = draw;
+            draw();
+        }
+
+        // Cell5: xếp hạng theo vị trí
+        function renderCell5() {
+            const body = sectionShell("cell5", "Cell5 · Xếp hạng theo vị trí", "Chọn top và tô đậm theo notebook.");
+            const controls = document.createElement("div");
+            controls.className = "controls";
+            const topSel = document.createElement("select");
+            [[3, "Top 3"], [5, "Top 5"], [10, "Top 10"], [45, "Tất cả (45)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; topSel.appendChild(o); });
+            topSel.value = "45";
+            const hiSel = document.createElement("select");
+            [[0, "Không"], [1, "Top 1"], [3, "Top 3"], [5, "Top 5"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; hiSel.appendChild(o); });
+            hiSel.value = "3";
+            controls.append("Hiển thị:", topSel, "Tô đậm:", hiSel);
+            body.appendChild(controls);
+            const wrap = document.createElement("div");
+            wrap.className = "card";
+            body.appendChild(wrap);
+
+            function draw() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                const count = Array.from({ length: 6 }, () => Array(46).fill(0));
+                rows.forEach(r => { r.nums.forEach((v, i) => { count[i][v]++; }); });
+                let html = "<div><table><thead><tr><th>Rank</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th></tr></thead><tbody>";
+                const topN = parseInt(topSel.value, 10);
+                for (let rank = 0; rank < topN; rank++) {
+                    const cells = [];
+                    for (let pos = 0; pos < 6; pos++) {
+                        const arr = [...Array(45).keys()].map(i => i + 1).map(v => [v, count[pos][v]]).sort((a, b) => b[1] - a[1]);
+                        const [v, c] = arr[rank];
+                        const pct = rows.length ? (c / rows.length) : 0;
+                        const col = getCol(v);
+                        cells.push(`<td><div><strong>${v}</strong> <span class='muted'>[C${col}]</span></div><div class='muted'>${fmtPct(pct)}</div></td>`);
+                    }
+                    const bg = rank < hiSel.value ? (rank === 0 ? "#134e4a" : rank === 1 ? "#42340a" : "#0f1b2d") : (rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)");
+                    html += `<tr style="background:${bg};"><td>#${rank + 1}</td>${cells.join("")}</tr>`;
+                }
+                html += "</tbody></table></div>";
+                wrap.innerHTML = html;
+            }
+            topSel.onchange = hiSel.onchange = draw;
+            draw();
+        }
+
+        // Helpers for labels
+        const labelOf = (nums) => nums.map(getCol).join("");
+        const diffPositions = (a, b) => { const pos = []; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) pos.push(i); return pos; };
+
+        // Cell6: group by label with max diff + consecutive
+        function renderCell6() {
+            const body = sectionShell("cell6", "Cell6 · Nhóm theo label", "max sai khác & liền kề, chỉ nhóm >=2 kỳ.");
+            const controls = document.createElement("div");
+            controls.className = "controls";
+            const diffSel = document.createElement("select");
+            for (let i = 0; i <= 6; i++) { const o = document.createElement("option"); o.value = i; o.textContent = `Sai khác ${i}`; diffSel.appendChild(o); } diffSel.value = "1";
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
+            controls.append("Sai khác tối đa:", diffSel, consecLabel);
+            body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+
+            function group() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                const labelRows = {};
+                rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
+                const labels = Object.keys(labelRows).sort();
+                const used = new Set();
+                const groups = [];
+                labels.forEach(base => {
+                    if (used.has(base)) return;
+                    used.add(base);
+                    const gLabels = [base];
+                    let gRows = [...labelRows[base]];
+                    labels.forEach(other => {
+                        if (used.has(other)) return;
+                        const pos = diffPositions(base, other);
+                        if (pos.length > diffSel.value) return;
+                        if (consec.checked && pos.length > 1 && !pos.every((p, i) => i === 0 || p - pos[i - 1] === 1)) return;
+                        used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
+                    });
+                    if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
+                });
+                groups.sort((a, b) => b.rows.length - a.rows.length);
+                let html = `<div class='muted'>${groups.length} nhóm · ${groups.reduce((s, g) => s + g.rows.length, 0)} kỳ</div><div class='grid-centered'>`;
+                groups.forEach((g, idx) => {
+                    html += `<div class='card'><div class='flex' style='justify-content:space-between'><strong>Base ${g.base}</strong><span class='badge'>${g.rows.length} kỳ</span></div>`;
+                    html += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                    g.rows.slice(0, 20).forEach(r => {
+                        const label = labelOf(r.nums);
+                        const labelHtml = label.split("").map((ch, i) => ch !== g.base[i] ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>` : `<span>${ch}</span>`).join(" ");
+                        const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                    });
+                    html += "</tbody></table>";
+                    if (g.rows.length > 20) html += `<div class='muted'>... ${g.rows.length - 20} dòng nữa</div>`;
+                    html += "</div>";
+                });
+                html += "</div>";
+                wrap.innerHTML = html;
+            }
+            diffSel.onchange = consec.onchange = group;
+            group();
+        }
+
+        // Cell7: reverse query by label pattern (6 chars, _ wildcard)
+        function renderCell7() {
+            const body = sectionShell("cell7", "Cell7 · Tìm kiếm label 6 ký tự", "Điền 6 ký tự (0-9 hoặc _) để lọc.");
+            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; return inp; });
+            const wrapInputs = document.createElement("div"); wrapInputs.className = "controls"; inputs.forEach(i => wrapInputs.appendChild(i)); body.appendChild(wrapInputs);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; wrapInputs.appendChild(clearBtn);
+
+            function run() {
+                const pattern = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : "_"; }).join("");
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                if (pattern.length !== 6) { wrap.innerHTML = "<div class='error'>Cần 6 ký tự</div>"; return; }
+                const records = rows.filter(r => {
+                    const label = r.label;
+                    for (let i = 0; i < 6; i++) if (pattern[i] !== "_" && pattern[i] !== label[i]) return false;
+                    return true;
+                });
+                if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
+                let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
+                const chunk = 15;
+                for (let i = 0; i < records.length; i += chunk) {
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th></tr></thead><tbody>";
+                    records.slice(i, i + chunk).forEach(r => {
+                        const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
+                        html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                    });
+                    html += "</tbody></table></div>";
+                }
+                html += "</div>";
+                wrap.innerHTML = html;
+            }
+            inputs.forEach((inp, idx) => {
+                inp.oninput = run;
+                inp.onkeydown = (e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                };
+            });
+            clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            run();
+        }
+
+        // Cell8: group by same number set size x
+        function renderCell8() {
+            const body = sectionShell("cell8", "Cell8 · Phân nhóm theo bộ số", "Chọn kích thước bộ số (1-6), tùy chọn liền kề, sắp xếp.");
+            const controls = document.createElement("div"); controls.className = "controls";
+            const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = true;
+            const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            controls.append("Bộ số:", xSel, consecLabel, "Sắp xếp:", sortSel);
+            body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+
+            function group() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                const x = parseInt(xSel.value, 10);
+                const groups = new Map();
+                rows.forEach(r => {
+                    const nums = r.nums;
+                    if (consec.checked) {
+                        // Khi chọn liền kề, chỉ duyệt các block liên tiếp thay vì mọi tổ hợp → nhanh hơn
+                        for (let i = 0; i <= nums.length - x; i++) {
+                            const slice = nums.slice(i, i + x).slice();
+                            const key = slice.sort((a, b) => a - b).join("-");
+                            if (!groups.has(key)) groups.set(key, []);
+                            groups.get(key).push(r);
+                        }
+                    } else {
+                        const indexed = nums.map((v, i) => [i, v]);
+                        const combos = kCombinations(indexed, x);
+                        combos.forEach(combo => {
+                            const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                            const key = values.join("-");
+                            if (!groups.has(key)) groups.set(key, []);
+                            groups.get(key).push(r);
+                        });
+                    }
+                });
+                let arr = [...groups.entries()].filter(([, list]) => list.length >= 2);
+                const sort = sortSel.value;
+                if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
+                else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
+                else if (sort === "count_asc") arr.sort((a, b) => a[1].length - b[1].length);
+                else arr.sort((a, b) => b[1].length - a[1].length);
+
+                let html = `<div class='muted'>${arr.length} nhóm (>=2 kỳ)</div><div class='grid-centered'>`;
+                arr.forEach(([key, list]) => {
+                    html += `<div class='card'><div class='flex' style='justify-content:space-between'><strong>{${key.replace(/-/g, ',')}}</strong><span class='badge'>${list.length} kỳ</span></div>`;
+                    html += "<div><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    list.slice(0, 20).forEach(r => {
+                        const setValues = new Set(key.split("-").map(Number));
+                        const nums = consec.checked ? highlightBlock(r.nums, setValues, x) : r.nums.map(v => setValues.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                    });
+                    if (list.length > 20) html += `<tr><td colspan='2' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
+                    html += "</tbody></table></div></div>";
+                });
+                html += "</div>";
+                wrap.innerHTML = html;
+            }
+            xSel.onchange = consec.onchange = sortSel.onchange = group;
+            group();
+        }
+
+        // helpers
+        function kCombinations(set, k) {
+            const combs = [];
+            const recur = (start, combo) => {
+                if (combo.length === k) { combs.push(combo.slice()); return; }
+                for (let i = start; i < set.length; i++) { combo.push(set[i]); recur(i + 1, combo); combo.pop(); }
+            };
+            recur(0, []); return combs;
+        }
+        function compareKey(a, b) {
+            const pa = a.split("-").map(Number); const pb = b.split("-").map(Number);
+            for (let i = 0; i < Math.min(pa.length, pb.length); i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; }
+            return pa.length - pb.length;
+        }
+        function highlightBlock(nums, setValues, blockSize) {
+            for (let i = 0; i <= nums.length - blockSize; i++) {
+                const block = nums.slice(i, i + blockSize);
+                if (block.length === blockSize && block.every(v => setValues.has(v)) && new Set(block).size === setValues.size) {
+                    return nums.map((v, idx) => idx >= i && idx < i + blockSize ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                }
+            }
+            return nums.map(v => setValues.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+        }
+
+        // Cell9: draws containing user set
+        function renderCell9() {
+            const body = sectionShell("cell9", "Cell9 · Các kỳ chứa bộ số", "Điền tùy ý tối đa 6 số (1-45), tùy chọn liền kề.");
+            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
+            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); controls.append(consecLabel); body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            function run() {
+                const vals = inputs.map(i => parseInt(i.value, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 45);
+                if (!vals.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 số...</div>"; return; }
+                const setVals = new Set(vals);
+                const records = rows.filter(r => {
+                    if (!setValsIsSubset(setVals, r.nums)) return false;
+                    if (consec.checked) return hasConsecutiveBlock(r.nums, setVals);
+                    return true;
+                });
+                if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
+                let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
+                const chunk = 15;
+                for (let i = 0; i < records.length; i += chunk) {
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    records.slice(i, i + chunk).forEach(r => {
+                        const nums = consec.checked ? highlightBlock(r.nums, setVals, setVals.size) : r.nums.map(v => setVals.has(v) ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                    });
+                    html += "</tbody></table></div>";
+                }
+                html += "</div>";
+                wrap.innerHTML = html;
+            }
+            inputs.forEach((inp, idx) => {
+                inp.oninput = run;
+                inp.onkeydown = (e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                };
+            });
+            consec.onchange = run; clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            run();
+        }
+        function setValsIsSubset(setVals, arr) { for (const v of setVals) if (!arr.includes(v)) return false; return true; }
+        function hasConsecutiveBlock(nums, setVals) {
+            const k = setVals.size;
+            for (let i = 0; i <= nums.length - k; i++) {
+                const block = nums.slice(i, i + k);
+                if (block.length === k && setValsIsSubset(setVals, block) && new Set(block).size === setVals.size) return true;
+            }
+            return false;
+        }
+
+        // Cell10: analyze other positions given value at order
+        function renderCell10() {
+            const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 số vào 1 ô để xem phân bố cột ở vị trí còn lại.");
+            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            function run(changeIdx) {
+                const filled = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).filter(x => !isNaN(x.val));
+                if (filled.length > 1 && changeIdx !== undefined) filled.filter(f => f.idx !== changeIdx).forEach(f => inputs[f.idx].value = "");
+                const single = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).find(x => !isNaN(x.val));
+                if (!single) { wrap.innerHTML = "<div class='loader'>Điền số vào 1 ô...</div>"; return; }
+                const order = single.idx + 1; const value = single.val;
+                const posCols = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }; const posMaps = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {} };
+                let total = 0, hit = 0;
+                rows.forEach(r => {
+                    if (r.nums.length !== 6) return; total++; if (r.nums[order - 1] !== value) return; hit++;
+                    for (let pos = 1; pos <= 6; pos++) { if (pos === order) continue; const v = r.nums[pos - 1]; const c = getCol(v); posCols[pos].push(c); (posMaps[pos][c] ||= []).push(v); }
+                });
+                if (!hit) { wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${value} ở vị trí ${order}</div>`; return; }
+                const pattern = Array(6).fill("_"); pattern[order - 1] = value;
+                let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
+                const positionsBefore = [1, 2, 3, 4, 5, 6].filter(p => p < order);
+                const positionsAfter = [1, 2, 3, 4, 5, 6].filter(p => p > order);
+                const renderPosTable = (pos) => {
+                    const counts = countMap(posCols[pos]);
+                    let rowsHtml = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => {
+                        const vals = countMap(posMaps[pos][c] || []);
+                        const valsHtml = Object.entries(vals).sort((a, b) => b[1] - a[1]).map(([v, k]) => `<strong>${v}</strong>(${k})`).join(', ');
+                        return `<tr><td>Cột ${c}</td><td style='text-align:right'>${n}</td><td style='text-align:right'>${fmtPct(n / posCols[pos].length)}</td><td>${valsHtml || '—'}</td></tr>`;
+                    }).join("");
+                    return `<div class='card'><h4>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th><th>Số hay đi cùng</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+                };
+                if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${positionsBefore.map(renderPosTable).join('')}</div>`;
+                if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${positionsAfter.map(renderPosTable).join('')}</div>`;
+                wrap.innerHTML = html;
+            }
+            inputs.forEach((inp, idx) => {
+                inp.oninput = () => run(idx);
+                inp.onkeydown = (e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                };
+            });
+            clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            run();
+        }
+        function countMap(arr) { const m = {}; arr.forEach(v => m[v] = (m[v] || 0) + 1); return m; }
+
+        // Cell11: pattern search 6 positions with commas, _ wildcard
+        function renderCell11() {
+            const body = sectionShell("cell11", "Cell11 · Pattern số (1-45 hoặc _)", "Điền tối đa 6 ô; tự sinh pattern dạng _,4,_,37,_,_.");
+            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+            const controls = document.createElement("div"); controls.className = "controls"; inputs.forEach(i => controls.appendChild(i)); body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+
+            function run(changeIdx) {
+                const pattern = inputs.map(inp => {
+                    const v = inp.value.trim();
+                    if (!v) return "_";
+                    const n = parseInt(v, 10);
+                    return (n >= 1 && n <= 45) ? String(n) : "_";
+                });
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                if (pattern.every(p => p === "_")) { wrap.innerHTML = "<div class='loader'>Nhập vào 1 ô để tìm kiếm...</div>"; return; }
+                const results = rows.filter(r => pattern.every((p, i) => p === "_" || r.nums[i] === Number(p)));
+                if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
+                const patternStr = pattern.join(',');
+                let html = `<div class='muted'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
+                const chunk = 15;
+                for (let i = 0; i < results.length; i += chunk) {
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th></tr></thead><tbody>";
+                    results.slice(i, i + chunk).forEach(r => {
+                        const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        html += `<tr><td>${r.date}</td><td>${nums}</td></tr>`;
+                    });
+                    html += "</tbody></table></div>";
+                }
+                html += "</div>";
+                wrap.innerHTML = html;
+            }
+            inputs.forEach((inp, idx) => {
+                inp.oninput = () => run(idx);
+                inp.onkeydown = (e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                };
+            });
+            clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            run();
+        }
+
+        async function bootstrap() {
+            // Theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            const root = document.documentElement;
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            root.setAttribute('data-theme', savedTheme);
+            themeToggle.onclick = () => {
+                const current = root.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+            };
+
+            // Tải dữ liệu TRƯỚC khi render các cell
+            await loadData();
+
+            const showSection = createSectionSwitcher();
+            buildNav(showSection);
+            renderCell4();
+            renderCell5();
+            renderCell6();
+            renderCell7();
+            renderCell8();
+            renderCell9();
+            renderCell10();
+            renderCell11();
+            // Hiển thị section theo hash (nếu hợp lệ), mặc định cell4
+            const initial = (location.hash || "#cell4").replace("#", "");
+            showSection(initial || "cell4");
+            window.addEventListener("hashchange", () => {
+                const id = (location.hash || "#cell4").replace("#", "");
+                showSection(id || "cell4");
+            });
+        }
+
+        bootstrap();
+    </script>
+</body>
+
+</html>
