@@ -2,35 +2,34 @@ name: Convert Excel to JSON
 
 on:
   push:
-    paths:
-      - data.xlsx
-  # hoặc nếu muốn cron:
-  # schedule:
-  #   - cron: "*/15 * * * *"
+    branches:
+      - main
+  schedule:
+    - cron: "*/15 * * * *"   # 15 phút (đúng spec)
+  workflow_dispatch:
 
 jobs:
   convert:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: 🛠️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Install deps
+      - name: 📦 Install dependencies
         run: npm install xlsx
 
-      - name: Convert data
+      - name: 🔄 Convert Excel to JSON
         run: node convert_data_to_json.js
 
-      - name: Commit result
+      - name: 📤 Commit and push if changed
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "Auto update data.json" || echo "No changes"
-          git push
+          git diff --cached --quiet || (git commit -m "🔄 Auto update data.json" && git push)
