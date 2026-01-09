@@ -480,6 +480,44 @@
         .hidden {
             display: none;
         }
+
+        /* Floating scroll-to-top button */
+        #scrollToTop {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: none;
+            z-index: 99;
+            box-shadow: 0 4px 12px rgba(56, 239, 125, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        #scrollToTop:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 20px rgba(56, 239, 125, 0.4);
+        }
+
+        #scrollToTop:active {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            #scrollToTop {
+                bottom: 20px;
+                right: 20px;
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 
@@ -491,6 +529,7 @@
             <button class="theme-toggle" id="themeToggle" title="Chuyển giao diện">🌓</button>
         </div>
     </header>
+    <button id="scrollToTop" title="Quay về đầu trang">↑</button>
     <main>
         <div id="status" class="card" style="margin-bottom:18px;">Đang tải dữ liệu...</div>
         <!-- Sections injected by JS -->
@@ -1113,6 +1152,21 @@
         }
 
         async function bootstrap() {
+            // Scroll to top button
+            const scrollBtn = document.getElementById('scrollToTop');
+            scrollBtn.onclick = () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    scrollBtn.style.display = 'flex';
+                    scrollBtn.style.alignItems = 'center';
+                    scrollBtn.style.justifyContent = 'center';
+                } else {
+                    scrollBtn.style.display = 'none';
+                }
+            });
+
             // Theme toggle
             const themeToggle = document.getElementById('themeToggle');
             const root = document.documentElement;
