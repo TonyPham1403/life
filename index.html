@@ -309,6 +309,16 @@
             color: #0b1220;
         }
 
+        /* Keep top ranks in Cell4 readable on dark theme */
+        [data-theme="dark"] #cell4 tbody tr.rank-top td {
+            color: #0b1220;
+        }
+
+        [data-theme="dark"] #cell4 tbody tr.rank-top .pill {
+            background: #fffbea;
+            color: #0b1220;
+        }
+
         .pill {
             display: inline-block;
             padding: 3px 7px;
@@ -622,7 +632,8 @@
                     "<th>Rank</th><th>Số</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th><th>Tổng %</th></tr></thead><tbody>";
                 data.forEach((row, idx) => {
                     const bg = idx === 0 ? "#134e4a" : idx === 1 ? "#422006" : idx === 2 ? "#0f172a" : (idx % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)");
-                    html += `<tr style="background:${bg};">` +
+                    const rankClass = idx < 3 ? "rank-top" : "";
+                    html += `<tr class="${rankClass}" style="background:${bg};">` +
                         `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
                         row.pcts.map(p => `<td>${fmtPct(p)}</td>`).join("") +
                         `<td><strong>${fmtPct(row.sum)}</strong></td></tr>`;
