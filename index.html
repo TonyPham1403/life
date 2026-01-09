@@ -793,15 +793,15 @@
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                 const x = parseInt(xSel.value, 10);
                 const groups = new Map();
-                rows.forEach(r => {
+                rows.forEach((r, rowIndex) => {
                     const nums = r.nums;
                     if (consec.checked) {
                         // Khi chọn liền kề, chỉ duyệt các block liên tiếp thay vì mọi tổ hợp → nhanh hơn
                         for (let i = 0; i <= nums.length - x; i++) {
                             const slice = nums.slice(i, i + x).slice();
                             const key = slice.sort((a, b) => a - b).join("-");
-                            if (!groups.has(key)) groups.set(key, []);
-                            groups.get(key).push(r);
+                            if (!groups.has(key)) groups.set(key, new Set());
+                            groups.get(key).add(rowIndex); // Dùng Set để tránh trùng lặp
                         }
                     } else {
                         const indexed = nums.map((v, i) => [i, v]);
@@ -809,12 +809,12 @@
                         combos.forEach(combo => {
                             const values = combo.map(c => c[1]).sort((a, b) => a - b);
                             const key = values.join("-");
-                            if (!groups.has(key)) groups.set(key, []);
-                            groups.get(key).push(r);
+                            if (!groups.has(key)) groups.set(key, new Set());
+                            groups.get(key).add(rowIndex); // Dùng Set để tránh trùng lặp
                         });
                     }
                 });
-                let arr = [...groups.entries()].filter(([, list]) => list.length >= 2);
+                let arr = [...groups.entries()].map(([key, indices]) => [key, [...indices].map(i => rows[i])]).filter(([, list]) => list.length >= 2);
                 const sort = sortSel.value;
                 if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
                 else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
