@@ -1107,142 +1107,315 @@
 
         // Cell9: draws containing user set
         function renderCell9() {
-            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số", "Nhập tối đa 6 số (1-45) để tìm các kỳ có chứa những số này. Có thể kéo thả số giữa các vị trí.");
-            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số hoặc label", "Chọn tìm theo bộ số (1-45) hoặc label (1-6). Có thể kéo thả giữa các vị trí.");
+
+            // Mode selector
+            const modeSel = document.createElement("select");
+            [["number", "Bộ số (1-45)"], ["label", "Label (1-6)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; modeSel.appendChild(o); });
+            modeSel.value = "number";
+
+            // Create inputs factory based on mode
+            const createInputs = (mode) => {
+                if (mode === "number") {
+                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+                } else {
+                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "40px"; return inp; });
+                }
+            };
+
+            let inputs = createInputs(modeSel.value);
 
             // Create draggable containers for inputs
-            const containers = inputs.map((inp, idx) => {
-                const container = document.createElement("div");
-                container.className = "drag-input-container";
-                container.style.cssText = "position:relative;display:inline-block;";
-                container.draggable = false;
+            const createContainers = (inputArray) => {
+                return inputArray.map((inp, idx) => {
+                    const container = document.createElement("div");
+                    container.className = "drag-input-container";
+                    container.style.cssText = "position:relative;display:inline-block;";
+                    container.draggable = false;
 
-                const dragHandle = document.createElement("div");
-                dragHandle.className = "drag-handle";
-                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+                    const dragHandle = document.createElement("div");
+                    dragHandle.className = "drag-handle";
+                    dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
 
-                inp.style.position = "relative";
-                inp.style.zIndex = "2";
+                    inp.style.position = "relative";
+                    inp.style.zIndex = "2";
 
-                container.appendChild(inp);
-                container.appendChild(dragHandle);
-                container.dataset.index = idx;
+                    container.appendChild(inp);
+                    container.appendChild(dragHandle);
+                    container.dataset.index = idx;
 
-                const updateDraggable = () => {
-                    const hasValue = inp.value.trim() !== "";
-                    container.draggable = hasValue;
-                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
-                    container.style.opacity = hasValue ? "1" : "0.7";
-                    if (hasValue) {
-                        container.style.border = "2px solid var(--accent)";
-                        container.style.borderRadius = "10px";
-                        container.style.padding = "2px";
-                    } else {
-                        container.style.border = "none";
-                        container.style.padding = "0";
-                    }
-                };
+                    const updateDraggable = () => {
+                        const hasValue = inp.type === "number" ? inp.value.trim() !== "" : (inp.value.trim() !== "" && inp.value.trim() !== "_");
+                        container.draggable = hasValue;
+                        dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
+                        container.style.opacity = hasValue ? "1" : "0.7";
+                        if (hasValue) {
+                            container.style.border = "2px solid var(--accent)";
+                            container.style.borderRadius = "10px";
+                            container.style.padding = "2px";
+                        } else {
+                            container.style.border = "none";
+                            container.style.padding = "0";
+                        }
+                    };
 
-                inp.addEventListener("input", updateDraggable);
-                updateDraggable();
+                    inp.addEventListener("input", updateDraggable);
+                    updateDraggable();
 
-                return container;
-            });
+                    return container;
+                });
+            };
+
+            let containers = createContainers(inputs);
 
             // Drag and drop logic
             let draggedIndex = null;
 
-            containers.forEach((container, idx) => {
-                container.addEventListener("dragstart", (e) => {
-                    draggedIndex = idx;
-                    container.style.opacity = "0.4";
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", inputs[idx].value);
-                });
+            const setupDragListeners = (containerArray) => {
+                containerArray.forEach((container, idx) => {
+                    container.addEventListener("dragstart", (e) => {
+                        draggedIndex = idx;
+                        container.style.opacity = "0.4";
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", inputs[idx].value);
+                    });
 
-                container.addEventListener("dragend", (e) => {
-                    container.style.opacity = "";
-                    containers.forEach(c => {
-                        c.style.backgroundColor = "";
-                        c.style.transform = "";
+                    container.addEventListener("dragend", (e) => {
+                        container.style.opacity = "";
+                        containerArray.forEach(c => {
+                            c.style.backgroundColor = "";
+                            c.style.transform = "";
+                        });
+                    });
+
+                    container.addEventListener("dragover", (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (draggedIndex !== null && draggedIndex !== idx) {
+                            container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                            container.style.transform = "scale(1.05)";
+                        }
+                    });
+
+                    container.addEventListener("dragleave", (e) => {
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                    });
+
+                    container.addEventListener("drop", (e) => {
+                        e.preventDefault();
+                        if (draggedIndex !== null && draggedIndex !== idx) {
+                            const tempValue = inputs[idx].value;
+                            inputs[idx].value = inputs[draggedIndex].value;
+                            inputs[draggedIndex].value = tempValue;
+
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                            run();
+                        }
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                        draggedIndex = null;
                     });
                 });
+            };
 
-                container.addEventListener("dragover", (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    if (draggedIndex !== null && draggedIndex !== idx) {
-                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
-                        container.style.transform = "scale(1.05)";
-                    }
-                });
-
-                container.addEventListener("dragleave", (e) => {
-                    container.style.backgroundColor = "";
-                    container.style.transform = "";
-                });
-
-                container.addEventListener("drop", (e) => {
-                    e.preventDefault();
-                    if (draggedIndex !== null && draggedIndex !== idx) {
-                        const tempValue = inputs[idx].value;
-                        inputs[idx].value = inputs[draggedIndex].value;
-                        inputs[draggedIndex].value = tempValue;
-
-                        inputs[idx].dispatchEvent(new Event("input"));
-                        inputs[draggedIndex].dispatchEvent(new Event("input"));
-
-                        run();
-                    }
-                    container.style.backgroundColor = "";
-                    container.style.transform = "";
-                    draggedIndex = null;
-                });
-            });
+            setupDragListeners(containers);
 
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
             const controls = document.createElement("div"); controls.className = "controls";
-            const labelText = document.createElement("span"); labelText.textContent = "Bộ số:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
-            controls.appendChild(labelText);
-            containers.forEach(c => controls.appendChild(c)); controls.append(consecLabel); body.appendChild(controls);
+
+            // Add mode selector
+            controls.appendChild(modeSel);
+
+            const inputLabel = document.createElement("span"); inputLabel.textContent = modeSel.value === "number" ? "Bộ số:" : "Label:"; inputLabel.style.fontWeight = "700"; inputLabel.style.fontSize = "14px"; inputLabel.style.marginLeft = "12px";
+            controls.appendChild(inputLabel);
+
+            // For label mode, reverse the containers for proper left-to-right display
+            const containersToAdd = modeSel.value === "label" ? [...containers].reverse() : containers;
+            containersToAdd.forEach(c => controls.appendChild(c));
+            controls.append(consecLabel);
+            body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
 
             const hint = document.createElement("div");
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
-            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
+            hint.innerHTML = "💡 Mẹo: Kéo thả giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
             controls.appendChild(hint);
 
             function run() {
-                const vals = inputs.map(i => parseInt(i.value, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 45);
-                if (!vals.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 số...</div>"; return; }
-                const setVals = new Set(vals);
-                const records = rows.filter(r => {
-                    if (!setValsIsSubset(setVals, r.nums)) return false;
-                    if (consec.checked) return hasConsecutiveBlock(r.nums, setVals);
-                    return true;
-                });
-                if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
-                let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
-                const chunk = 15;
-                for (let i = 0; i < records.length; i += chunk) {
-                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
-                    records.slice(i, i + chunk).forEach(r => {
-                        const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
-                        const labelHtml = renderHighlightedLabel(r.label, positions);
-                        html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                const mode = modeSel.value;
+
+                if (mode === "number") {
+                    // Mode: Tìm bộ số
+                    const vals = inputs.map(i => parseInt(i.value, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 45);
+                    if (!vals.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 số...</div>"; return; }
+                    // Count frequency of each number in input
+                    const inputFreq = {};
+                    vals.forEach(v => { inputFreq[v] = (inputFreq[v] || 0) + 1; });
+                    const setVals = new Set(vals);
+                    const records = rows.filter(r => {
+                        // Count frequency of numbers in row
+                        const rowFreq = {};
+                        r.nums.forEach(v => { rowFreq[v] = (rowFreq[v] || 0) + 1; });
+                        // Check if row has at least the frequency we need for each number
+                        for (const num in inputFreq) {
+                            if ((rowFreq[num] || 0) < inputFreq[num]) return false;
+                        }
+                        if (consec.checked) return hasConsecutiveBlock(r.nums, setVals);
+                        return true;
                     });
-                    html += "</tbody></table></div>";
+                    if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
+                    let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
+                    const chunk = 15;
+                    for (let i = 0; i < records.length; i += chunk) {
+                        html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        records.slice(i, i + chunk).forEach(r => {
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
+                            const labelHtml = renderHighlightedLabel(r.label, positions);
+                            html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        });
+                        html += "</tbody></table></div>";
+                    }
+                    html += "</div>";
+                    wrap.innerHTML = html;
+                } else {
+                    // Mode: Tìm label - dùng tần suất (list), hỗ trợ Liền kề theo cửa sổ liên tiếp
+                    const labels = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : null; }).filter(v => v !== null);
+                    if (!labels.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 ký tự...</div>"; return; }
+                    // Đếm tần suất ký tự trong input
+                    const inputFreq = {};
+                    labels.forEach(ch => { inputFreq[ch] = (inputFreq[ch] || 0) + 1; });
+                    const totalCount = labels.length;
+                    const inputKeys = Object.keys(inputFreq);
+                    const keySet = new Set(inputKeys);
+
+                    const records = rows.filter(r => {
+                        const labelStr = r.label;
+                        // Kiểm tra tần suất toàn chuỗi: mỗi ký tự trong input phải xuất hiện đủ số lần
+                        const rowFreq = {};
+                        for (const ch of labelStr) rowFreq[ch] = (rowFreq[ch] || 0) + 1;
+                        for (const ch of inputKeys) {
+                            if ((rowFreq[ch] || 0) < inputFreq[ch]) return false;
+                        }
+                        // Nếu yêu cầu liền kề: tìm cửa sổ độ dài totalCount thỏa tần suất input
+                        if (consec.checked) {
+                            for (let i = 0; i <= labelStr.length - totalCount; i++) {
+                                const block = labelStr.slice(i, i + totalCount);
+                                const blockFreq = {};
+                                for (const ch of block) blockFreq[ch] = (blockFreq[ch] || 0) + 1;
+                                let ok = true;
+                                for (const ch of inputKeys) {
+                                    if ((blockFreq[ch] || 0) < inputFreq[ch]) { ok = false; break; }
+                                }
+                                if (ok) return true;
+                            }
+                            return false;
+                        }
+                        return true;
+                    });
+                    if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
+                    let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
+                    const chunk = 15;
+                    for (let i = 0; i < records.length; i += chunk) {
+                        html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        records.slice(i, i + chunk).forEach(r => {
+                            const nums = r.nums.map(n => `<span class='pill'>${n}</span>`).join(" ");
+                            const labelStr = r.label;
+                            let highlightPos = [];
+                            if (consec.checked) {
+                                // Tìm cửa sổ đầu tiên thỏa tần suất để highlight
+                                let start = -1;
+                                for (let s = 0; s <= labelStr.length - totalCount && start === -1; s++) {
+                                    const block = labelStr.slice(s, s + totalCount);
+                                    const blockFreq = {};
+                                    for (const ch of block) blockFreq[ch] = (blockFreq[ch] || 0) + 1;
+                                    let ok = true;
+                                    for (const ch of inputKeys) {
+                                        if ((blockFreq[ch] || 0) < inputFreq[ch]) { ok = false; break; }
+                                    }
+                                    if (ok) start = s;
+                                }
+                                if (start !== -1) {
+                                    highlightPos = Array.from({ length: totalCount }, (_, k) => start + k);
+                                }
+                            }
+                            // Không liền kề: highlight mọi vị trí có ký tự thuộc tập input
+                            if (!highlightPos.length) {
+                                for (let pos = 0; pos < labelStr.length; pos++) {
+                                    if (keySet.has(labelStr[pos])) highlightPos.push(pos);
+                                }
+                            }
+                            const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
+                            html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        });
+                        html += "</tbody></table></div>";
+                    }
+                    html += "</div>";
+                    wrap.innerHTML = html;
                 }
-                html += "</div>";
-                wrap.innerHTML = html;
             }
+
+            // Handle mode change
+            modeSel.onchange = () => {
+                // Clear any drag-drop visual state from old containers
+                document.querySelectorAll(".drag-input-container").forEach(c => {
+                    c.style.opacity = "1";
+                    c.style.transform = "";
+                });
+
+                inputs = createInputs(modeSel.value);
+                containers = createContainers(inputs);
+                setupDragListeners(containers);
+
+                // Clear and update controls - remove old containers completely
+                const oldContainers = controls.querySelectorAll(".drag-input-container");
+                oldContainers.forEach(c => c.remove());
+
+                // Update label text
+                inputLabel.textContent = modeSel.value === "number" ? "Bộ số:" : "Label:";
+
+                // Re-insert input containers
+                const insertPoint = inputLabel;
+                const containersToAdd = modeSel.value === "label" ? [...containers].reverse() : containers;
+                containersToAdd.forEach(c => insertPoint.parentNode.insertBefore(c, insertPoint.nextSibling));
+
+                // Re-attach event listeners to new inputs
+                inputs.forEach((inp, idx) => {
+                    inp.oninput = run;
+                    inp.onkeydown = (e) => {
+                        if (e.key === 'ArrowLeft') {
+                            e.preventDefault();
+                            const nextIdx = idx > 0 ? idx - 1 : inputs.length - 1;
+                            inputs[nextIdx].focus();
+                        }
+                        if (e.key === 'ArrowRight') {
+                            e.preventDefault();
+                            const nextIdx = idx < inputs.length - 1 ? idx + 1 : 0;
+                            inputs[nextIdx].focus();
+                        }
+                    };
+                });
+
+                run();
+            };
+
             inputs.forEach((inp, idx) => {
                 inp.oninput = run;
                 inp.onkeydown = (e) => {
-                    if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
-                    if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                    if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        const nextIdx = idx > 0 ? idx - 1 : inputs.length - 1;
+                        inputs[nextIdx].focus();
+                    }
+                    if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        const nextIdx = idx < inputs.length - 1 ? idx + 1 : 0;
+                        inputs[nextIdx].focus();
+                    }
                 };
             });
             consec.onchange = run; clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
@@ -1260,7 +1433,11 @@
 
         // Cell10: analyze other positions given value at order
         function renderCell10() {
-            const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 số vào 1 ô để xem phân bố cột ở vị trí còn lại. Có thể kéo thả số giữa các vị trí.");
+            const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 giá trị vào 1 ô để xem phân bố ở 5 vị trí còn lại. Có thể kéo thả giữa các vị trí.");
+            // Mode selector: Number (1–45) vs Column (1–6)
+            const modeSel = document.createElement("select");
+            [["number", "Số (1–45)"], ["column", "Cột (1–6)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; modeSel.appendChild(o); });
+            modeSel.value = "number";
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
 
             // Create draggable containers for inputs
@@ -1353,7 +1530,10 @@
                 });
             });
 
-            const controls = document.createElement("div"); controls.className = "controls"; containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
+            const controls = document.createElement("div"); controls.className = "controls";
+            // Remove extra label; the dropdown options already indicate the mode
+            controls.append(modeSel);
+            containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
 
@@ -1365,18 +1545,34 @@
 
             function run(changeIdx) {
                 const filled = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).filter(x => !isNaN(x.val));
-                if (filled.length > 1 && changeIdx !== undefined) filled.filter(f => f.idx !== changeIdx).forEach(f => inputs[f.idx].value = "");
+                if (filled.length > 1 && changeIdx !== undefined) {
+                    filled.filter(f => f.idx !== changeIdx).forEach(f => {
+                        inputs[f.idx].value = "";
+                        // Refresh drag visuals when value is cleared programmatically
+                        inputs[f.idx].dispatchEvent(new Event("input"));
+                    });
+                }
                 const single = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).find(x => !isNaN(x.val));
-                if (!single) { wrap.innerHTML = "<div class='loader'>Điền số vào 1 ô...</div>"; return; }
+                if (!single) {
+                    wrap.innerHTML = modeSel.value === "number"
+                        ? "<div class='loader'>Điền 1 số (1–45) vào 1 ô...</div>"
+                        : "<div class='loader'>Điền 1 cột (1–6) vào 1 ô...</div>";
+                    return;
+                }
                 const order = single.idx + 1; const value = single.val;
                 const posCols = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }; const posMaps = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {} };
                 let total = 0, hit = 0;
                 rows.forEach(r => {
-                    if (r.nums.length !== 6) return; total++; if (r.nums[order - 1] !== value) return; hit++;
+                    if (r.nums.length !== 6) return; total++;
+                    const matched = (modeSel.value === "number") ? (r.nums[order - 1] === value) : (getCol(r.nums[order - 1]) === value);
+                    if (!matched) return; hit++;
                     for (let pos = 1; pos <= 6; pos++) { if (pos === order) continue; const v = r.nums[pos - 1]; const c = getCol(v); posCols[pos].push(c); (posMaps[pos][c] ||= []).push(v); }
                 });
-                if (!hit) { wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${value} ở vị trí ${order}</div>`; return; }
-                const pattern = Array(6).fill("_"); pattern[order - 1] = value;
+                if (!hit) {
+                    const what = modeSel.value === "number" ? value : `cột ${value}`;
+                    wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${what} ở vị trí ${order}</div>`; return;
+                }
+                const pattern = Array(6).fill("_"); pattern[order - 1] = (modeSel.value === "number") ? value : `C${value}`;
                 let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
                 const positionsBefore = [1, 2, 3, 4, 5, 6].filter(p => p < order);
                 const positionsAfter = [1, 2, 3, 4, 5, 6].filter(p => p > order);
@@ -1384,13 +1580,29 @@
                     const counts = countMap(posCols[pos]);
                     let rowsHtml = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => {
                         const vals = countMap(posMaps[pos][c] || []);
-                        const valsHtml = Object.entries(vals).sort((a, b) => b[1] - a[1]).map(([v, k]) => `<strong>${v}</strong>(${k})`).join(', ');
-                        return `<tr><td>Cột ${c}</td><td style='text-align:right'>${n}</td><td style='text-align:right'>${fmtPct(n / posCols[pos].length)}</td><td>${valsHtml || '—'}</td></tr>`;
+                        const valsHtml = Object.entries(vals).sort((a, b) => b[1] - a[1]).map(([v, k]) => `<strong>${v}</strong><span style='font-weight:400'>(${k})</span>`).join(', ');
+                        return `<tr><td style='font-weight:700'>Cột ${c}</td><td style='text-align:right;font-weight:700'>${n}</td><td style='text-align:right;font-weight:700'>${fmtPct(n / posCols[pos].length)}</td><td style='font-weight:700'>${valsHtml || '—'}</td></tr>`;
                     }).join("");
                     return `<div class='card'><h4>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th><th>Số hay đi cùng</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
                 };
-                if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${positionsBefore.map(renderPosTable).join('')}</div>`;
-                if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${positionsAfter.map(renderPosTable).join('')}</div>`;
+                // Column-mode: compact 3-column table (Column | Count | Percentage), 6 rows ranked
+                const renderPosTableColumn = (pos) => {
+                    const counts = countMap(posCols[pos]);
+                    const totalPos = posCols[pos].length || 1;
+                    const items = [1, 2, 3, 4, 5, 6].map(c => ({ col: c, count: counts[c] || 0, pct: (counts[c] || 0) / totalPos }));
+                    items.sort((a, b) => b.count - a.count || a.col - b.col);
+                    // Ensure each card is at most 1/3 of the row and centered
+                    let t = `<div class='card' style='flex:0 1 calc(33.333% - 10px);'><h4 style='margin:0 0 8px;'>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th></tr></thead><tbody>`;
+                    items.forEach((it, idx) => {
+                        const rankBg = idx === 0 ? "#c8e6c9" : idx === 1 ? "#fff9c4" : idx === 2 ? "#b3e5fc" : "";
+                        const style = rankBg ? `style=\"background:${rankBg}\"` : "";
+                        t += `<tr ${style}><td style='font-weight:700'>${it.col}</td><td style='text-align:right;font-weight:700'>${it.count}</td><td style='text-align:right;font-weight:700'>${fmtPct(it.pct)}</td></tr>`;
+                    });
+                    t += "</tbody></table></div>";
+                    return t;
+                };
+                if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${(modeSel.value === "number" ? positionsBefore.map(renderPosTable) : positionsBefore.map(renderPosTableColumn)).join('')}</div>`;
+                if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${(modeSel.value === "number" ? positionsAfter.map(renderPosTable) : positionsAfter.map(renderPosTableColumn)).join('')}</div>`;
                 wrap.innerHTML = html;
             }
             inputs.forEach((inp, idx) => {
@@ -1400,7 +1612,27 @@
                     if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
                 };
             });
-            clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            clearBtn.onclick = () => {
+                inputs.forEach(i => {
+                    i.value = "";
+                    // Refresh drag visuals after clear
+                    i.dispatchEvent(new Event("input"));
+                });
+                run();
+            };
+            // Mode changes: adjust input constraints, CLEAR values, and rerun
+            modeSel.onchange = () => {
+                inputs.forEach(inp => {
+                    // Switch constraints per mode
+                    if (modeSel.value === "number") { inp.min = 1; inp.max = 45; inp.placeholder = ""; }
+                    else { inp.min = 1; inp.max = 6; inp.placeholder = "1–6"; }
+                    // Clear previous value when switching modes
+                    inp.value = "";
+                    // Refresh drag visuals after mode switch
+                    inp.dispatchEvent(new Event("input"));
+                });
+                run();
+            };
             run();
         }
         function countMap(arr) { const m = {}; arr.forEach(v => m[v] = (m[v] || 0) + 1); return m; }
