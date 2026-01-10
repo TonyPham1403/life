@@ -60,6 +60,7 @@
             backdrop-filter: blur(12px);
             background: rgba(15, 23, 42, 0.8);
             border-bottom: 1px solid var(--border);
+            overflow: hidden;
         }
 
         [data-theme="light"] header {
@@ -107,6 +108,61 @@
             font-size: 12px;
             color: var(--highlight-text);
             font-weight: 900;
+            cursor: pointer;
+            position: relative;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+
+        .brand span:hover {
+            transform: scale(1.05);
+        }
+
+        .image-popup {
+            position: fixed;
+            z-index: 9999;
+            background: white;
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            display: none;
+        }
+
+        [data-theme="dark"] .image-popup {
+            background: var(--panel);
+            border-color: var(--accent);
+        }
+
+        .image-popup.show {
+            display: block;
+            animation: fadeInDown 0.3s ease;
+        }
+
+        .image-popup img {
+            max-width: 300px;
+            max-height: 300px;
+            display: block;
+            border-radius: 8px;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .image-popup img {
+                max-width: 200px;
+                max-height: 200px;
+            }
         }
 
         nav {
@@ -524,11 +580,16 @@
 <body>
     <header>
         <div class="topbar">
-            <div class="brand">Life Notebook <span>HTML</span></div>
+            <div class="brand">Life Notebook
+                <span id="htmlBadge">HTML</span>
+            </div>
             <nav id="nav"></nav>
             <button class="theme-toggle" id="themeToggle" title="Chuyển giao diện">🌓</button>
         </div>
     </header>
+    <div class="image-popup" id="imagePopup">
+        <img src="anh.png" alt="Preview">
+    </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
     <main>
         <div id="status" class="card" style="margin-bottom:18px;">Đang tải dữ liệu...</div>
@@ -1801,6 +1862,37 @@
         }
 
         async function bootstrap() {
+            // HTML badge image popup
+            const htmlBadge = document.getElementById('htmlBadge');
+            const imagePopup = document.getElementById('imagePopup');
+            let isPopupVisible = false;
+
+            // Show popup on hover (mouseenter)
+            htmlBadge.addEventListener('mouseenter', () => {
+                if (!isPopupVisible) {
+                    isPopupVisible = true;
+                    const rect = htmlBadge.getBoundingClientRect();
+                    imagePopup.style.top = `${rect.bottom + 8}px`;
+                    imagePopup.style.left = `${rect.left}px`;
+                    imagePopup.classList.add('show');
+                }
+            });
+
+            // Toggle popup on click - only way to close
+            htmlBadge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                isPopupVisible = !isPopupVisible;
+
+                if (isPopupVisible) {
+                    // Calculate position based on badge location
+                    const rect = htmlBadge.getBoundingClientRect();
+                    imagePopup.style.top = `${rect.bottom + 8}px`;
+                    imagePopup.style.left = `${rect.left}px`;
+                }
+
+                imagePopup.classList.toggle('show', isPopupVisible);
+            });
+
             // Scroll to top button
             const scrollBtn = document.getElementById('scrollToTop');
             scrollBtn.onclick = () => {
