@@ -1646,18 +1646,20 @@
                     }).join("");
                     return `<div class='card'><h4>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th><th>Số hay đi cùng</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
                 };
-                // Column-mode: compact 3-column table (Column | Count | Percentage), 6 rows ranked
+                // Column-mode: compact 4-column table (Column | Count | Percentage | Numbers), 6 rows ranked
                 const renderPosTableColumn = (pos) => {
                     const counts = countMap(posCols[pos]);
                     const totalPos = posCols[pos].length || 1;
                     const items = [1, 2, 3, 4, 5, 6].map(c => ({ col: c, count: counts[c] || 0, pct: (counts[c] || 0) / totalPos }));
                     items.sort((a, b) => b.count - a.count || a.col - b.col);
                     // Ensure each card is at most 1/3 of the row and centered
-                    let t = `<div class='card' style='flex:0 1 calc(33.333% - 10px);'><h4 style='margin:0 0 8px;'>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th></tr></thead><tbody>`;
+                    let t = `<div class='card' style='flex:0 1 calc(33.333% - 10px);'><h4 style='margin:0 0 8px;'>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th><th>Số hay xuất hiện</th></tr></thead><tbody>`;
                     items.forEach((it, idx) => {
                         const rankBg = idx === 0 ? "#c8e6c9" : idx === 1 ? "#fff9c4" : idx === 2 ? "#b3e5fc" : "";
                         const style = rankBg ? `style=\"background:${rankBg}\"` : "";
-                        t += `<tr ${style}><td style='font-weight:700'>${it.col}</td><td style='text-align:right;font-weight:700'>${it.count}</td><td style='text-align:right;font-weight:700'>${fmtPct(it.pct)}</td></tr>`;
+                        const vals = countMap(posMaps[pos][it.col] || []);
+                        const valsHtml = Object.entries(vals).sort((a, b) => b[1] - a[1]).map(([v, k]) => `<strong>${v}</strong><span style='font-weight:400'>(${k})</span>`).join(', ');
+                        t += `<tr ${style}><td style='font-weight:700'>${it.col}</td><td style='text-align:right;font-weight:700'>${it.count}</td><td style='text-align:right;font-weight:700'>${fmtPct(it.pct)}</td><td style='font-weight:700'>${valsHtml || '—'}</td></tr>`;
                     });
                     t += "</tbody></table></div>";
                     return t;
