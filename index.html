@@ -18,6 +18,9 @@
             --text-strong: #fff;
             --highlight-bg: #4CAF50;
             --highlight-text: #0b1220;
+            /* Canvas connection line color for dark mode */
+            --connection-line-color: #ff5722;
+            /* deep orange - contrasts with dark bg and yellow cells */
         }
 
         [data-theme="light"] {
@@ -32,6 +35,9 @@
             --text-strong: #000;
             --highlight-bg: #4CAF50;
             --highlight-text: #fff;
+            /* Canvas connection line color for light mode */
+            --connection-line-color: #00cc00;
+            /* keep green in light theme */
         }
 
         * {
@@ -116,6 +122,331 @@
 
         .brand span:hover {
             transform: scale(1.05);
+        }
+
+        /* Number Picker Popup and Place Boxes (copied from index.html) */
+        .number-picker-popup {
+            position: fixed;
+            z-index: 9999;
+            background: white;
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            display: none;
+            max-width: 500px;
+            max-height: 600px;
+            overflow-y: auto;
+            left: 0;
+            top: 0;
+            cursor: move;
+            transform-origin: top left;
+            transition: transform 0.1s ease-out, opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .popup-scale-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            display: none;
+            background: var(--accent);
+            border: 1px solid var(--accent-2);
+            opacity: 0.7;
+        }
+
+        .popup-scale-handle.visible {
+            display: block;
+        }
+
+        .number-picker-popup * {
+            cursor: default;
+        }
+
+        .number-picker-popup .popup-scale-handle {
+            cursor: nwse-resize !important;
+        }
+
+        [data-theme="dark"] .number-picker-popup {
+            background: var(--panel);
+            border-color: var(--accent);
+        }
+
+        .number-picker-popup.show {
+            display: block;
+            opacity: 1;
+        }
+
+        .number-picker-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .number-picker-table th {
+            border: 1px solid var(--border);
+            padding: 8px;
+            text-align: center;
+            font-weight: 600;
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        .number-picker-table td {
+            background: var(--cell-bg-color, #fffbea);
+            color: #000000;
+            transition: all 0.2s;
+            border: 2px solid var(--connection-line-color);
+            box-shadow: 0 2px 8px rgba(255, 251, 234, 0.4);
+            font-weight: 700;
+            padding: 8px;
+            text-align: center;
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        .number-picker-table th.label-cell {
+            cursor: grab;
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
+            color: white;
+        }
+
+        .number-picker-table th.label-cell:active {
+            cursor: grabbing;
+        }
+
+        .number-picker-table td:nth-child(3) {
+            border-right: 3px solid #00cc00 !important;
+        }
+
+        .number-picker-table td:nth-child(4) {
+            border-left: 3px solid #00cc00 !important;
+        }
+
+        .number-picker-table th:nth-child(3) {
+            border-right: 3px solid rgba(255, 255, 255, 0.6) !important;
+            box-shadow: inset -3px 0 0 0 rgba(255, 255, 255, 0.6);
+        }
+
+        .number-picker-table th:nth-child(4) {
+            border-left: 3px solid rgba(255, 255, 255, 0.6) !important;
+            box-shadow: inset 3px 0 0 0 rgba(255, 255, 255, 0.6);
+        }
+
+        .number-picker-table td:active {
+            cursor: grabbing;
+        }
+
+        [data-theme="light"] .number-picker-table td {
+            background: var(--cell-bg-color, #fffbea);
+            color: #000000;
+            border: 2px solid var(--connection-line-color);
+            box-shadow: 0 2px 8px rgba(255, 251, 234, 0.4);
+            font-weight: 700;
+        }
+
+        [data-theme="light"] .number-picker-table td:nth-child(3) {
+            border-right: 3px solid #00cc00 !important;
+        }
+
+        [data-theme="light"] .number-picker-table td:nth-child(4) {
+            border-left: 3px solid #00cc00 !important;
+        }
+
+        [data-theme="light"] .number-picker-table th:nth-child(3) {
+            border-right: 3px solid #11998e !important;
+            box-shadow: inset -3px 0 0 0 #11998e;
+        }
+
+        [data-theme="light"] .number-picker-table th:nth-child(4) {
+            border-left: 3px solid #11998e !important;
+            box-shadow: inset 3px 0 0 0 #11998e;
+        }
+
+        .number-picker-table td:hover {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+            color: var(--highlight-text);
+            transform: scale(1.08);
+            box-shadow: 0 4px 12px rgba(56, 239, 125, 0.3);
+        }
+
+        .number-picker-table td.disabled {
+            opacity: 1;
+            cursor: not-allowed;
+            background: #1a2a3a !important;
+            pointer-events: none;
+            color: #00ff00 !important;
+            font-weight: 700 !important;
+        }
+
+        [data-theme="light"] .number-picker-table td.disabled {
+            background: #e8f4f8 !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Apply bright label-cell style when column has values */
+        .number-picker-table th.label-cell.with-values {
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%) !important;
+            color: white !important;
+            font-weight: 800 !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        [data-theme="light"] .number-picker-table th.label-cell.with-values {
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%) !important;
+            color: white !important;
+            font-weight: 800 !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        /* Dim label cells that don't have values */
+        .number-picker-table tfoot:not(.disabled) th.label-cell:not(.with-values) {
+            opacity: 0.3 !important;
+            pointer-events: none !important;
+        }
+
+        .number-picker-table tbody.disabled,
+        .number-picker-table tfoot.disabled {
+            pointer-events: none;
+            opacity: 0.3;
+            position: relative;
+        }
+
+        .number-picker-table tbody.disabled::after,
+        .number-picker-table tfoot.disabled::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(0, 0, 0, 0.03) 10px,
+                    rgba(0, 0, 0, 0.03) 20px);
+            pointer-events: none;
+        }
+
+        [data-theme="dark"] .number-picker-table tbody.disabled::after,
+        [data-theme="dark"] .number-picker-table tfoot.disabled::after {
+            background: repeating-linear-gradient(45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(255, 255, 255, 0.03) 10px,
+                    rgba(255, 255, 255, 0.03) 20px);
+        }
+
+        .place-container {
+            margin-top: 16px;
+            padding: 18px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background: rgba(56, 239, 125, 0.08);
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        .place-container:hover {
+            background: rgba(56, 239, 125, 0.12);
+            border-color: var(--accent-2);
+        }
+
+        .places-grid {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .place-box {
+            width: 60px;
+            height: 60px;
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            background: rgba(56, 239, 125, 0.1);
+            color: var(--accent);
+            cursor: grab;
+            transition: all 0.2s;
+            position: relative;
+            user-select: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .place-box.filled {
+            background: rgba(56, 239, 125, 0.25);
+            border-style: solid;
+            border-color: var(--accent);
+        }
+
+        [data-theme="light"] .place-box.filled {
+            background: #0f9f5c;
+            color: var(--highlight-text);
+            border-color: #0f9f5c;
+        }
+
+        .place-box-label {
+            position: absolute;
+            top: -20px;
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .place-box-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .mode-selector {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: rgba(56, 239, 125, 0.05);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mode-selector select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .clear-btn {
+            background: #ef4444 !important;
+            color: #fff !important;
+            border-color: #dc2626 !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            font-weight: 500 !important;
+        }
+
+        .clear-btn:hover {
+            background: #dc2626 !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
         }
 
         .image-popup {
@@ -234,7 +565,7 @@
         input,
         button {
             border-radius: 10px;
-            border: 1px solid var(--border);
+            border: 2px solid var(--accent);
             background: var(--card);
             color: var(--text);
             padding: 10px 12px;
@@ -340,29 +671,6 @@
 
         [data-theme="dark"] tbody tr:hover {
             background: rgba(255, 230, 179, 0.2) !important;
-        }
-
-        /* Top rank colors from notebook */
-        tbody tr:first-child {
-            background: #c8e6c9 !important;
-        }
-
-        tbody tr:nth-child(2) {
-            background: #fff9c4 !important;
-        }
-
-        tbody tr:nth-child(3) {
-            background: #b3e5fc !important;
-        }
-
-        /* Keep text legible on light rank backgrounds, especially in dark theme */
-        tbody tr:nth-child(-n+3) td {
-            color: #0f172a;
-            font-weight: 700;
-        }
-
-        [data-theme="dark"] tbody tr:nth-child(-n+3) td {
-            color: #0b1220;
         }
 
         /* Keep top ranks in Cell4 readable on dark theme */
@@ -494,6 +802,25 @@
             padding: 16px;
         }
 
+        /* Performance: skip rendering offscreen content like large apps do */
+        section {
+            content-visibility: auto;
+            contain: content;
+            contain-intrinsic-size: 800px 600px;
+        }
+
+        .card {
+            content-visibility: auto;
+            contain: content;
+        }
+
+        /* Reduce paint/layout when card bodies are offscreen */
+        .card-body {
+            content-visibility: auto;
+            contain: content;
+            contain-intrinsic-size: 200px 120px;
+        }
+
         @media (min-width: 768px) {
             main {
                 padding: 24px 18px 48px;
@@ -537,6 +864,12 @@
             display: none;
         }
 
+        /* Flash highlight after copying a row */
+        tr.copied-row {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
         /* Floating scroll-to-top button */
         #scrollToTop {
             position: fixed;
@@ -574,6 +907,15 @@
                 font-size: 20px;
             }
         }
+
+        /* Canvas overlay for drawing connections */
+        #connectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
     </style>
 </head>
 
@@ -590,6 +932,33 @@
     <div class="image-popup" id="imagePopup">
         <img src="anh.png" alt="Preview">
     </div>
+    <!-- Number Picker Popup (copied from index.html) -->
+    <div class="number-picker-popup" id="numberPickerPopup">
+        <table class="number-picker-table" id="numberPickerTable">
+            <!-- Generated by JS -->
+        </table>
+        <div class="place-container">
+            <div class="places-grid" id="placesGrid">
+                <!-- Generated by JS: 6 place boxes V1-V6 -->
+            </div>
+        </div>
+        <div class="mode-selector">
+            <label style="font-size: 12px;">Mode:</label>
+            <button id="modeSelector"
+                style="width: 100px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);">Số
+                (1-45)</button>
+            <button id="clearPlaceBtn" class="clear-btn" title="Xóa toàn bộ place"
+                style="padding: 6px 10px; font-size: 12px;">Xóa</button>
+            <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
+            <button id="connectionToggle"
+                style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
+                title="Hiện/ẩn đường nối giữa các số liên tiếp">Hiện</button>
+            <label style="margin-left: 6px; font-size: 12px;">Màu:</label>
+            <input type="color" id="cellColorPicker" value="#fffbea"
+                style="width: 50px; height: 32px; cursor: pointer; border-radius: 6px;"
+                title="Chọn màu nền cho các ô số">
+        </div>
+    </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
     <main>
         <div id="status" class="card" style="margin-bottom:18px;">Đang tải dữ liệu...</div>
@@ -600,6 +969,92 @@
         // ===== Helpers from notebook =====
         const COL_MAP = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 2, 10: 2, 11: 2, 12: 2, 13: 2, 14: 2, 15: 2, 16: 2, 17: 3, 18: 3, 19: 3, 20: 3, 21: 3, 22: 3, 23: 3, 24: 3, 25: 4, 26: 4, 27: 4, 28: 4, 29: 4, 30: 4, 31: 4, 32: 5, 33: 5, 34: 5, 35: 5, 36: 5, 37: 5, 38: 5, 39: 6, 40: 6, 41: 6, 42: 6, 43: 6, 44: 6, 45: 6 };
         const getCol = (v) => COL_MAP[v] ?? 0;
+
+        // ===== Web Worker Setup =====
+        // Tạo web worker inline để xử lý tính toán nặng
+        const workerCode = `
+            // Helpers for worker
+            const compareKey = (a, b) => {
+                const pa = a.split("-").map(Number); 
+                const pb = b.split("-").map(Number);
+                for (let i = 0; i < Math.min(pa.length, pb.length); i++) { 
+                    if (pa[i] !== pb[i]) return pa[i] - pb[i]; 
+                } 
+                return pa.length - pb.length;
+            };
+
+            function kCombinations(set, k) {
+                const combs = [];
+                const recur = (start, combo) => {
+                    if (combo.length === k) { combs.push([...combo]); return; }
+                    for (let i = start; i < set.length; i++) { combo.push(set[i]); recur(i + 1, combo); combo.pop(); }
+                };
+                recur(0, []); 
+                return combs;
+            }
+
+            self.onmessage = (e) => {
+                const { rows, xSel, consec, sortSel, workerType } = e.data;
+                
+                if (workerType === 'groupBySet') {
+                    const x = parseInt(xSel, 10);
+                    const groups = new Map();
+                    
+                    rows.forEach((r, rowIndex) => {
+                        const nums = r.nums;
+                        if (consec) {
+                            for (let i = 0; i <= nums.length - x; i++) {
+                                const slice = nums.slice(i, i + x).slice();
+                                const key = slice.sort((a, b) => a - b).join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            }
+                        } else {
+                            // Optimize: skip large combos calculation
+                            if (x > 4) {
+                                for (let i = 0; i <= nums.length - x; i++) {
+                                    const slice = nums.slice(i, i + x).slice();
+                                    const key = slice.sort((a, b) => a - b).join("-");
+                                    if (!groups.has(key)) groups.set(key, new Set());
+                                    groups.get(key).add(rowIndex);
+                                }
+                            } else {
+                                const indexed = nums.map((v, i) => [i, v]);
+                                const combos = kCombinations(indexed, x);
+                                combos.forEach(combo => {
+                                    const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                    const key = values.join("-");
+                                    if (!groups.has(key)) groups.set(key, new Set());
+                                    groups.get(key).add(rowIndex);
+                                });
+                            }
+                        }
+                    });
+                    
+                    let arr = [...groups.entries()]
+                        .map(([key, indices]) => [key, indices])
+                        .filter(([, indices]) => indices.size >= 2)
+                        .sort((a, b) => {
+                            const sort = sortSel;
+                            if (sort === "value_asc") return compareKey(a[0], b[0]);
+                            if (sort === "value_desc") return compareKey(b[0], a[0]);
+                            if (sort === "count_asc") return a[1].size - b[1].size;
+                            return b[1].size - a[1].size;
+                        });
+
+                    self.postMessage({ result: arr.map(([k, v]) => [k, Array.from(v)]) });
+                }
+            };
+        `;
+
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        let worker = null;
+
+        const getWorker = () => {
+            if (!worker) worker = new Worker(workerUrl);
+            return worker;
+        };
 
         // ===== Data Loading =====
         let rows = [];
@@ -629,13 +1084,71 @@
         const fmtPct = (v) => `${(v * 100).toFixed(decimalPlaces)}%`;
         const fmtPctCustom = (v, decimals) => `${(v * 100).toFixed(decimals)}%`;
         const MATCH_STYLE = "background:#2e7d32;color:#fff;"; // dark green with white text for matched values
+
+        // Debounce helper to prevent excessive function calls
+        const createDebounce = (fn, delay = 100) => {
+            let timeout;
+            return function debounced(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => fn.apply(this, args), delay);
+            };
+        };
+
+        // Throttle helper for smoother updates
+        const createThrottle = (fn, delay = 100) => {
+            let lastCall = 0;
+            return function throttled(...args) {
+                const now = Date.now();
+                if (now - lastCall >= delay) {
+                    lastCall = now;
+                    return fn.apply(this, args);
+                }
+            };
+        };
+
+        // Double-click any table row that has data-result to copy its result string (format: 1,2,3,4,5,6)
+        const handleRowCopyDblClick = (e) => {
+            const row = e.target.closest("tr[data-result]");
+            if (!row || !row.dataset.result) return;
+            const text = row.dataset.result;
+
+            const flash = () => {
+                row.classList.add("copied-row");
+                setTimeout(() => row.classList.remove("copied-row"), 500);
+            };
+
+            const fallbackCopy = () => {
+                try {
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    ta.style.position = "fixed";
+                    ta.style.top = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    flash();
+                } catch (_) { /* ignore */ }
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(flash).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+        };
+
+        // Global listener to catch all dynamic tables
+        document.addEventListener('dblclick', handleRowCopyDblClick, true);
+
         const anchorNav = [
             { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
             { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
-            { id: "cell6", label: "Cell6 · Nhóm label" },
-            { id: "cell7", label: "Cell7 · Tìm label" },
-            { id: "cell8", label: "Cell8 · Nhóm bộ số" },
-            { id: "cell9", label: "Cell9 · Bộ số tùy chọn" },
+            { id: "cell6", label: "Cell6 · Nhóm bộ số" },
+            { id: "cell7", label: "Cell7 · Nhóm label" },
+            { id: "cell8", label: "Cell8 · Tìm label" },
+            { id: "cell9", label: "Cell9 · Tổ hợp tùy chọn" },
             { id: "cell10", label: "Cell10 · Phân tích vị trí" },
             { id: "cell11", label: "Cell11 · Pattern số" },
         ];
@@ -648,6 +1161,10 @@
                 btn.textContent = item.label;
                 btn.dataset.target = item.id;
                 btn.onclick = () => {
+                    // Lazy render the section only when needed
+                    if (typeof ensureRendered === 'function') {
+                        ensureRendered(item.id);
+                    }
                     showSection(item.id);
                     history.replaceState(null, "", `#${item.id}`);
                 };
@@ -718,7 +1235,7 @@
             return showSection;
         }
 
-        // Cell4: tỷ lệ theo vị trí
+
         function renderCell4() {
             const body = sectionShell("cell4", "Cell4 · Tỷ lệ theo vị trí (home)", "Top/Sort tương tự notebook: hiển thị tỷ lệ từng số theo 6 vị trí.");
             const controls = document.createElement("div");
@@ -860,7 +1377,7 @@
 
         // Cell6: group by label with max diff + consecutive
         function renderCell6() {
-            const body = sectionShell("cell6", "Cell6 · Nhóm theo label", "max sai khác & liền kề, chỉ nhóm >=2 kỳ.");
+            const body = sectionShell("cell7", "Cell7 · Nhóm theo label", "max sai khác & liền kề, chỉ nhóm >=2 kỳ.");
             const controls = document.createElement("div");
             controls.className = "controls";
             const diffSel = document.createElement("select");
@@ -869,54 +1386,189 @@
             controls.append("Sai khác tối đa:", diffSel, consecLabel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+
+            let groupCache = null;
+            let cacheKey = null;
 
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
-                const labelRows = {};
-                rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
-                const labels = Object.keys(labelRows).sort();
-                const used = new Set();
-                const groups = [];
-                labels.forEach(base => {
-                    if (used.has(base)) return;
-                    used.add(base);
-                    const gLabels = [base];
-                    let gRows = [...labelRows[base]];
-                    labels.forEach(other => {
-                        if (used.has(other)) return;
-                        const pos = diffPositions(base, other);
-                        if (pos.length > diffSel.value) return;
-                        if (consec.checked && pos.length > 1 && !pos.every((p, i) => i === 0 || p - pos[i - 1] === 1)) return;
-                        used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
+
+                // Tạo key để kiểm tra cache
+                const newCacheKey = `${diffSel.value}|${consec.checked}`;
+                if (cacheKey === newCacheKey && groupCache) {
+                    renderGroups(groupCache);
+                    return;
+                }
+
+                wrap.innerHTML = "<div class='loader'>Đang xử lý...</div>";
+
+                // Dùng requestIdleCallback để tính toán khi browser rảnh
+                if (window.requestIdleCallback) {
+                    requestIdleCallback(() => computeAndRender());
+                } else {
+                    setTimeout(() => computeAndRender(), 0);
+                }
+
+                function computeAndRender() {
+                    const labelRows = {};
+                    rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
+                    const labels = Object.keys(labelRows).sort();
+                    const used = new Set();
+                    const groups = [];
+
+                    labels.forEach(base => {
+                        if (used.has(base)) return;
+                        used.add(base);
+                        const gLabels = [base];
+                        let gRows = [...labelRows[base]];
+
+                        // Optimize: chỉ so sánh với labels chưa dùng (thay vì mọi labels)
+                        for (let j = 0; j < labels.length; j++) {
+                            const other = labels[j];
+                            if (used.has(other)) continue;
+                            const pos = diffPositions(base, other);
+                            if (pos.length > diffSel.value) continue;
+                            if (consec.checked && pos.length > 1 && !pos.every((p, i) => i === 0 || p - pos[i - 1] === 1)) continue;
+                            used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
+                        }
+                        if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
                     });
-                    if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
-                });
-                groups.sort((a, b) => b.rows.length - a.rows.length);
-                let html = `<div class='muted'>${groups.length} nhóm · ${groups.reduce((s, g) => s + g.rows.length, 0)} kỳ</div><div class='grid-centered'>`;
-                groups.forEach((g, idx) => {
-                    html += `<div class='card'><div class='flex' style='justify-content:space-between'><strong>Base ${g.base}</strong><span class='badge'>${g.rows.length} kỳ</span></div>`;
-                    html += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
-                    g.rows.slice(0, 20).forEach(r => {
-                        const label = labelOf(r.nums);
-                        const labelHtml = label.split("").map((ch, i) => ch !== g.base[i] ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>` : `<span>${ch}</span>`).join(" ");
-                        const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
-                    });
-                    html += "</tbody></table>";
-                    if (g.rows.length > 20) html += `<div class='muted'>... ${g.rows.length - 20} dòng nữa</div>`;
-                    html += "</div>";
-                });
-                html += "</div>";
-                wrap.innerHTML = html;
+
+                    groups.sort((a, b) => b.rows.length - a.rows.length);
+                    groupCache = groups;
+                    cacheKey = newCacheKey;
+                    renderGroups(groups);
+                }
             }
-            diffSel.onchange = consec.onchange = group;
+
+            function renderGroups(groups) {
+                // Summary + grid container
+                wrap.innerHTML = `<div class='muted'>${groups.length} nhóm · ${groups.reduce((s, g) => s + g.rows.length, 0)} kỳ</div>` +
+                    `<div class='grid-centered' id='labelGroupGrid'></div>`;
+                const grid = wrap.querySelector('#labelGroupGrid');
+
+                // Caches for smoother back-scroll
+                const htmlCache = new Map(); // idx -> innerHTML
+                const heightCache = new Map(); // idx -> measured height
+                const lruQueue = []; // maintain recency for limiting cache
+                const MAX_CACHE = 60;
+                const cardRefs = new Map(); // idx -> element
+                const mountedSet = new Set(); // idx currently mounted
+                const MAX_MOUNTED = 36; // limit live DOM to reduce churn
+
+                const setCache = (idx, html) => {
+                    htmlCache.set(idx, html);
+                    lruQueue.push(idx);
+                    if (lruQueue.length > MAX_CACHE) {
+                        const rm = lruQueue.shift();
+                        if (!mountedSet.has(rm)) htmlCache.delete(rm);
+                    }
+                };
+
+                const mount = (card, g, idx) => {
+                    if (card.dataset.mounted === '1') return;
+                    const body = card.querySelector('.card-body');
+                    // Reuse cached HTML if available
+                    let inner = htmlCache.get(idx);
+                    if (!inner) {
+                        inner = "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        g.rows.slice(0, 20).forEach(r => {
+                            const label = labelOf(r.nums);
+                            const labelHtml = label.split("").map((ch, i) => ch !== g.base[i]
+                                ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`
+                                : `<span>${ch}</span>`).join(" ");
+                            const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        });
+                        inner += "</tbody></table>";
+                        if (g.rows.length > 20) inner += `<div class='muted'>... ${g.rows.length - 20} dòng nữa</div>`;
+                        setCache(idx, inner);
+                    }
+                    body.style.minHeight = "";
+                    body.innerHTML = inner;
+                    card.dataset.mounted = '1';
+                    mountedSet.add(idx);
+                    // Measure and cache height after first mount
+                    if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
+                    enforceMountedBudget(idx);
+                };
+
+                const unmount = (card, idx) => {
+                    if (card.dataset.mounted !== '1') return;
+                    const body = card.querySelector('.card-body');
+                    const h = heightCache.get(idx);
+                    if (h) body.style.minHeight = `${h}px`;
+                    body.innerHTML = ""; // free DOM when offscreen
+                    card.dataset.mounted = '0';
+                    mountedSet.delete(idx);
+                };
+
+                const enforceMountedBudget = (preferKeepIdx) => {
+                    if (mountedSet.size <= MAX_MOUNTED) return;
+                    // Unmount farthest cards first
+                    const vh = window.innerHeight;
+                    const center = vh / 2;
+                    const candidates = Array.from(mountedSet).filter(i => i !== preferKeepIdx).map(i => {
+                        const el = cardRefs.get(i);
+                        const rect = el ? el.getBoundingClientRect() : { top: 1e9 };
+                        return { i, d: Math.abs(rect.top - center) };
+                    }).sort((a, b) => b.d - a.d);
+                    while (mountedSet.size > MAX_MOUNTED && candidates.length) {
+                        const { i } = candidates.shift();
+                        const el = cardRefs.get(i);
+                        if (el) unmount(el, i);
+                    }
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        const g = groups[idx];
+                        if (!g) return;
+                        if (entry.isIntersecting) {
+                            mount(entry.target, g, idx);
+                        } else {
+                            unmount(entry.target, idx);
+                        }
+                    });
+                }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+
+                // Chunked creation of cards to avoid main-thread spikes
+                let created = 0;
+                const chunkSize = 6;
+                const createChunk = () => {
+                    const end = Math.min(created + chunkSize, groups.length);
+                    for (let i = created; i < end; i++) {
+                        const g = groups[i];
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.dataset.index = String(i);
+                        card.dataset.mounted = '0';
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                            `<strong>Base ${g.base}</strong>` +
+                            `<span class='badge'>${g.rows.length} kỳ</span>` +
+                            `</div><div class='card-body' style='min-height:120px'></div>`;
+                        grid.appendChild(card);
+                        cardRefs.set(i, card);
+                        observer.observe(card);
+                    }
+                    created = end;
+                    if (created < groups.length) requestAnimationFrame(createChunk);
+                };
+                createChunk();
+            }
+
+            // Dùng debounce để tránh tính toán quá tần suất
+            const debouncedGroup = createDebounce(group, 300);
+            diffSel.onchange = consec.onchange = debouncedGroup;
             group();
         }
 
         // Cell7: reverse query by label pattern (6 chars, _ wildcard)
         function renderCell7() {
-            const body = sectionShell("cell7", "Cell7 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Có thể kéo thả giữa các vị trí.");
-            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; return inp; });
+            const body = sectionShell("cell8", "Cell8 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Có thể kéo thả giữa các vị trí.");
+            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "70px"; return inp; });
 
             // Create draggable containers for inputs
             const containers = inputs.map((inp, idx) => {
@@ -959,17 +1611,29 @@
 
             // Drag and drop logic
             let draggedIndex = null;
+            let dropHandled = false;
 
             containers.forEach((container, idx) => {
                 container.addEventListener("dragstart", (e) => {
                     draggedIndex = idx;
+                    dropHandled = false;
                     container.style.opacity = "0.4";
-                    e.dataTransfer.effectAllowed = "move";
+                    container.style.cursor = "grabbing";
+                    e.dataTransfer.effectAllowed = "copyMove";
                     e.dataTransfer.setData("text/plain", inputs[idx].value);
                 });
 
                 container.addEventListener("dragend", (e) => {
                     container.style.opacity = "";
+                    container.style.cursor = "grab";
+                    // If drop didn't happen (dragged outside), delete the value
+                    if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                        inputs[idx].value = "";
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        if (run) run();
+                    }
+                    draggedIndex = null;
+                    dropHandled = false;
                     containers.forEach(c => {
                         c.style.backgroundColor = "";
                         c.style.transform = "";
@@ -978,7 +1642,7 @@
 
                 container.addEventListener("dragover", (e) => {
                     e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
+                    e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
                     if (draggedIndex !== null && draggedIndex !== idx) {
                         container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
                         container.style.transform = "scale(1.05)";
@@ -992,7 +1656,84 @@
 
                 container.addEventListener("drop", (e) => {
                     e.preventDefault();
-                    if (draggedIndex !== null && draggedIndex !== idx) {
+                    dropHandled = true;
+                    const draggedData = e.dataTransfer.getData('text/plain');
+                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                    const labelData = e.dataTransfer.getData('application/x-label');
+
+                    // Kéo từ bảng label C1-C6 trực tiếp từ popup
+                    if (labelData) {
+                        inputs[idx].value = labelData.replace('C', '');
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        run();
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                        draggedIndex = null;
+                        return;
+                    }
+
+                    // Swap với 1 place box
+                    if (placeIndexData !== null && placeIndexData !== '') {
+                        const srcIdx = parseInt(placeIndexData, 10);
+                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                        if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
+                            const popupMode = window.getNumberPickerMode ? window.getNumberPickerMode() : 'number';
+                            const incomingRaw = placeVals[srcIdx];
+                            const incoming = incomingRaw && popupMode === 'number' ? getCol(parseInt(incomingRaw, 10)) : incomingRaw;
+                            const outgoing = inputs[idx].value;
+                            inputs[idx].value = incoming || '';
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            placeVals[srcIdx] = outgoing || '';
+                            if (window.setPlaceValues) window.setPlaceValues(placeVals);
+                            if (window.markPlaceDropHandled) window.markPlaceDropHandled();
+                            run();
+                            container.style.backgroundColor = "";
+                            container.style.transform = "";
+                            draggedIndex = null;
+                            return;
+                        }
+                    }
+                    // Nếu kéo cả bộ place (6 giá trị)
+                    if (placeSetData) {
+                        try {
+                            const values = JSON.parse(placeSetData);
+                            if (Array.isArray(values) && values.length === 6) {
+                                const popupMode = window.getNumberPickerMode ? window.getNumberPickerMode() : 'number';
+                                for (let i = 0; i < 6; i++) {
+                                    const val = values[i];
+                                    let col = '';
+                                    if (val) {
+                                        const numVal = parseInt(val, 10);
+                                        col = popupMode === 'number' ? getCol(numVal) : numVal;
+                                    }
+                                    inputs[i].value = col || '';
+                                    inputs[i].dispatchEvent(new Event("input"));
+                                }
+                                run();
+                                container.style.backgroundColor = "";
+                                container.style.transform = "";
+                                draggedIndex = null;
+                                return;
+                            }
+                        } catch (err) { }
+                    }
+                    // Kéo số trực tiếp từ popup → chuyển sang cột (chỉ nếu không phải internal drag)
+                    if (draggedIndex === null && !placeIndexData && draggedData && !isNaN(draggedData)) {
+                        const numVal = parseInt(draggedData, 10);
+                        if (numVal >= 1 && numVal <= 45) {
+                            const col = getCol(numVal);
+                            inputs[idx].value = col || '';
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            run();
+                            container.style.backgroundColor = "";
+                            container.style.transform = "";
+                            draggedIndex = null;
+                            return;
+                        }
+                    }
+                    // Hoán đổi nội bộ
+                    else if (draggedIndex !== null && draggedIndex !== idx) {
                         const tempValue = inputs[idx].value;
                         inputs[idx].value = inputs[draggedIndex].value;
                         inputs[draggedIndex].value = tempValue;
@@ -1013,7 +1754,8 @@
             wrapInputs.appendChild(labelText);
             containers.forEach(c => wrapInputs.appendChild(c)); body.appendChild(wrapInputs);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
-            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; wrapInputs.appendChild(clearBtn);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; wrapInputs.appendChild(clearBtn);
 
             const hint = document.createElement("div");
             hint.className = "muted";
@@ -1041,7 +1783,7 @@
                             : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`
                         ).join(" ");
                         const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
-                        html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -1061,7 +1803,7 @@
 
         // Cell8: group by same number set size x
         function renderCell8() {
-            const body = sectionShell("cell8", "Cell8 · Phân nhóm theo bộ số", "Chọn kích thước bộ số (1-6), tùy chọn liền kề, sắp xếp.");
+            const body = sectionShell("cell6", "Cell6 · Phân nhóm theo bộ số", "Chọn kích thước bộ số (1-6), tùy chọn liền kề, sắp xếp.");
             const controls = document.createElement("div"); controls.className = "controls";
             const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = true;
@@ -1069,67 +1811,210 @@
             controls.append("Bộ số:", xSel, consecLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+
+            let groupCache = null;
+            let cacheKey = null;
+            let isComputing = false;
 
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+
+                const newCacheKey = `${xSel.value}|${consec.checked}|${sortSel.value}`;
+                if (cacheKey === newCacheKey && groupCache) {
+                    renderGroupTable(groupCache);
+                    return;
+                }
+
+                if (isComputing) return; // Tránh multiple requests
+                isComputing = true;
+                wrap.innerHTML = "<div class='loader'>Đang xử lý (trên background thread)...</div>";
+
                 const x = parseInt(xSel.value, 10);
-                const groups = new Map();
-                rows.forEach((r, rowIndex) => {
-                    const nums = r.nums;
-                    if (consec.checked) {
-                        // Khi chọn liền kề, chỉ duyệt các block liên tiếp thay vì mọi tổ hợp → nhanh hơn
-                        for (let i = 0; i <= nums.length - x; i++) {
-                            const slice = nums.slice(i, i + x).slice();
-                            const key = slice.sort((a, b) => a - b).join("-");
-                            if (!groups.has(key)) groups.set(key, new Set());
-                            groups.get(key).add(rowIndex); // Dùng Set để tránh trùng lặp
+
+                // Nếu x <= 2 hoặc consec=true, tính nhanh trên main thread
+                if (x <= 2 || consec.checked) {
+                    computeQuick();
+                } else {
+                    // Nếu x > 2 và consec=false, dùng worker
+                    computeWithWorker();
+                }
+
+                function computeQuick() {
+                    const groups = new Map();
+                    rows.forEach((r, rowIndex) => {
+                        const nums = r.nums;
+                        if (consec.checked) {
+                            for (let i = 0; i <= nums.length - x; i++) {
+                                const slice = nums.slice(i, i + x).slice();
+                                const key = slice.sort((a, b) => a - b).join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            }
+                        } else {
+                            const indexed = nums.map((v, i) => [i, v]);
+                            const combos = kCombinations(indexed, x);
+                            combos.forEach(combo => {
+                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                const key = values.join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            });
                         }
-                    } else {
-                        const indexed = nums.map((v, i) => [i, v]);
-                        const combos = kCombinations(indexed, x);
-                        combos.forEach(combo => {
-                            const values = combo.map(c => c[1]).sort((a, b) => a - b);
-                            const key = values.join("-");
-                            if (!groups.has(key)) groups.set(key, new Set());
-                            groups.get(key).add(rowIndex); // Dùng Set để tránh trùng lặp
-                        });
-                    }
-                });
-                let arr = [...groups.entries()].map(([key, indices]) => [key, [...indices].map(i => rows[i])]).filter(([, list]) => list.length >= 2);
-                const sort = sortSel.value;
-                if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
-                else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
-                else if (sort === "count_asc") arr.sort((a, b) => a[1].length - b[1].length);
-                else arr.sort((a, b) => b[1].length - a[1].length);
-
-                let html = `<div class='muted'>${arr.length} nhóm (>=2 kỳ)</div><div class='grid-centered'>`;
-                arr.forEach(([key, list]) => {
-                    html += `<div class='card'><div class='flex' style='justify-content:space-between'><strong>{${key.replace(/-/g, ',')}}</strong><span class='badge'>${list.length} kỳ</span></div>`;
-                    html += "<div><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
-                    list.slice(0, 20).forEach(r => {
-                        const setValues = new Set(key.split("-").map(Number));
-                        const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
-                        const labelHtml = renderHighlightedLabel(r.label, positions);
-                        html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
-                    if (list.length > 20) html += `<tr><td colspan='3' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
-                    html += "</tbody></table></div></div>";
-                });
-                html += "</div>";
-                wrap.innerHTML = html;
-            }
-            xSel.onchange = consec.onchange = sortSel.onchange = group;
-            group();
-        }
 
-        // helpers
-        function kCombinations(set, k) {
-            const combs = [];
-            const recur = (start, combo) => {
-                if (combo.length === k) { combs.push(combo.slice()); return; }
-                for (let i = start; i < set.length; i++) { combo.push(set[i]); recur(i + 1, combo); combo.pop(); }
-            };
-            recur(0, []); return combs;
+                    let arr = [...groups.entries()]
+                        .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
+                        .filter(([, list]) => list.length >= 2);
+
+                    const sort = sortSel.value;
+                    if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
+                    else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
+                    else if (sort === "count_asc") arr.sort((a, b) => a[1].length - b[1].length);
+                    else arr.sort((a, b) => b[1].length - a[1].length);
+                    groupCache = arr;
+                    cacheKey = newCacheKey;
+                    isComputing = false;
+                    renderGroupTable(arr);
+                }
+
+                function computeWithWorker() {
+                    const worker = getWorker();
+                    const rowsForWorker = rows.map(r => ({ nums: r.nums, date: r.date, label: r.label }));
+
+                    worker.onmessage = (e) => {
+                        const arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
+
+                        groupCache = arr;
+                        cacheKey = newCacheKey;
+                        isComputing = false;
+                        renderGroupTable(arr);
+                    };
+
+                    worker.postMessage({
+                        rows: rowsForWorker,
+                        xSel: xSel.value,
+                        consec: consec.checked,
+                        sortSel: sortSel.value,
+                        workerType: 'groupBySet'
+                    });
+                }
+            }
+
+            function renderGroupTable(arr) {
+                // Header + empty grid container so the browser can paint quickly
+                wrap.innerHTML = `<div class='muted'>${arr.length} nhóm (>=2 kỳ)</div>` +
+                    `<div class='grid-centered' id='groupGrid'></div>`;
+                const grid = wrap.querySelector('#groupGrid');
+
+                // Caches and mount window for smooth scroll
+                const htmlCache = new Map(); // idx -> innerHTML
+                const heightCache = new Map(); // idx -> measured height
+                const lruQueue = [];
+                const MAX_CACHE = 80; // cell8 is capped to 100 groups
+                const cardRefs = new Map();
+                const mountedSet = new Set();
+                const MAX_MOUNTED = 40;
+
+                const setCache = (idx, html) => {
+                    htmlCache.set(idx, html);
+                    lruQueue.push(idx);
+                    if (lruQueue.length > MAX_CACHE) {
+                        const rm = lruQueue.shift();
+                        if (!mountedSet.has(rm)) htmlCache.delete(rm);
+                    }
+                };
+
+                // Lazy mount/unmount per-card table using viewport observation
+                const mount = (card, idx) => {
+                    if (card.dataset.mounted === '1') return;
+                    const [key, list] = arr[idx] || [];
+                    if (!key) return;
+                    const body = card.querySelector('.card-body');
+                    let inner = htmlCache.get(idx);
+                    if (!inner) {
+                        const setValues = new Set(key.split('-').map(Number));
+                        const x = parseInt(xSel.value, 10);
+                        inner = `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>`;
+                        list.slice(0, 20).forEach(r => {
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
+                            const labelHtml = renderHighlightedLabel(r.label, positions);
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        });
+                        if (list.length > 20) inner += `<tr><td colspan='3' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
+                        inner += `</tbody></table>`;
+                        setCache(idx, inner);
+                    }
+                    body.style.minHeight = '';
+                    body.innerHTML = inner;
+                    card.dataset.mounted = '1';
+                    mountedSet.add(idx);
+                    if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
+                    enforceMountedBudget(idx);
+                };
+
+                const unmount = (card, idx) => {
+                    if (card.dataset.mounted !== '1') return;
+                    const body = card.querySelector('.card-body');
+                    const h = heightCache.get(idx);
+                    if (h) body.style.minHeight = `${h}px`;
+                    body.innerHTML = '';
+                    card.dataset.mounted = '0';
+                    mountedSet.delete(idx);
+                };
+
+                const enforceMountedBudget = (preferKeepIdx) => {
+                    if (mountedSet.size <= MAX_MOUNTED) return;
+                    const vh = window.innerHeight; const center = vh / 2;
+                    const candidates = Array.from(mountedSet).filter(i => i !== preferKeepIdx).map(i => {
+                        const el = cardRefs.get(i);
+                        const rect = el ? el.getBoundingClientRect() : { top: 1e9 };
+                        return { i, d: Math.abs(rect.top - center) };
+                    }).sort((a, b) => b.d - a.d);
+                    while (mountedSet.size > MAX_MOUNTED && candidates.length) {
+                        const { i } = candidates.shift();
+                        const el = cardRefs.get(i);
+                        if (el) unmount(el, i);
+                    }
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        if (Number.isNaN(idx)) return;
+                        if (entry.isIntersecting) mount(entry.target, idx);
+                        else unmount(entry.target, idx);
+                    });
+                }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+
+                // Create card shells in chunks
+                let created = 0;
+                const chunkSize = 8;
+                const createChunk = () => {
+                    const end = Math.min(created + chunkSize, arr.length);
+                    for (let i = created; i < end; i++) {
+                        const [key, list] = arr[i];
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.dataset.index = String(i);
+                        card.dataset.mounted = '0';
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<span class='badge'>${list.length} kỳ</span>` +
+                            `</div><div class='card-body' style='min-height:120px'></div>`;
+                        grid.appendChild(card);
+                        cardRefs.set(i, card);
+                        observer.observe(card);
+                    }
+                    created = end;
+                    if (created < arr.length) requestAnimationFrame(createChunk);
+                };
+                createChunk();
+            }
+
+            const debouncedGroup = createDebounce(group, 300);
+            xSel.onchange = consec.onchange = sortSel.onchange = debouncedGroup;
+            group();
         }
         function compareKey(a, b) {
             const pa = a.split("-").map(Number); const pb = b.split("-").map(Number);
@@ -1168,23 +2053,29 @@
 
         // Cell9: draws containing user set
         function renderCell9() {
-            const body = sectionShell("cell9", "Cell9 · Tìm kỳ chứa bộ số hoặc label", "Chọn tìm theo bộ số (1-45) hoặc label (1-6). Có thể kéo thả giữa các vị trí.");
+            const body = sectionShell("cell9", "Cell9 · Tổ hợp chứa bộ số hoặc label", "Chọn tìm theo bộ số (1-45) hoặc label (1-6). Có thể kéo thả giữa các vị trí.");
 
-            // Mode selector
-            const modeSel = document.createElement("select");
-            [["number", "Bộ số (1-45)"], ["label", "Label (1-6)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; modeSel.appendChild(o); });
-            modeSel.value = "number";
+            // Mode toggle integrated with Number Picker
+            const getNumberPickerMode = window.getNumberPickerMode || (() => "number");
+            const setNumberPickerMode = window.setNumberPickerMode || (() => { });
+            const onNumberPickerModeChange = window.onNumberPickerModeChange || (() => () => { });
+            let cell9ModeState = getNumberPickerMode();
+            const modeBtn = document.createElement('button');
+            modeBtn.textContent = cell9ModeState === 'number' ? 'Bộ số (1-45)' : 'Label (1-6)';
+            modeBtn.style.padding = '6px 10px';
+            modeBtn.style.fontSize = '12px';
+            modeBtn.style.cursor = 'pointer';
 
             // Create inputs factory based on mode
             const createInputs = (mode) => {
                 if (mode === "number") {
                     return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
                 } else {
-                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "40px"; return inp; });
+                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "70px"; return inp; });
                 }
             };
 
-            let inputs = createInputs(modeSel.value);
+            let inputs = createInputs(cell9ModeState);
 
             // Create draggable containers for inputs
             const createContainers = (inputArray) => {
@@ -1226,23 +2117,39 @@
                     return container;
                 });
             };
-
             let containers = createContainers(inputs);
 
             // Drag and drop logic
             let draggedIndex = null;
+            let dropHandled = false;
+
 
             const setupDragListeners = (containerArray) => {
                 containerArray.forEach((container, idx) => {
+                    // Track drag-over state to avoid redundant style updates
+                    let isDragOverThis = false;
+
                     container.addEventListener("dragstart", (e) => {
                         draggedIndex = idx;
+                        dropHandled = false;
                         container.style.opacity = "0.4";
-                        e.dataTransfer.effectAllowed = "move";
+                        container.style.cursor = "grabbing";
+                        e.dataTransfer.effectAllowed = "copyMove";
                         e.dataTransfer.setData("text/plain", inputs[idx].value);
                     });
 
                     container.addEventListener("dragend", (e) => {
                         container.style.opacity = "";
+                        container.style.cursor = "grab";
+                        // If drop didn't happen (dragged outside), delete the value
+                        if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                            inputs[idx].value = "";
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            if (run) run();
+                        }
+                        draggedIndex = null;
+                        dropHandled = false;
+                        isDragOverThis = false;
                         containerArray.forEach(c => {
                             c.style.backgroundColor = "";
                             c.style.transform = "";
@@ -1251,21 +2158,95 @@
 
                     container.addEventListener("dragover", (e) => {
                         e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        if (draggedIndex !== null && draggedIndex !== idx) {
+                        e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
+
+                        // Only update styles if not already in drag-over state
+                        if (!isDragOverThis) {
+                            isDragOverThis = true;
                             container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
                             container.style.transform = "scale(1.05)";
                         }
                     });
 
                     container.addEventListener("dragleave", (e) => {
+                        isDragOverThis = false;
                         container.style.backgroundColor = "";
                         container.style.transform = "";
                     });
 
                     container.addEventListener("drop", (e) => {
                         e.preventDefault();
-                        if (draggedIndex !== null && draggedIndex !== idx) {
+                        dropHandled = true;
+                        const draggedData = e.dataTransfer.getData('text/plain');
+                        const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                        const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                        const labelData = e.dataTransfer.getData('application/x-label');
+                        isDragOverThis = false;
+
+                        // Swap with a single place box
+                        if (placeIndexData !== null && placeIndexData !== '') {
+                            const srcIdx = parseInt(placeIndexData, 10);
+                            const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                            if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
+                                const incoming = placeVals[srcIdx];
+                                const outgoing = inputs[idx].value;
+                                inputs[idx].value = incoming || '';
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                placeVals[srcIdx] = outgoing || '';
+                                if (window.setPlaceValues) window.setPlaceValues(placeVals);
+                                if (window.markPlaceDropHandled) window.markPlaceDropHandled();
+                                if (run) run();
+                                draggedIndex = null;
+                                container.style.backgroundColor = "";
+                                container.style.transform = "";
+                                return;
+                            }
+                        }
+                        // Accept place set (6 numbers)
+                        if (placeSetData) {
+                            try {
+                                let values = JSON.parse(placeSetData);
+                                if (Array.isArray(values) && values.length === 6) {
+                                    // In label mode, reverse values to match reversed display
+                                    if (cell9ModeState === 'label') {
+                                        values = values.reverse();
+                                    }
+                                    for (let i = 0; i < 6; i++) {
+                                        inputs[i].value = values[i] || '';
+                                        inputs[i].dispatchEvent(new Event("input"));
+                                    }
+                                    if (run) run();
+                                }
+                            } catch (err) { }
+                        }
+                        // Kéo số/label trực tiếp từ popup (chỉ nếu không phải internal drag)
+                        else if (draggedIndex === null && !placeIndexData && draggedData && !isNaN(draggedData)) {
+                            const numVal = parseInt(draggedData, 10);
+                            if (cell9ModeState === 'number' && numVal >= 1 && numVal <= 45) {
+                                inputs[idx].value = numVal;
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                if (run) run();
+                                return;
+                            } else if (cell9ModeState === 'label') {
+                                const col = getCol(numVal);
+                                inputs[idx].value = col || '';
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                if (run) run();
+                                return;
+                            }
+                        }
+                        // Kéo label từ header popup khi mode = label
+                        else if (draggedIndex === null && labelData && cell9ModeState === 'label') {
+                            inputs[idx].value = labelData.replace('C', '');
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            if (run) run();
+                            draggedIndex = null;
+                            container.style.backgroundColor = "";
+                            container.style.transform = "";
+                            return;
+                        }
+                        // Otherwise swap
+                        else if (draggedIndex !== null && draggedIndex !== idx) {
                             const tempValue = inputs[idx].value;
                             inputs[idx].value = inputs[draggedIndex].value;
                             inputs[draggedIndex].value = tempValue;
@@ -1273,7 +2254,7 @@
                             inputs[idx].dispatchEvent(new Event("input"));
                             inputs[draggedIndex].dispatchEvent(new Event("input"));
 
-                            run();
+                            if (run) run();
                         }
                         container.style.backgroundColor = "";
                         container.style.transform = "";
@@ -1287,19 +2268,20 @@
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
             const controls = document.createElement("div"); controls.className = "controls";
 
-            // Add mode selector
-            controls.appendChild(modeSel);
+            // Add mode toggle button
+            controls.appendChild(modeBtn);
 
-            const inputLabel = document.createElement("span"); inputLabel.textContent = modeSel.value === "number" ? "Bộ số:" : "Label:"; inputLabel.style.fontWeight = "700"; inputLabel.style.fontSize = "14px"; inputLabel.style.marginLeft = "12px";
+            const inputLabel = document.createElement("span"); inputLabel.textContent = cell9ModeState === "number" ? "Bộ số:" : "Label:"; inputLabel.style.fontWeight = "700"; inputLabel.style.fontSize = "14px"; inputLabel.style.marginLeft = "12px";
             controls.appendChild(inputLabel);
 
             // For label mode, reverse the containers for proper left-to-right display
-            const containersToAdd = modeSel.value === "label" ? [...containers].reverse() : containers;
+            const containersToAdd = cell9ModeState === "label" ? [...containers].reverse() : containers;
             containersToAdd.forEach(c => controls.appendChild(c));
             controls.append(consecLabel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
-            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
             const hint = document.createElement("div");
             hint.className = "muted";
@@ -1308,21 +2290,17 @@
             controls.appendChild(hint);
 
             function run() {
-                const mode = modeSel.value;
+                const mode = cell9ModeState;
 
                 if (mode === "number") {
-                    // Mode: Tìm bộ số
                     const vals = inputs.map(i => parseInt(i.value, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 45);
                     if (!vals.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 số...</div>"; return; }
-                    // Count frequency of each number in input
                     const inputFreq = {};
                     vals.forEach(v => { inputFreq[v] = (inputFreq[v] || 0) + 1; });
                     const setVals = new Set(vals);
                     const records = rows.filter(r => {
-                        // Count frequency of numbers in row
                         const rowFreq = {};
                         r.nums.forEach(v => { rowFreq[v] = (rowFreq[v] || 0) + 1; });
-                        // Check if row has at least the frequency we need for each number
                         for (const num in inputFreq) {
                             if ((rowFreq[num] || 0) < inputFreq[num]) return false;
                         }
@@ -1337,17 +2315,15 @@
                         records.slice(i, i + chunk).forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
-                            html += `<tr><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
                 } else {
-                    // Mode: Tìm label - dùng tần suất (list), hỗ trợ Liền kề theo cửa sổ liên tiếp
                     const labels = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : null; }).filter(v => v !== null);
                     if (!labels.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 ký tự...</div>"; return; }
-                    // Đếm tần suất ký tự trong input
                     const inputFreq = {};
                     labels.forEach(ch => { inputFreq[ch] = (inputFreq[ch] || 0) + 1; });
                     const totalCount = labels.length;
@@ -1356,13 +2332,11 @@
 
                     const records = rows.filter(r => {
                         const labelStr = r.label;
-                        // Kiểm tra tần suất toàn chuỗi: mỗi ký tự trong input phải xuất hiện đủ số lần
                         const rowFreq = {};
                         for (const ch of labelStr) rowFreq[ch] = (rowFreq[ch] || 0) + 1;
                         for (const ch of inputKeys) {
                             if ((rowFreq[ch] || 0) < inputFreq[ch]) return false;
                         }
-                        // Nếu yêu cầu liền kề: tìm cửa sổ độ dài totalCount thỏa tần suất input
                         if (consec.checked) {
                             for (let i = 0; i <= labelStr.length - totalCount; i++) {
                                 const block = labelStr.slice(i, i + totalCount);
@@ -1388,7 +2362,6 @@
                             const labelStr = r.label;
                             let highlightPos = [];
                             if (consec.checked) {
-                                // Tìm cửa sổ đầu tiên thỏa tần suất để highlight
                                 let start = -1;
                                 for (let s = 0; s <= labelStr.length - totalCount && start === -1; s++) {
                                     const block = labelStr.slice(s, s + totalCount);
@@ -1404,14 +2377,13 @@
                                     highlightPos = Array.from({ length: totalCount }, (_, k) => start + k);
                                 }
                             }
-                            // Không liền kề: highlight mọi vị trí có ký tự thuộc tập input
                             if (!highlightPos.length) {
                                 for (let pos = 0; pos < labelStr.length; pos++) {
                                     if (keySet.has(labelStr[pos])) highlightPos.push(pos);
                                 }
                             }
                             const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
-                            html += `<tr><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -1420,63 +2392,87 @@
                 }
             }
 
-            // Handle mode change
-            modeSel.onchange = () => {
-                // Clear any drag-drop visual state from old containers
+            const applyCell9Mode = (mode, { notify = true } = {}) => {
+                if (mode !== 'number' && mode !== 'label') return;
+                if (!notify && cell9ModeState === mode) return;
+
+                cell9ModeState = mode;
+                modeBtn.textContent = cell9ModeState === 'number' ? 'Bộ số (1-45)' : 'Label (1-6)';
+
+                // Clear old drag listeners by removing and recreating containers
                 document.querySelectorAll(".drag-input-container").forEach(c => {
                     c.style.opacity = "1";
                     c.style.transform = "";
                 });
 
-                inputs = createInputs(modeSel.value);
+                inputs = createInputs(mode);
                 containers = createContainers(inputs);
-                setupDragListeners(containers);
 
-                // Clear and update controls - remove old containers completely
+                // Reset draggedIndex to prevent stale references
+                draggedIndex = null;
+
+                setupDragListeners(containers);
                 const oldContainers = controls.querySelectorAll(".drag-input-container");
                 oldContainers.forEach(c => c.remove());
 
-                // Update label text
-                inputLabel.textContent = modeSel.value === "number" ? "Bộ số:" : "Label:";
+                inputLabel.textContent = mode === "number" ? "Bộ số:" : "Label:";
 
-                // Re-insert input containers
-                const insertPoint = inputLabel;
-                const containersToAdd = modeSel.value === "label" ? [...containers].reverse() : containers;
-                containersToAdd.forEach(c => insertPoint.parentNode.insertBefore(c, insertPoint.nextSibling));
-
-                // Re-attach event listeners to new inputs
-                inputs.forEach((inp, idx) => {
-                    inp.oninput = run;
-                    inp.onkeydown = (e) => {
-                        if (e.key === 'ArrowLeft') {
-                            e.preventDefault();
-                            const nextIdx = idx > 0 ? idx - 1 : inputs.length - 1;
-                            inputs[nextIdx].focus();
-                        }
-                        if (e.key === 'ArrowRight') {
-                            e.preventDefault();
-                            const nextIdx = idx < inputs.length - 1 ? idx + 1 : 0;
-                            inputs[nextIdx].focus();
-                        }
-                    };
+                // Insert containers in visual order (avoid accidental reversal)
+                const containersToAdd = mode === "label" ? [...containers].reverse() : containers;
+                let anchor = inputLabel;
+                containersToAdd.forEach(c => {
+                    anchor.parentNode.insertBefore(c, anchor.nextSibling);
+                    anchor = c;
                 });
 
+                // Navigation based on visual order (containersToAdd defines on-screen order)
+                const navOrder = containersToAdd.map(c => parseInt(c.dataset.index, 10));
+                const attachKeyHandlers = () => {
+                    inputs.forEach((inp, logicalIdx) => {
+                        inp.oninput = run;
+                        inp.onkeydown = (e) => {
+                            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                            e.preventDefault();
+                            const pos = navOrder.indexOf(logicalIdx);
+                            if (pos === -1) return;
+                            const nextPos = e.key === 'ArrowLeft'
+                                ? (pos > 0 ? pos - 1 : navOrder.length - 1)
+                                : (pos < navOrder.length - 1 ? pos + 1 : 0);
+                            const targetIdx = navOrder[nextPos];
+                            inputs[targetIdx]?.focus();
+                        };
+                    });
+                };
+                attachKeyHandlers();
+
+                if (notify) setNumberPickerMode(mode);
                 run();
             };
 
-            inputs.forEach((inp, idx) => {
+            // Toggle button click to switch modes and notify popup
+            modeBtn.addEventListener('click', () => {
+                const next = cell9ModeState === 'number' ? 'label' : 'number';
+                applyCell9Mode(next, { notify: true });
+            });
+
+            // Sync with external popup mode changes
+            onNumberPickerModeChange((mode) => applyCell9Mode(mode, { notify: false }));
+
+            // Initial handlers for first render: use current visual order
+            const initialContainers = cell9ModeState === "label" ? [...containers].reverse() : containers;
+            const initialNavOrder = initialContainers.map(c => parseInt(c.dataset.index, 10));
+            inputs.forEach((inp, logicalIdx) => {
                 inp.oninput = run;
                 inp.onkeydown = (e) => {
-                    if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        const nextIdx = idx > 0 ? idx - 1 : inputs.length - 1;
-                        inputs[nextIdx].focus();
-                    }
-                    if (e.key === 'ArrowRight') {
-                        e.preventDefault();
-                        const nextIdx = idx < inputs.length - 1 ? idx + 1 : 0;
-                        inputs[nextIdx].focus();
-                    }
+                    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                    e.preventDefault();
+                    const pos = initialNavOrder.indexOf(logicalIdx);
+                    if (pos === -1) return;
+                    const nextPos = e.key === 'ArrowLeft'
+                        ? (pos > 0 ? pos - 1 : initialNavOrder.length - 1)
+                        : (pos < initialNavOrder.length - 1 ? pos + 1 : 0);
+                    const targetIdx = initialNavOrder[nextPos];
+                    inputs[targetIdx]?.focus();
                 };
             });
             consec.onchange = run; clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
@@ -1495,10 +2491,14 @@
         // Cell10: analyze other positions given value at order
         function renderCell10() {
             const body = sectionShell("cell10", "Cell10 · Phân tích các vị trí khác", "Điền 1 giá trị vào 1 ô để xem phân bố ở 5 vị trí còn lại. Có thể kéo thả giữa các vị trí.");
-            // Mode selector: Number (1–45) vs Column (1–6)
-            const modeSel = document.createElement("select");
-            [["number", "Số (1–45)"], ["column", "Cột (1–6)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; modeSel.appendChild(o); });
-            modeSel.value = "number";
+            // Mode toggle: Number (1–45) vs Column (1–6)
+            const popupMode = window.getNumberPickerMode ? window.getNumberPickerMode() : "number";
+            let cell10ModeState = popupMode === "label" ? "column" : "number";
+            const modeBtn = document.createElement('button');
+            modeBtn.textContent = cell10ModeState === 'number' ? 'Số (1–45)' : 'Cột (1–6)';
+            modeBtn.style.padding = '6px 10px';
+            modeBtn.style.fontSize = '12px';
+            modeBtn.style.cursor = 'pointer';
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
 
             // Create draggable containers for inputs
@@ -1542,17 +2542,29 @@
 
             // Drag and drop logic
             let draggedIndex = null;
+            let dropHandled = false;
 
             containers.forEach((container, idx) => {
                 container.addEventListener("dragstart", (e) => {
                     draggedIndex = idx;
+                    dropHandled = false;
                     container.style.opacity = "0.4";
-                    e.dataTransfer.effectAllowed = "move";
+                    container.style.cursor = "grabbing";
+                    e.dataTransfer.effectAllowed = "copyMove";
                     e.dataTransfer.setData("text/plain", inputs[idx].value);
                 });
 
                 container.addEventListener("dragend", (e) => {
                     container.style.opacity = "";
+                    container.style.cursor = "grab";
+                    // If drop didn't happen (dragged outside), delete the value
+                    if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                        inputs[idx].value = "";
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        if (run) run();
+                    }
+                    draggedIndex = null;
+                    dropHandled = false;
                     containers.forEach(c => {
                         c.style.backgroundColor = "";
                         c.style.transform = "";
@@ -1561,11 +2573,9 @@
 
                 container.addEventListener("dragover", (e) => {
                     e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    if (draggedIndex !== null && draggedIndex !== idx) {
-                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
-                        container.style.transform = "scale(1.05)";
-                    }
+                    e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
+                    container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                    container.style.transform = "scale(1.05)";
                 });
 
                 container.addEventListener("dragleave", (e) => {
@@ -1575,7 +2585,72 @@
 
                 container.addEventListener("drop", (e) => {
                     e.preventDefault();
-                    if (draggedIndex !== null && draggedIndex !== idx) {
+                    dropHandled = true;
+                    const draggedData = e.dataTransfer.getData('text/plain');
+                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                    const labelData = e.dataTransfer.getData('application/x-label');
+
+                    // Swap with a single place box
+                    if (placeIndexData !== null && placeIndexData !== '') {
+                        const srcIdx = parseInt(placeIndexData, 10);
+                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                        if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
+                            const incoming = placeVals[srcIdx];
+                            const outgoing = inputs[idx].value;
+                            inputs[idx].value = incoming || '';
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            placeVals[srcIdx] = outgoing || '';
+                            if (window.setPlaceValues) window.setPlaceValues(placeVals);
+                            if (window.markPlaceDropHandled) window.markPlaceDropHandled();
+                            if (run) run(idx);
+                            container.style.backgroundColor = "";
+                            container.style.transform = "";
+                            draggedIndex = null;
+                            return;
+                        }
+                    }
+                    // Accept place set (6 numbers)
+                    if (placeSetData) {
+                        try {
+                            const values = JSON.parse(placeSetData);
+                            if (Array.isArray(values) && values.length === 6) {
+                                for (let i = 0; i < 6; i++) {
+                                    inputs[i].value = values[i] || '';
+                                    inputs[i].dispatchEvent(new Event("input"));
+                                }
+                                if (run) run(0);
+                            }
+                        } catch (err) { }
+                    }
+                    // Kéo số trực tiếp từ popup (chỉ nếu không phải internal drag)
+                    else if (draggedIndex === null && draggedData && !isNaN(draggedData)) {
+                        const num = parseInt(draggedData, 10);
+                        if (cell10ModeState === 'number' && num >= 1 && num <= 45) {
+                            inputs[idx].value = num;
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            run(idx);
+                            return;
+                        } else if (cell10ModeState === 'column' && num >= 1 && num <= 45) {
+                            const col = getCol(num);
+                            inputs[idx].value = col;
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            run(idx);
+                            return;
+                        }
+                    }
+                    // Kéo label từ header popup khi mode = column
+                    else if (draggedIndex === null && labelData && cell10ModeState === 'column') {
+                        inputs[idx].value = labelData.replace('C', '');
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        run(idx);
+                        draggedIndex = null;
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                        return;
+                    }
+                    // Otherwise swap
+                    else if (draggedIndex !== null && draggedIndex !== idx) {
                         const tempValue = inputs[idx].value;
                         inputs[idx].value = inputs[draggedIndex].value;
                         inputs[draggedIndex].value = tempValue;
@@ -1583,7 +2658,7 @@
                         inputs[idx].dispatchEvent(new Event("input"));
                         inputs[draggedIndex].dispatchEvent(new Event("input"));
 
-                        run(idx);
+                        if (run) run(idx);
                     }
                     container.style.backgroundColor = "";
                     container.style.transform = "";
@@ -1592,11 +2667,12 @@
             });
 
             const controls = document.createElement("div"); controls.className = "controls";
-            // Remove extra label; the dropdown options already indicate the mode
-            controls.append(modeSel);
+            // Add mode toggle button
+            controls.append(modeBtn);
             containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
-            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
             const hint = document.createElement("div");
             hint.className = "muted";
@@ -1615,7 +2691,7 @@
                 }
                 const single = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).find(x => !isNaN(x.val));
                 if (!single) {
-                    wrap.innerHTML = modeSel.value === "number"
+                    wrap.innerHTML = cell10ModeState === "number"
                         ? "<div class='loader'>Điền 1 số (1–45) vào 1 ô...</div>"
                         : "<div class='loader'>Điền 1 cột (1–6) vào 1 ô...</div>";
                     return;
@@ -1625,15 +2701,15 @@
                 let total = 0, hit = 0;
                 rows.forEach(r => {
                     if (r.nums.length !== 6) return; total++;
-                    const matched = (modeSel.value === "number") ? (r.nums[order - 1] === value) : (getCol(r.nums[order - 1]) === value);
+                    const matched = (cell10ModeState === "number") ? (r.nums[order - 1] === value) : (getCol(r.nums[order - 1]) === value);
                     if (!matched) return; hit++;
                     for (let pos = 1; pos <= 6; pos++) { if (pos === order) continue; const v = r.nums[pos - 1]; const c = getCol(v); posCols[pos].push(c); (posMaps[pos][c] ||= []).push(v); }
                 });
                 if (!hit) {
-                    const what = modeSel.value === "number" ? value : `cột ${value}`;
+                    const what = cell10ModeState === "number" ? value : `cột ${value}`;
                     wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${what} ở vị trí ${order}</div>`; return;
                 }
-                const pattern = Array(6).fill("_"); pattern[order - 1] = (modeSel.value === "number") ? value : `C${value}`;
+                const pattern = Array(6).fill("_"); pattern[order - 1] = (cell10ModeState === "number") ? value : `C${value}`;
                 let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
                 const positionsBefore = [1, 2, 3, 4, 5, 6].filter(p => p < order);
                 const positionsAfter = [1, 2, 3, 4, 5, 6].filter(p => p > order);
@@ -1664,8 +2740,8 @@
                     t += "</tbody></table></div>";
                     return t;
                 };
-                if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${(modeSel.value === "number" ? positionsBefore.map(renderPosTable) : positionsBefore.map(renderPosTableColumn)).join('')}</div>`;
-                if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${(modeSel.value === "number" ? positionsAfter.map(renderPosTable) : positionsAfter.map(renderPosTableColumn)).join('')}</div>`;
+                if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsBefore.map(renderPosTable) : positionsBefore.map(renderPosTableColumn)).join('')}</div>`;
+                if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsAfter.map(renderPosTable) : positionsAfter.map(renderPosTableColumn)).join('')}</div>`;
                 wrap.innerHTML = html;
             }
             inputs.forEach((inp, idx) => {
@@ -1683,19 +2759,34 @@
                 });
                 run();
             };
-            // Mode changes: adjust input constraints, CLEAR values, and rerun
-            modeSel.onchange = () => {
+            // Toggle button: adjust constraints, notify popup, clear values, rerun
+            modeBtn.addEventListener('click', () => {
+                cell10ModeState = cell10ModeState === 'number' ? 'column' : 'number';
+                modeBtn.textContent = cell10ModeState === 'number' ? 'Số (1–45)' : 'Cột (1–6)';
+                const newPopupMode = cell10ModeState === 'column' ? 'label' : 'number';
+                if (window.setNumberPickerMode) window.setNumberPickerMode(newPopupMode);
                 inputs.forEach(inp => {
-                    // Switch constraints per mode
-                    if (modeSel.value === "number") { inp.min = 1; inp.max = 45; inp.placeholder = ""; }
-                    else { inp.min = 1; inp.max = 6; inp.placeholder = "1–6"; }
-                    // Clear previous value when switching modes
-                    inp.value = "";
-                    // Refresh drag visuals after mode switch
-                    inp.dispatchEvent(new Event("input"));
+                    if (cell10ModeState === 'number') { inp.min = 1; inp.max = 45; inp.placeholder = ''; }
+                    else { inp.min = 1; inp.max = 6; inp.placeholder = '1–6'; }
+                    inp.value = '';
+                    inp.dispatchEvent(new Event('input'));
                 });
                 run();
-            };
+            });
+            // Subscribe to external mode changes
+            if (window.onNumberPickerModeChange) {
+                window.onNumberPickerModeChange((mode) => {
+                    cell10ModeState = mode === 'label' ? 'column' : 'number';
+                    modeBtn.textContent = cell10ModeState === 'number' ? 'Số (1–45)' : 'Cột (1–6)';
+                    inputs.forEach(inp => {
+                        if (cell10ModeState === 'number') { inp.min = 1; inp.max = 45; inp.placeholder = ''; }
+                        else { inp.min = 1; inp.max = 6; inp.placeholder = '1–6'; }
+                        inp.value = '';
+                        inp.dispatchEvent(new Event('input'));
+                    });
+                    run();
+                });
+            }
             run();
         }
         function countMap(arr) { const m = {}; arr.forEach(v => m[v] = (m[v] || 0) + 1); return m; }
@@ -1757,17 +2848,29 @@
 
             // Drag and drop logic
             let draggedIndex = null;
+            let dropHandled = false;
 
             containers.forEach((container, idx) => {
                 container.addEventListener("dragstart", (e) => {
                     draggedIndex = idx;
+                    dropHandled = false;
                     container.style.opacity = "0.4";
-                    e.dataTransfer.effectAllowed = "move";
+                    container.style.cursor = "grabbing";
+                    e.dataTransfer.effectAllowed = "copyMove";
                     e.dataTransfer.setData("text/plain", inputs[idx].value);
                 });
 
                 container.addEventListener("dragend", (e) => {
                     container.style.opacity = "";
+                    container.style.cursor = "grab";
+                    // If drop didn't happen (dragged outside), delete the value
+                    if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                        inputs[idx].value = "";
+                        inputs[idx].dispatchEvent(new Event("input"));
+                        if (run) run();
+                    }
+                    draggedIndex = null;
+                    dropHandled = false;
                     containers.forEach(c => {
                         c.style.backgroundColor = "";
                         c.style.transform = "";
@@ -1776,11 +2879,9 @@
 
                 container.addEventListener("dragover", (e) => {
                     e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    if (draggedIndex !== null && draggedIndex !== idx) {
-                        container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
-                        container.style.transform = "scale(1.05)";
-                    }
+                    e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
+                    container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                    container.style.transform = "scale(1.05)";
                 });
 
                 container.addEventListener("dragleave", (e) => {
@@ -1790,17 +2891,62 @@
 
                 container.addEventListener("drop", (e) => {
                     e.preventDefault();
-                    if (draggedIndex !== null && draggedIndex !== idx) {
-                        // Swap values
+                    dropHandled = true;
+                    const draggedData = e.dataTransfer.getData('text/plain');
+                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
+
+                    // Swap with a single place box
+                    if (placeIndexData !== null && placeIndexData !== '') {
+                        const srcIdx = parseInt(placeIndexData, 10);
+                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                        if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
+                            const incoming = placeVals[srcIdx];
+                            const outgoing = inputs[idx].value;
+                            inputs[idx].value = incoming || '';
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            placeVals[srcIdx] = outgoing || '';
+                            if (window.setPlaceValues) window.setPlaceValues(placeVals);
+                            if (window.markPlaceDropHandled) window.markPlaceDropHandled();
+                            run();
+                            container.style.backgroundColor = "";
+                            container.style.transform = "";
+                            draggedIndex = null;
+                            return;
+                        }
+                    }
+                    // Accept place set (6 numbers)
+                    if (placeSetData) {
+                        try {
+                            const values = JSON.parse(placeSetData);
+                            if (Array.isArray(values) && values.length === 6) {
+                                for (let i = 0; i < 6; i++) {
+                                    inputs[i].value = values[i] || '';
+                                    inputs[i].dispatchEvent(new Event("input"));
+                                }
+                                if (run) run();
+                            }
+                        } catch (err) { }
+                    }
+                    // Kéo số trực tiếp từ popup (chỉ nếu không phải internal drag)
+                    else if (draggedIndex === null && draggedData && !isNaN(draggedData)) {
+                        const num = parseInt(draggedData, 10);
+                        if (num >= 1 && num <= 45) {
+                            inputs[idx].value = num;
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            run(idx);
+                            return;
+                        }
+                    }
+                    // Otherwise swap
+                    else if (draggedIndex !== null && draggedIndex !== idx) {
                         const tempValue = inputs[idx].value;
                         inputs[idx].value = inputs[draggedIndex].value;
                         inputs[draggedIndex].value = tempValue;
 
-                        // Update draggable state for both
                         inputs[idx].dispatchEvent(new Event("input"));
                         inputs[draggedIndex].dispatchEvent(new Event("input"));
 
-                        // Trigger search
                         run();
                     }
                     container.style.backgroundColor = "";
@@ -1816,7 +2962,7 @@
             body.appendChild(controls);
 
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
-            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "ghost"; controls.appendChild(clearBtn);
+            const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
             // Add hint text
             const hint = document.createElement("div");
@@ -1845,7 +2991,7 @@
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                         const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
                         const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
-                        html += `<tr><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -1864,36 +3010,899 @@
         }
 
         async function bootstrap() {
-            // HTML badge image popup
+            // Number picker popup
             const htmlBadge = document.getElementById('htmlBadge');
-            const imagePopup = document.getElementById('imagePopup');
+            const numberPickerPopup = document.getElementById('numberPickerPopup');
+            const numberPickerTable = document.getElementById('numberPickerTable');
+            const placesGrid = document.getElementById('placesGrid');
             let isPopupVisible = false;
 
-            // Show popup on hover (mouseenter)
-            htmlBadge.addEventListener('mouseenter', () => {
-                if (!isPopupVisible) {
-                    isPopupVisible = true;
-                    const rect = htmlBadge.getBoundingClientRect();
-                    imagePopup.style.top = `${rect.bottom + 8}px`;
-                    imagePopup.style.left = `${rect.left}px`;
-                    imagePopup.classList.add('show');
+            // Place state: [value1, value2, value3, value4, value5, value6]
+            const placeValues = ['', '', '', '', '', ''];
+            let draggedNumber = null;
+            let draggedPlaceIndex = null;
+            let draggedPlaceValue = null;
+            let lastDropInsidePlace = false; // track if a place drag was dropped back into place
+            let currentMode = 'number'; // 'number' or 'label'
+            const modeListeners = new Set();
+
+            const notifyModeChange = (mode, source) => {
+                modeListeners.forEach(fn => fn(mode, source));
+            };
+
+            const setNumberPickerMode = (mode, source = 'picker') => {
+                if (mode !== 'number' && mode !== 'label') return;
+                if (currentMode === mode) return;
+                currentMode = mode;
+                modeSelector.value = mode;
+                // Clear place values when switching mode
+                placeValues.fill('');
+                generateNumberPickerTable();
+                generatePlaceBoxes();
+                setupNumberCellDragDrop();
+                setupLabelCellDragDrop();
+                notifyModeChange(mode, source);
+
+                // Update connection toggle state when mode changes
+                if (window.updateConnectionToggleState) {
+                    window.updateConnectionToggleState();
                 }
+
+                // Update label cell styling based on new mode and place values
+                updateLabelCellStyles();
+            };
+
+            window.setNumberPickerMode = (mode) => setNumberPickerMode(mode, 'external');
+            window.getNumberPickerMode = () => currentMode;
+            window.onNumberPickerModeChange = (cb) => {
+                modeListeners.add(cb);
+                return () => modeListeners.delete(cb);
+            };
+
+            // Popup scale state
+            const popupScaleState = { scale: 1.0 };
+
+            const savePopupScale = () => {
+                localStorage.setItem('popupScale', JSON.stringify(popupScaleState.scale));
+            };
+
+            const loadPopupScale = () => {
+                const saved = localStorage.getItem('popupScale');
+                if (saved) {
+                    popupScaleState.scale = parseFloat(saved);
+                }
+            };
+
+            const applyPopupScale = () => {
+                numberPickerPopup.style.transform = `scale(${popupScaleState.scale})`;
+            };
+
+            const applyPopupScaleInstant = () => {
+                // Apply scale instantly without transition animation
+                const oldTransition = numberPickerPopup.style.transition;
+                numberPickerPopup.style.transition = 'none';
+                numberPickerPopup.style.transform = `scale(${popupScaleState.scale})`;
+                // Force browser to process the change
+                void numberPickerPopup.offsetHeight;
+                numberPickerPopup.style.transition = oldTransition;
+            };
+
+            const addPopupScaleHandle = () => {
+                let handle = numberPickerPopup.querySelector('.popup-scale-handle');
+                if (handle) handle.remove();
+
+                handle = document.createElement('div');
+                handle.className = 'popup-scale-handle';
+
+                let isScaling = false;
+                let startX = 0;
+                let startScale = popupScaleState.scale;
+
+                handle.addEventListener('mousedown', (e) => {
+                    isScaling = true;
+                    startX = e.clientX;
+                    startScale = popupScaleState.scale;
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isScaling) return;
+                    const diff = e.clientX - startX;
+                    const newScale = Math.max(0.5, Math.min(2, startScale + diff * 0.0025));
+                    popupScaleState.scale = parseFloat(newScale.toFixed(3));
+                    applyPopupScale();
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isScaling) {
+                        isScaling = false;
+                        savePopupScale();
+                    }
+                });
+
+                numberPickerPopup.appendChild(handle);
+            };
+
+            loadPopupScale();
+
+            // Generate number picker table (rotated 90° counter-clockwise)
+            function generateNumberPickerTable() {
+                const numbersInPlace = currentMode === 'number'
+                    ? new Set(placeValues.filter(v => v && v.trim() && !isNaN(v)))
+                    : new Set();
+
+                const numbersByCol = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+                for (let i = 1; i <= 45; i++) {
+                    const col = getCol(i);
+                    numbersByCol[col].push(i);
+                }
+
+                const tbodyDisabled = currentMode === 'label' ? ' class="disabled"' : '';
+                const tfootDisabled = currentMode === 'number' ? ' class="disabled"' : '';
+
+                let html = `<tbody${tbodyDisabled}>`;
+                for (let row = 7; row >= 0; row--) {
+                    html += '<tr>';
+                    for (let col = 1; col <= 6; col++) {
+                        const nums = numbersByCol[col];
+                        const num = nums[row] || '_';
+                        if (num === '_') {
+                            html += `<td style="color:var(--muted);opacity:0.5;">_</td>`;
+                        } else {
+                            const isDisabled = numbersInPlace.has(String(num));
+                            const disabledClass = isDisabled ? ' disabled' : '';
+                            const draggable = (isDisabled || currentMode === 'label') ? 'false' : 'true';
+                            html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}">${num}</td>`;
+                        }
+                    }
+                    html += '</tr>';
+                }
+                html += '</tbody>';
+
+                html += `<tfoot${tfootDisabled}><tr>`;
+                for (let col = 1; col <= 6; col++) {
+                    html += `<th class="label-cell" data-label="C${col}" draggable="true" style="cursor: grab;">C${col}</th>`;
+                }
+                html += '</tr></tfoot>';
+
+                numberPickerTable.innerHTML = html;
+
+                // Draw connections after table is rendered
+                requestAnimationFrame(() => drawConnections());
+            }
+
+            // Draw connections between consecutive numbers in place boxes
+            function drawConnections() {
+                const connectionToggle = document.getElementById('connectionToggle');
+                const connectionsEnabled = !!connectionToggle && connectionToggle.textContent.trim() === 'Hiện';
+                // Only draw in number mode and when connections are enabled
+                if (currentMode !== 'number' || !connectionsEnabled) {
+                    const existingCanvas = document.getElementById('connectionCanvas');
+                    if (existingCanvas) existingCanvas.remove();
+                    return;
+                }
+
+                // Find consecutive pairs in placeValues
+                const pairs = [];
+                for (let i = 0; i < placeValues.length - 1; i++) {
+                    const curr = placeValues[i];
+                    const next = placeValues[i + 1];
+                    if (curr && curr.trim() && !isNaN(curr) && next && next.trim() && !isNaN(next)) {
+                        pairs.push([parseInt(curr, 10), parseInt(next, 10)]);
+                    }
+                }
+
+                if (pairs.length === 0) {
+                    const existingCanvas = document.getElementById('connectionCanvas');
+                    if (existingCanvas) existingCanvas.remove();
+                    return;
+                }
+
+                // Get or create canvas
+                let canvas = document.getElementById('connectionCanvas');
+                const wrapper = numberPickerTable.parentElement;
+
+                if (!canvas) {
+                    canvas = document.createElement('canvas');
+                    canvas.id = 'connectionCanvas';
+                    canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:1';
+                    wrapper.appendChild(canvas);
+                }
+
+                const tableRect = numberPickerTable.getBoundingClientRect();
+                const wrapperRect = wrapper.getBoundingClientRect();
+
+                // Get current popup scale
+                const scale = popupScaleState.scale;
+
+                // Get device pixel ratio for sharp rendering
+                const dpr = window.devicePixelRatio || 1;
+
+                // Canvas should match unscaled table size (divide by scale)
+                const canvasWidth = tableRect.width / scale;
+                const canvasHeight = tableRect.height / scale;
+
+                // Set canvas display size (CSS pixels, unscaled)
+                canvas.style.width = canvasWidth + 'px';
+                canvas.style.height = canvasHeight + 'px';
+
+                // Set canvas actual size (device pixels)
+                canvas.width = canvasWidth * dpr;
+                canvas.height = canvasHeight * dpr;
+
+                // Position canvas to align with table within wrapper (unscaled coordinates)
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+
+                const ctx = canvas.getContext('2d');
+                // Scale context to match device pixel ratio
+                ctx.scale(dpr, dpr);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Store circle centers for line drawing
+                const circleCenters = {};
+                const circleRadius = 9;
+
+                // Theme-aware colors
+                const cssVars = getComputedStyle(document.documentElement);
+                const lineColor = (cssVars.getPropertyValue('--connection-line-color') || '#00cc00').trim();
+                const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                const circleColor = currentTheme === 'light' ? lineColor : '#667eea';
+
+                // Draw circles around all numbers in placeValues
+                const allNumbers = placeValues
+                    .filter(v => v && v.trim() && !isNaN(v))
+                    .map(v => parseInt(v, 10));
+
+                allNumbers.forEach(num => {
+                    const cell = numberPickerTable.querySelector(`td[data-number="${num}"]`);
+                    if (!cell) return;
+
+                    const cellRect = cell.getBoundingClientRect();
+
+                    // Apply scale factor to coordinates
+                    const x = (cellRect.left - tableRect.left) / scale + (cellRect.width / scale) / 2;
+                    const y = (cellRect.top - tableRect.top) / scale + (cellRect.height / scale) / 2;
+
+                    // Store center for line drawing
+                    circleCenters[num] = { x, y };
+
+                    // Draw circle (stroke, not fill)
+                    ctx.strokeStyle = circleColor;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                });
+
+                // Draw lines between consecutive pairs, starting from circle edge
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 3]);
+
+                pairs.forEach(([num1, num2]) => {
+                    const center1 = circleCenters[num1];
+                    const center2 = circleCenters[num2];
+                    if (!center1 || !center2) return;
+
+                    const x1 = center1.x;
+                    const y1 = center1.y;
+                    const x2 = center2.x;
+                    const y2 = center2.y;
+
+                    // Calculate angle from center1 to center2
+                    const angle = Math.atan2(y2 - y1, x2 - x1);
+
+                    // Start line from the edge of circle1, pointing toward circle2
+                    const startX = x1 + circleRadius * Math.cos(angle);
+                    const startY = y1 + circleRadius * Math.sin(angle);
+
+                    // End line at the edge of circle2, pointing back toward circle1
+                    const endX = x2 - circleRadius * Math.cos(angle);
+                    const endY = y2 - circleRadius * Math.sin(angle);
+
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                });
+            }
+
+            // Generate place boxes - 6 individual boxes
+            function generatePlaceBoxes() {
+                placesGrid.innerHTML = '';
+                for (let i = 0; i < 6; i++) {
+                    const placeBox = document.createElement('div');
+                    placeBox.className = `place-box ${placeValues[i] ? 'filled' : ''}`;
+                    placeBox.dataset.placeIndex = i;
+                    // Always allow dragging so an empty slot can receive a swapped value
+                    placeBox.draggable = true;
+
+                    // Dblclick to paste clipboard into all 6 slots (number mode only)
+                    placeBox.addEventListener('dblclick', (e) => {
+                        e.stopPropagation();
+                        pasteClipboardToPlaces();
+                    });
+
+                    const value = document.createElement('div');
+                    value.className = 'place-box-value';
+                    value.textContent = placeValues[i] || '_';
+                    placeBox.appendChild(value);
+
+                    placeBox.addEventListener('dragstart', (e) => {
+                        draggedPlaceIndex = i;
+                        draggedPlaceValue = placeValues[i];
+                        lastDropInsidePlace = false;
+                        e.dataTransfer.effectAllowed = 'copyMove';
+                        e.dataTransfer.setData('text/plain', placeValues[i] || '');
+                        e.dataTransfer.setData('application/x-place-index', String(i));
+                        e.dataTransfer.setData('application/x-place-set', JSON.stringify(placeValues));
+                    });
+
+                    placeBox.addEventListener('dragend', () => {
+                        placeBox.style.borderColor = 'var(--accent)';
+                        if (!lastDropInsidePlace && draggedPlaceValue) {
+                            placeValues[draggedPlaceIndex] = '';
+                            generateNumberPickerTable();
+                            generatePlaceBoxes();
+                            setupNumberCellDragDrop();
+                            setupLabelCellDragDrop();
+                            updateLabelCellStyles();
+                        }
+                        draggedPlaceIndex = null;
+                        draggedPlaceValue = null;
+                    });
+
+                    placeBox.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        placeBox.style.borderColor = 'var(--accent-2)';
+                        placeBox.style.backgroundColor = 'rgba(102, 126, 234, 0.25)';
+                    });
+
+                    placeBox.addEventListener('dragleave', () => {
+                        placeBox.style.borderColor = 'var(--accent)';
+                        placeBox.style.backgroundColor = placeValues[i] ? 'rgba(56, 239, 125, 0.25)' : 'rgba(56, 239, 125, 0.1)';
+                    });
+
+                    placeBox.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        lastDropInsidePlace = true;
+                        placeBox.style.borderColor = 'var(--accent)';
+                        placeBox.style.backgroundColor = placeValues[i] ? 'rgba(56, 239, 125, 0.25)' : 'rgba(56, 239, 125, 0.1)';
+
+                        if (draggedPlaceIndex !== null && draggedPlaceIndex !== i) {
+                            const tmp = placeValues[i];
+                            placeValues[i] = draggedPlaceValue || '';
+                            placeValues[draggedPlaceIndex] = tmp || '';
+                            generateNumberPickerTable();
+                            generatePlaceBoxes();
+                            setupNumberCellDragDrop();
+                            setupLabelCellDragDrop();
+                            document.querySelectorAll('.place-box').forEach(box => {
+                                box.style.removeProperty('borderColor');
+                                box.style.removeProperty('backgroundColor');
+                                box.style.removeProperty('opacity');
+                            });
+                            const placeContainer = numberPickerPopup.querySelector('.place-container');
+                            if (placeContainer) {
+                                placeContainer.style.removeProperty('borderColor');
+                                placeContainer.style.removeProperty('backgroundColor');
+                                placeContainer.style.removeProperty('opacity');
+                            }
+                            return;
+                        }
+
+                        let data = e.dataTransfer.getData('application/x-place-set');
+                        if (data) {
+                            try {
+                                const values = JSON.parse(data);
+                                for (let j = 0; j < 6; j++) {
+                                    placeValues[j] = values[j] || '';
+                                }
+                                generateNumberPickerTable();
+                                generatePlaceBoxes();
+                                setupNumberCellDragDrop();
+                                setupLabelCellDragDrop();
+                                updateLabelCellStyles();
+                                return;
+                            } catch (err) { }
+                        }
+
+                        const labelData = e.dataTransfer.getData('application/x-label');
+                        if (labelData && currentMode === 'label') {
+                            const colNum = labelData.replace('C', '');
+                            placeValues[i] = colNum;
+                            generateNumberPickerTable();
+                            generatePlaceBoxes();
+                            setupNumberCellDragDrop();
+                            setupLabelCellDragDrop();
+                            updateLabelCellStyles();
+                            return;
+                        }
+
+                        const num = e.dataTransfer.getData('text/plain');
+                        if (num && !isNaN(num) && currentMode === 'number') {
+                            placeValues[i] = num;
+                            generateNumberPickerTable();
+                            generatePlaceBoxes();
+                            setupNumberCellDragDrop();
+                            setupLabelCellDragDrop();
+                            updateLabelCellStyles();
+                        }
+                    });
+
+                    placesGrid.appendChild(placeBox);
+                }
+            }
+
+            function setupPlaceContainerListeners() {
+                const placeContainer = numberPickerPopup.querySelector('.place-container');
+                placeContainer.draggable = true;
+
+                placeContainer.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                    e.dataTransfer.setData('text/plain', JSON.stringify(placeValues));
+                    e.dataTransfer.setData('application/x-place-set', JSON.stringify(placeValues));
+                    placeContainer.style.opacity = '0.6';
+                });
+
+                placeContainer.addEventListener('dragend', () => {
+                    placeContainer.style.opacity = '1';
+                });
+
+                placeContainer.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                    placeContainer.style.borderColor = 'var(--accent-2)';
+                    placeContainer.style.backgroundColor = 'rgba(102, 126, 234, 0.2)';
+                });
+
+                placeContainer.addEventListener('dragleave', (e) => {
+                    if (e.target === placeContainer) {
+                        placeContainer.style.borderColor = 'var(--accent)';
+                        placeContainer.style.backgroundColor = 'rgba(56, 239, 125, 0.08)';
+                    }
+                });
+
+                placeContainer.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    lastDropInsidePlace = true;
+                    placeContainer.style.borderColor = 'var(--accent)';
+                    placeContainer.style.backgroundColor = 'rgba(56, 239, 125, 0.08)';
+
+                    if (currentMode === 'number') {
+                        const num = e.dataTransfer.getData('text/plain');
+                        if (num && !isNaN(num)) {
+                            const firstEmpty = placeValues.findIndex(v => !v);
+                            if (firstEmpty >= 0) {
+                                placeValues[firstEmpty] = num;
+                                generateNumberPickerTable();
+                                generatePlaceBoxes();
+                                setupNumberCellDragDrop();
+                                setupLabelCellDragDrop();
+                                updateLabelCellStyles();
+                            }
+                        }
+                    } else if (currentMode === 'label') {
+                        const labelData = e.dataTransfer.getData('application/x-label');
+                        if (labelData) {
+                            const colNum = labelData.replace('C', '');
+                            const firstEmpty = placeValues.findIndex(v => !v);
+                            if (firstEmpty >= 0) {
+                                placeValues[firstEmpty] = colNum;
+                                generateNumberPickerTable();
+                                generatePlaceBoxes();
+                                setupNumberCellDragDrop();
+                                setupLabelCellDragDrop();
+                            }
+                        }
+                    }
+                });
+            }
+
+            function setupNumberCellDragDrop() {
+                const numberCells = document.querySelectorAll('.number-cell');
+                numberCells.forEach(cell => {
+                    cell.addEventListener('dragstart', (e) => {
+                        draggedNumber = cell.dataset.number;
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('text/plain', draggedNumber);
+                    });
+
+                    cell.addEventListener('dragend', () => {
+                        draggedNumber = null;
+                    });
+                });
+            }
+
+            function setupLabelCellDragDrop() {
+                const labelCells = document.querySelectorAll('.label-cell');
+                labelCells.forEach(cell => {
+                    // Skip if already setup (has data attribute)
+                    if (cell.dataset.dragSetup === 'true') return;
+
+                    // Clone to remove all old event listeners
+                    const newCell = cell.cloneNode(true);
+                    cell.parentNode.replaceChild(newCell, cell);
+
+                    // Explicitly set draggable to ensure it works after cloneNode
+                    newCell.draggable = true;
+                    newCell.dataset.dragSetup = 'true';
+
+                    newCell.addEventListener('dragstart', (e) => {
+                        const label = newCell.dataset.label;
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('application/x-label', label);
+                        newCell.style.opacity = '0.5';
+                    });
+
+                    newCell.addEventListener('dragend', () => {
+                        newCell.style.opacity = '1';
+                    });
+                });
+            }
+
+            // Update label cell styling based on place values
+            function updateLabelCellStyles() {
+                const tfoot = document.querySelector('.number-picker-table tfoot');
+
+                if (currentMode !== 'number') {
+                    // In label mode, make all label cells bright and draggable
+                    const labelCells = document.querySelectorAll('.label-cell');
+                    labelCells.forEach(cell => {
+                        cell.classList.add('with-values');
+                    });
+                    if (tfoot) tfoot.classList.remove('disabled');
+                    return;
+                }
+
+                // In number mode, determine which columns have values in placeValues
+                const columnsWithValues = new Set();
+                placeValues.forEach(val => {
+                    if (val && val.trim() && !isNaN(val)) {
+                        const num = parseInt(val, 10);
+                        const col = getCol(num); // Use existing getCol helper
+                        columnsWithValues.add(col);
+                    }
+                });
+
+                // If any columns have values, remove disabled class from tfoot to show labels bright
+                if (columnsWithValues.size > 0) {
+                    if (tfoot) tfoot.classList.remove('disabled');
+                } else {
+                    if (tfoot) tfoot.classList.add('disabled');
+                }
+
+                // Update label cell styling
+                const labelCells = document.querySelectorAll('.label-cell');
+                labelCells.forEach(cell => {
+                    const label = cell.dataset.label; // e.g., "C1", "C2", ...
+                    const colNum = parseInt(label.substring(1), 10); // Extract column number
+                    if (columnsWithValues.has(colNum)) {
+                        cell.classList.add('with-values');
+                    } else {
+                        cell.classList.remove('with-values');
+                    }
+                });
+            }
+
+            const modeSelector = document.getElementById('modeSelector');
+            let modeState = 'number';
+            modeSelector.addEventListener('click', () => {
+                modeState = modeState === 'number' ? 'label' : 'number';
+                modeSelector.textContent = modeState === 'number' ? 'Số (1-45)' : 'Label (C1-C6)';
+                setNumberPickerMode(modeState, 'picker');
             });
 
-            // Toggle popup on click - only way to close
+
+            // Sync mode button when mode changes from external sources (cell9/10)
+            if (window.onNumberPickerModeChange) {
+                window.onNumberPickerModeChange((mode) => {
+                    modeState = mode;
+                    modeSelector.textContent = mode === 'number' ? 'Số (1-45)' : 'Label (C1-C6)';
+                });
+            }
+
+            // Connection toggle
+            const connectionToggle = document.getElementById('connectionToggle');
+            const connectionToggleLabel = document.getElementById('connectionToggleLabel');
+
+            const updateConnectionToggleState = () => {
+                const isNumberMode = currentMode === 'number';
+                connectionToggle.disabled = !isNumberMode;
+                if (connectionToggleLabel) {
+                    connectionToggleLabel.style.opacity = isNumberMode ? '1' : '0.5';
+                }
+                connectionToggle.style.opacity = isNumberMode ? '1' : '0.5';
+                connectionToggle.style.cursor = isNumberMode ? 'pointer' : 'not-allowed';
+
+                // Redraw when toggled
+                drawConnections();
+            };
+
+            // Expose globally for mode change callback
+            window.updateConnectionToggleState = updateConnectionToggleState;
+
+            let connectionState = true;
+            connectionToggle.addEventListener('click', () => {
+                connectionState = !connectionState;
+                connectionToggle.textContent = connectionState ? 'Hiện' : 'Ẩn';
+                drawConnections();
+            });
+
+            // Initialize connection toggle state
+            updateConnectionToggleState();
+
+            // Paste clipboard into place (dblclick on any place box) when in number mode
+            async function pasteClipboardToPlaces() {
+                const placeContainer = numberPickerPopup.querySelector('.place-container');
+                const flashFail = (reason) => {
+                    console.log('Paste failed:', reason);
+                    if (!placeContainer) return;
+                    placeContainer.style.borderColor = '#ef4444';
+                    placeContainer.style.backgroundColor = 'rgba(239, 68, 68, 0.14)';
+                    setTimeout(() => {
+                        placeContainer.style.borderColor = 'var(--accent)';
+                        placeContainer.style.backgroundColor = 'rgba(56, 239, 125, 0.08)';
+                    }, 450);
+                };
+
+                if (currentMode !== 'number') {
+                    flashFail('wrong mode: ' + currentMode);
+                    return;
+                }
+
+                const readClipboard = async () => {
+                    if (navigator.clipboard && navigator.clipboard.readText) {
+                        return navigator.clipboard.readText();
+                    }
+                    if (window.clipboardData && window.clipboardData.getData) {
+                        return window.clipboardData.getData('Text');
+                    }
+                    return null;
+                };
+
+                let txt = null;
+                try {
+                    txt = await readClipboard();
+                    console.log('Raw clipboard result:', JSON.stringify(txt));
+                } catch (err) {
+                    console.error('Clipboard read error:', err);
+                    flashFail('clipboard error: ' + err.message);
+                    return;
+                }
+
+                if (txt === null || txt === undefined) {
+                    console.error('Clipboard returned null - API blocked or not available');
+                    flashFail('clipboard blocked (chạy qua http:// thay vì file://)');
+                    return;
+                }
+
+                txt = txt.trim();
+                if (!txt) {
+                    flashFail('clipboard empty');
+                    return;
+                }
+
+                const parts = txt.split(',').map(s => s.trim());
+                console.log('Parts after split:', parts, 'length:', parts.length);
+                if (parts.length !== 6) {
+                    flashFail(`expected 6 parts, got ${parts.length}`);
+                    return;
+                }
+                const next = [];
+                for (let i = 0; i < parts.length; i++) {
+                    const p = parts[i];
+                    if (p === '' || p === '_') { next.push(''); continue; }
+                    const n = parseInt(p, 10);
+                    console.log(`Part ${i}: "${p}" -> ${n}, valid: ${Number.isFinite(n) && n >= 1 && n <= 45}`);
+                    if (!Number.isFinite(n) || n < 1 || n > 45) {
+                        flashFail(`invalid number at position ${i + 1}: "${p}"`);
+                        return;
+                    }
+                    next.push(String(n));
+                }
+
+                console.log('Paste successful:', next);
+                for (let i = 0; i < 6; i++) placeValues[i] = next[i] || '';
+                generateNumberPickerTable();
+                generatePlaceBoxes();
+                setupNumberCellDragDrop();
+                setupLabelCellDragDrop();
+                updateLabelCellStyles();
+                if (placeContainer) {
+                    placeContainer.style.borderColor = 'var(--accent-2)';
+                    placeContainer.style.backgroundColor = 'rgba(102, 126, 234, 0.2)';
+                    setTimeout(() => {
+                        placeContainer.style.borderColor = 'var(--accent)';
+                        placeContainer.style.backgroundColor = 'rgba(56, 239, 125, 0.08)';
+                    }, 400);
+                }
+            }
+
+            const clearPlaceBtn = document.getElementById('clearPlaceBtn');
+            clearPlaceBtn.addEventListener('click', () => {
+                for (let i = 0; i < placeValues.length; i++) {
+                    placeValues[i] = '';
+                }
+                generateNumberPickerTable();
+                generatePlaceBoxes();
+                setupNumberCellDragDrop();
+                setupLabelCellDragDrop();
+                updateLabelCellStyles();
+            });
+
+            // Color picker to change cell background color
+            const cellColorPicker = document.getElementById('cellColorPicker');
+            cellColorPicker.addEventListener('input', (e) => {
+                const color = e.target.value;
+                // Update CSS variable instead of inline style to preserve hover effects
+                document.documentElement.style.setProperty('--cell-bg-color', color);
+            });
+
+            // Wrap table in a relative-positioned container
+            const tableWrapper = document.createElement('div');
+            tableWrapper.style.position = 'relative';
+            numberPickerTable.parentElement.insertBefore(tableWrapper, numberPickerTable);
+            tableWrapper.appendChild(numberPickerTable);
+
+            generateNumberPickerTable();
+            generatePlaceBoxes();
+            setupPlaceContainerListeners();
+            setupNumberCellDragDrop();
+            setupLabelCellDragDrop();
+
+            // Apply saved scale and add scale handle
+            applyPopupScale();
+            addPopupScaleHandle();
+
+            // Toggle popup on click
             htmlBadge.addEventListener('click', (e) => {
                 e.stopPropagation();
                 isPopupVisible = !isPopupVisible;
 
                 if (isPopupVisible) {
-                    // Calculate position based on badge location
-                    const rect = htmlBadge.getBoundingClientRect();
-                    imagePopup.style.top = `${rect.bottom + 8}px`;
-                    imagePopup.style.left = `${rect.left}px`;
+                    // Apply scale BEFORE showing to prevent flash
+                    applyPopupScaleInstant();
+
+                    const savedPos = localStorage.getItem('popupPosition');
+                    if (savedPos) {
+                        const { top, left } = JSON.parse(savedPos);
+                        numberPickerPopup.style.top = `${top}px`;
+                        numberPickerPopup.style.left = `${left}px`;
+                    } else {
+                        const rect = htmlBadge.getBoundingClientRect();
+                        numberPickerPopup.style.top = `${rect.bottom + 8}px`;
+                        numberPickerPopup.style.left = `${rect.left}px`;
+                    }
+
+                    // Set display and opacity 0, then fade in after scale applied
+                    numberPickerPopup.style.display = 'block';
+                    numberPickerPopup.style.opacity = '0';
+
+                    requestAnimationFrame(() => {
+                        numberPickerPopup.style.opacity = '1';
+                    });
+                } else {
+                    numberPickerPopup.style.opacity = '0';
+                    setTimeout(() => {
+                        numberPickerPopup.style.display = 'none';
+                    }, 300);
                 }
 
-                imagePopup.classList.toggle('show', isPopupVisible);
+                // Show/hide scale handle
+                const handle = document.querySelector('.popup-scale-handle');
+                if (handle) {
+                    handle.classList.toggle('visible', isPopupVisible);
+                }
             });
+
+            // Toggle popup with Ctrl
+            let ctrlPressed = false;
+            let ctrlWithOtherKey = false;
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Control' && !e.repeat) {
+                    ctrlPressed = true;
+                    ctrlWithOtherKey = false;
+                } else if (ctrlPressed && e.key !== 'Control') {
+                    ctrlWithOtherKey = true;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'Control' && ctrlPressed && !ctrlWithOtherKey) {
+                    isPopupVisible = !isPopupVisible;
+                    if (isPopupVisible) {
+                        // Apply scale BEFORE showing
+                        applyPopupScaleInstant();
+
+                        const savedPos = localStorage.getItem('popupPosition');
+                        if (savedPos) {
+                            const { top, left } = JSON.parse(savedPos);
+                            numberPickerPopup.style.top = `${top}px`;
+                            numberPickerPopup.style.left = `${left}px`;
+                        } else {
+                            const rect = htmlBadge.getBoundingClientRect();
+                            numberPickerPopup.style.top = `${rect.bottom + 8}px`;
+                            numberPickerPopup.style.left = `${rect.left}px`;
+                        }
+
+                        // Set display and opacity 0, then fade in after scale applied
+                        numberPickerPopup.style.display = 'block';
+                        numberPickerPopup.style.opacity = '0';
+
+                        requestAnimationFrame(() => {
+                            numberPickerPopup.style.opacity = '1';
+                        });
+                    } else {
+                        numberPickerPopup.style.opacity = '0';
+                        setTimeout(() => {
+                            numberPickerPopup.style.display = 'none';
+                        }, 300);
+                    }
+
+                    // Show/hide scale handle
+                    const handle = document.querySelector('.popup-scale-handle');
+                    if (handle) {
+                        handle.classList.toggle('visible', isPopupVisible);
+                    }
+                }
+                if (e.key === 'Control') {
+                    ctrlPressed = false;
+                    ctrlWithOtherKey = false;
+                }
+            });
+
+            // Make popup draggable by background
+            let popupOffsetX = 0, popupOffsetY = 0, isDraggingPopup = false;
+            numberPickerPopup.addEventListener('mousedown', (e) => {
+                if (e.target === numberPickerPopup) {
+                    isDraggingPopup = true;
+                    const rect = numberPickerPopup.getBoundingClientRect();
+                    popupOffsetX = e.clientX - rect.left;
+                    popupOffsetY = e.clientY - rect.top;
+                    e.preventDefault();
+                }
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (isDraggingPopup) {
+                    const newLeft = e.clientX - popupOffsetX;
+                    const newTop = e.clientY - popupOffsetY;
+                    numberPickerPopup.style.left = newLeft + 'px';
+                    numberPickerPopup.style.top = newTop + 'px';
+                    localStorage.setItem('popupPosition', JSON.stringify({ top: newTop, left: newLeft }));
+                }
+            });
+            document.addEventListener('mouseup', () => { isDraggingPopup = false; });
+
+            // Expose placeValues globally
+            window.getPlaceValues = () => placeValues;
+            window.markPlaceDropHandled = () => { lastDropInsidePlace = true; };
+            window.setPlaceValues = (values) => {
+                if (Array.isArray(values)) {
+                    for (let i = 0; i < 6; i++) {
+                        const v = values[i];
+                        placeValues[i] = (v === undefined || v === null) ? '' : v;
+                    }
+                }
+                generateNumberPickerTable();
+                generatePlaceBoxes();
+                setupNumberCellDragDrop();
+                setupLabelCellDragDrop();
+            };
+            window.applyPlaceValuesToInputs = (inputArray) => {
+                if (inputArray && inputArray.length >= 6) {
+                    for (let i = 0; i < 6; i++) {
+                        const val = placeValues[i];
+                        if (val && !isNaN(val)) {
+                            inputArray[i].value = val;
+                            inputArray[i].dispatchEvent(new Event('input'));
+                        }
+                    }
+                }
+            };
 
             // Scroll to top button
             const scrollBtn = document.getElementById('scrollToTop');
@@ -1920,26 +3929,44 @@
                 const next = current === 'dark' ? 'light' : 'dark';
                 root.setAttribute('data-theme', next);
                 localStorage.setItem('theme', next);
+                // Redraw connection lines to apply theme-specific colors
+                try { drawConnections(); } catch { }
             };
 
             // Tải dữ liệu TRƯỚC khi render các cell
             await loadData();
 
             const showSection = createSectionSwitcher();
+            // Renderer map for lazy section mounting
+            const renderers = {
+                cell4: renderCell4,
+                cell5: renderCell5,
+                // Note: mismatched creators – keep ids aligned with sections created inside
+                cell6: renderCell8, // Phân nhóm theo bộ số
+                cell7: renderCell6, // Nhóm theo label
+                cell8: renderCell7, // Tìm kiếm theo Label
+                cell9: renderCell9,
+                cell10: renderCell10,
+                cell11: renderCell11,
+            };
+
+            // Expose ensureRendered globally for nav handlers
+            window.ensureRendered = function ensureRendered(id) {
+                if (!document.getElementById(id)) {
+                    const fn = renderers[id];
+                    if (typeof fn === 'function') fn();
+                }
+            };
+
             buildNav(showSection);
-            renderCell4();
-            renderCell5();
-            renderCell6();
-            renderCell7();
-            renderCell8();
-            renderCell9();
-            renderCell10();
-            renderCell11();
             // Hiển thị section theo hash (nếu hợp lệ), mặc định cell4
             const initial = (location.hash || "#cell4").replace("#", "");
+            // Lazy mount only the initial section
+            window.ensureRendered(initial || "cell4");
             showSection(initial || "cell4");
             window.addEventListener("hashchange", () => {
                 const id = (location.hash || "#cell4").replace("#", "");
+                window.ensureRendered(id || "cell4");
                 showSection(id || "cell4");
             });
         }
