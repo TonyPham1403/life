@@ -1277,12 +1277,11 @@
                 let html = "<div><table><thead><tr>" +
                     "<th>Rank</th><th>Số</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th><th>Tổng %</th></tr></thead><tbody>";
                 data.forEach((row, idx) => {
-                    const bg = idx === 0 ? "#134e4a" : idx === 1 ? "#422006" : idx === 2 ? "#0f172a" : (idx % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)");
-                    const rankClass = idx < 3 ? "rank-top" : "";
-                    html += `<tr class="${rankClass}" style="background:${bg};">` +
+                    const bg = idx % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)";
+                    html += `<tr style="background:${bg};">` +
                         `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
                         row.pcts.map(p => `<td>${fmtPctCustom(p, decimals)}</td>`).join("") +
-                        `<td style="background:linear-gradient(135deg, rgba(56, 239, 125, 0.2) 0%, rgba(56, 239, 125, 0.35) 100%);color:#0f172a;font-weight:700;"><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
+                        `<td><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
@@ -1299,13 +1298,10 @@
             const topSel = document.createElement("select");
             [[3, "Top 3"], [5, "Top 5"], [10, "Top 10"], [45, "Tất cả (45)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; topSel.appendChild(o); });
             topSel.value = "45";
-            const hiSel = document.createElement("select");
-            [[0, "Không"], [1, "Top 1"], [3, "Top 3"], [5, "Top 5"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; hiSel.appendChild(o); });
-            hiSel.value = "3";
             const decimalSel = document.createElement("select");
             [[0, "0 chữ số"], [1, "1 chữ số"], [2, "2 chữ số"], [3, "3 chữ số"], [4, "4 chữ số"], [5, "5 chữ số"], [6, "6 chữ số"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; decimalSel.appendChild(o); });
             decimalSel.value = "2";
-            controls.append("Hiển thị:", topSel, "Tô đậm:", hiSel, "Độ chính xác:", decimalSel);
+            controls.append("Hiển thị:", topSel, "Độ chính xác:", decimalSel);
             body.appendChild(controls);
             const wrap = document.createElement("div");
             wrap.className = "card";
@@ -1327,7 +1323,7 @@
                         const col = getCol(v);
                         cells.push(`<td><div><strong>${v}</strong> <span class='muted'>[C${col}]</span></div><div class='muted'>${fmtPctCustom(pct, decimals)}</div></td>`);
                     }
-                    const bg = rank < hiSel.value ? (rank === 0 ? "#134e4a" : rank === 1 ? "#42340a" : "#0f1b2d") : (rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)");
+                    const bg = rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
                     html += `<tr style="background:${bg};"><td>#${rank + 1}</td>${cells.join("")}</tr>`;
                 }
                 html += "</tbody></table></div>";
@@ -1360,14 +1356,14 @@
                         const pct = rows.length ? (topCount / rows.length) : 0;
                         cells.push(`<td><div><strong>C${topCol}</strong></div><div class='muted'>${fmtPctCustom(pct, parseInt(decimalSel.value, 10))}</div></td>`);
                     }
-                    const bg = rank <= 3 ? (rank === 1 ? "#134e4a" : rank === 2 ? "#42340a" : "#0f1b2d") : (rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)");
+                    const bg = rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
                     html += `<tr style="background:${bg};"><td>#${rank}</td>${cells.join("")}</tr>`;
                 }
                 html += "</tbody></table></div>";
 
                 wrap.innerHTML = html;
             }
-            topSel.onchange = hiSel.onchange = decimalSel.onchange = draw;
+            topSel.onchange = decimalSel.onchange = draw;
             draw();
         }
 
