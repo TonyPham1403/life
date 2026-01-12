@@ -1392,7 +1392,9 @@
             const diffSel = document.createElement("select");
             for (let i = 0; i <= 6; i++) { const o = document.createElement("option"); o.value = i; o.textContent = `Sai khác ${i}`; diffSel.appendChild(o); } diffSel.value = "1";
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
-            controls.append("Sai khác tối đa:", diffSel, consecLabel);
+            const sortSel = document.createElement("select");
+            [["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -1452,6 +1454,12 @@
             }
 
             function renderGroups(groups) {
+                // Apply sorting based on sortSel value
+                if (sortSel.value === 'count_desc') groups.sort((a, b) => b.rows.length - a.rows.length);
+                else if (sortSel.value === 'count_asc') groups.sort((a, b) => a.rows.length - b.rows.length);
+                else if (sortSel.value === 'value_asc') groups.sort((a, b) => compareKey(a.base, b.base));
+                else if (sortSel.value === 'value_desc') groups.sort((a, b) => compareKey(b.base, a.base));
+
                 // Summary + grid container
                 wrap.innerHTML = `<div class='muted'>${groups.length} nhóm · ${groups.reduce((s, g) => s + g.rows.length, 0)} kỳ</div>` +
                     `<div class='grid-centered' id='labelGroupGrid'></div>`;
@@ -1571,6 +1579,7 @@
             // Dùng debounce để tránh tính toán quá tần suất
             const debouncedGroup = createDebounce(group, 300);
             diffSel.onchange = consec.onchange = debouncedGroup;
+            sortSel.onchange = () => groupCache && renderGroups(groupCache);
             group();
         }
 
