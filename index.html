@@ -1426,25 +1426,45 @@
                     rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
                     const labels = Object.keys(labelRows).sort();
                     const used = new Set();
-                    const groups = [];
+                    let groups = [];
 
+                    // Bước 1: Luôn nhóm theo điều kiện lỏng nhất (không liền kề)
                     labels.forEach(base => {
                         if (used.has(base)) return;
                         used.add(base);
                         const gLabels = [base];
                         let gRows = [...labelRows[base]];
 
-                        // Optimize: chỉ so sánh với labels chưa dùng (thay vì mọi labels)
                         for (let j = 0; j < labels.length; j++) {
                             const other = labels[j];
                             if (used.has(other)) continue;
                             const pos = diffPositions(base, other);
-                            if (pos.length > diffSel.value) continue;
-                            if (consec.checked && pos.length > 1 && !pos.every((p, i) => i === 0 || p - pos[i - 1] === 1)) continue;
+                            // Chỉ kiểm tra số vị trí khác nhau, không kiểm tra liền kề
+                            if (pos.length > parseInt(diffSel.value, 10)) continue;
                             used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
                         }
                         if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
                     });
+
+                    // Bước 2: Nếu tick "Liền kề", lọc các labels không thoả điều kiện trong mỗi nhóm
+                    if (consec.checked) {
+                        groups = groups.map(g => {
+                            // Giữ lại chỉ những labels thoả điều kiện liền kề với base
+                            const filteredLabels = g.labels.filter(label => {
+                                const pos = diffPositions(g.base, label);
+                                // Nếu chỉ khác ≤1 vị trí thì OK (không cần kiểm tra liền kề)
+                                if (pos.length <= 1) return true;
+                                // Nếu khác ≥2 vị trí, kiểm tra liền kề
+                                return pos.every((p, i) => i === 0 || p - pos[i - 1] === 1);
+                            });
+                            // Tính lại rows dựa trên filtered labels
+                            const filteredRows = [];
+                            filteredLabels.forEach(label => {
+                                filteredRows.push(...labelRows[label]);
+                            });
+                            return { base: g.base, labels: filteredLabels, rows: filteredRows };
+                        }).filter(g => g.rows.length >= 2); // Chỉ giữ nhóm ≥2 kỳ
+                    }
 
                     groups.sort((a, b) => b.rows.length - a.rows.length);
                     groupCache = groups;
