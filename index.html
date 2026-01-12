@@ -2499,11 +2499,8 @@
             // Toggle button click to switch modes and notify popup
             modeBtn.addEventListener('click', () => {
                 const next = cell9ModeState === 'number' ? 'label' : 'number';
-                applyCell9Mode(next, { notify: true });
+                applyCell9Mode(next, { notify: false });
             });
-
-            // Sync with external popup mode changes
-            onNumberPickerModeChange((mode) => applyCell9Mode(mode, { notify: false }));
 
             // Initial handlers for first render: use current visual order
             const initialContainers = cell9ModeState === "label" ? [...containers].reverse() : containers;
