@@ -1330,6 +1330,19 @@
 
                 // Thêm bảng mới: Xếp hạng cột theo vị trí (6x6)
                 html += "<h3 style='margin-top: 24px; margin-bottom: 12px;'>Xếp hạng cột theo vị trí</h3>";
+
+                // Tổng % của từng cột (C1-C6) trên toàn bộ 6 vị trí
+                const colTotals = Array(6).fill(0);
+                rows.forEach(r => {
+                    r.nums.forEach(v => { const col = getCol(v); colTotals[col - 1]++; });
+                });
+                const totalPositions = rows.length * 6;
+                const colPctDisplay = colTotals.map((c, idx) => {
+                    const pct = fmtPctCustom(totalPositions ? c / totalPositions : 0, decimals);
+                    return `<span class="pill" style="background:linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%); color:#fff; border:none;">C${idx + 1}</span> <strong>${pct}</strong>`;
+                }).join(" · ");
+                html += `<div style='margin:6px 0 10px; font-size:12px; color:var(--text-strong);'>${colPctDisplay}</div>`;
+
                 html += "<div><table><thead><tr><th>Rank</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th></tr></thead><tbody>";
 
                 // Tính toán: với mỗi vị trí, xếp hạng các cột (1-6) theo số lần xuất hiện
