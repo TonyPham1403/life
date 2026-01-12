@@ -2358,7 +2358,6 @@
                     for (let i = 0; i < records.length; i += chunk) {
                         html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
                         records.slice(i, i + chunk).forEach(r => {
-                            const nums = r.nums.map(n => `<span class='pill'>${n}</span>`).join(" ");
                             const labelStr = r.label;
                             let highlightPos = [];
                             if (consec.checked) {
@@ -2382,8 +2381,18 @@
                                     if (keySet.has(labelStr[pos])) highlightPos.push(pos);
                                 }
                             }
+                            // Create a set of highlighted column numbers from label chars
+                            const highlightedLabelChars = new Set(highlightPos.map(pos => labelStr[pos]));
+                            // Convert column chars to numbers 1-45 that belong to those columns
+                            const highlightedNums = new Set();
+                            for (let num = 1; num <= 45; num++) {
+                                if (highlightedLabelChars.has(String(getCol(num)))) {
+                                    highlightedNums.add(num);
+                                }
+                            }
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, highlightedNums, totalCount, consec.checked);
                             const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
-                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -2699,10 +2708,12 @@
                 const order = single.idx + 1; const value = single.val;
                 const posCols = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }; const posMaps = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {} };
                 let total = 0, hit = 0;
+                const selectedPosNumbers = []; // Collect numbers at selected position for column mode
                 rows.forEach(r => {
                     if (r.nums.length !== 6) return; total++;
                     const matched = (cell10ModeState === "number") ? (r.nums[order - 1] === value) : (getCol(r.nums[order - 1]) === value);
                     if (!matched) return; hit++;
+                    if (cell10ModeState === "column") selectedPosNumbers.push(r.nums[order - 1]);
                     for (let pos = 1; pos <= 6; pos++) { if (pos === order) continue; const v = r.nums[pos - 1]; const c = getCol(v); posCols[pos].push(c); (posMaps[pos][c] ||= []).push(v); }
                 });
                 if (!hit) {
@@ -2711,6 +2722,16 @@
                 }
                 const pattern = Array(6).fill("_"); pattern[order - 1] = (cell10ModeState === "number") ? value : `C${value}`;
                 let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
+
+                // Show numbers at selected position for column mode
+                if (cell10ModeState === "column" && selectedPosNumbers.length > 0) {
+                    const numCounts = countMap(selectedPosNumbers);
+                    const numsHtml = Object.entries(numCounts).sort((a, b) => b[1] - a[1]).map(([num, count]) =>
+                        `<strong>${num}</strong><span style='font-weight:400'>(${count})</span>`
+                    ).join(', ');
+                    html += `<div style='margin-top:8px;font-weight:700;color:var(--text-strong);'>${numsHtml}</div>`;
+                }
+
                 const positionsBefore = [1, 2, 3, 4, 5, 6].filter(p => p < order);
                 const positionsAfter = [1, 2, 3, 4, 5, 6].filter(p => p > order);
                 const renderPosTable = (pos) => {
@@ -2731,11 +2752,9 @@
                     // Ensure each card is at most 1/3 of the row and centered
                     let t = `<div class='card' style='flex:0 1 calc(33.333% - 10px);'><h4 style='margin:0 0 8px;'>Vị trí ${pos}</h4><table><thead><tr><th>Cột</th><th>Số lần</th><th>Tỷ lệ</th><th>Số hay xuất hiện</th></tr></thead><tbody>`;
                     items.forEach((it, idx) => {
-                        const rankBg = idx === 0 ? "#c8e6c9" : idx === 1 ? "#fff9c4" : idx === 2 ? "#b3e5fc" : "";
-                        const style = rankBg ? `style=\"background:${rankBg}\"` : "";
                         const vals = countMap(posMaps[pos][it.col] || []);
                         const valsHtml = Object.entries(vals).sort((a, b) => b[1] - a[1]).map(([v, k]) => `<strong>${v}</strong><span style='font-weight:400'>(${k})</span>`).join(', ');
-                        t += `<tr ${style}><td style='font-weight:700'>${it.col}</td><td style='text-align:right;font-weight:700'>${it.count}</td><td style='text-align:right;font-weight:700'>${fmtPct(it.pct)}</td><td style='font-weight:700'>${valsHtml || '—'}</td></tr>`;
+                        t += `<tr><td style='font-weight:700'>${it.col}</td><td style='text-align:right;font-weight:700'>${it.count}</td><td style='text-align:right;font-weight:700'>${fmtPct(it.pct)}</td><td style='font-weight:700'>${valsHtml || '—'}</td></tr>`;
                     });
                     t += "</tbody></table></div>";
                     return t;
