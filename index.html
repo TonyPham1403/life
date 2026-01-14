@@ -980,14 +980,14 @@
                 (1-45)</button>
             <button id="clearPlaceBtn" class="clear-btn" title="Xóa toàn bộ place"
                 style="padding: 6px 10px; font-size: 12px;">Xóa</button>
+            <label style="margin-left:6px;font-size:12px;">Rank:</label>
+            <button id="rankToggle"
+                style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">unnank</button>
             <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
             <button id="connectionToggle"
                 style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
                 title="Hiện/ẩn đường nối giữa các số liên tiếp">Hiện</button>
-            <label style="margin-left: 6px; font-size: 12px;">Màu:</label>
-            <input type="color" id="cellColorPicker" value="#fffbea"
-                style="width: 50px; height: 32px; cursor: pointer; border-radius: 6px;"
-                title="Chọn màu nền cho các ô số">
+            <!-- color picker removed per user request -->
         </div>
     </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
@@ -3238,7 +3238,20 @@
                             const isDisabled = numbersInPlace.has(String(num));
                             const disabledClass = isDisabled ? ' disabled' : '';
                             const draggable = (isDisabled || currentMode === 'label') ? 'false' : 'true';
-                            html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}">${num}</td>`;
+                            // Check rank toggle; when enabled, show [#x] inside the same cell, left-aligned,
+                            // while keeping the number centered.
+                            const rankToggleEl = document.getElementById('rankToggle');
+                            const rankEnabled = !!rankToggleEl && rankToggleEl.textContent.trim() === 'rank';
+                            if (rankEnabled) {
+                                const rankMap = window.rankByTotal || {};
+                                const r = rankMap[num] || '';
+                                html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
+                                    `<span class="rank-in-cell" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:0.85em;font-weight:500;color:var(--muted);opacity:0.9;z-index:2;">[#${r}]</span>` +
+                                    `<span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span>` +
+                                    `</td>`;
+                            } else {
+                                html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}"><span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span></td>`;
+                            }
                         }
                     }
                     html += '</tr>';
@@ -3820,13 +3833,15 @@
                 updateLabelCellStyles();
             });
 
-            // Color picker to change cell background color
+            // Optional color picker (removed from UI) — attach listener only if element exists
             const cellColorPicker = document.getElementById('cellColorPicker');
-            cellColorPicker.addEventListener('input', (e) => {
-                const color = e.target.value;
-                // Update CSS variable instead of inline style to preserve hover effects
-                document.documentElement.style.setProperty('--cell-bg-color', color);
-            });
+            if (cellColorPicker) {
+                cellColorPicker.addEventListener('input', (e) => {
+                    const color = e.target.value;
+                    // Update CSS variable instead of inline style to preserve hover effects
+                    document.documentElement.style.setProperty('--cell-bg-color', color);
+                });
+            }
 
             // Wrap table in a relative-positioned container
             const tableWrapper = document.createElement('div');
@@ -3839,6 +3854,18 @@
             setupPlaceContainerListeners();
             setupNumberCellDragDrop();
             setupLabelCellDragDrop();
+
+            // Rank toggle handler: toggles between 'unnank' and 'rank' and re-renders the table
+            const rankToggleBtn = document.getElementById('rankToggle');
+            if (rankToggleBtn) {
+                rankToggleBtn.addEventListener('click', () => {
+                    const cur = rankToggleBtn.textContent.trim();
+                    const next = cur === 'rank' ? 'unnank' : 'rank';
+                    rankToggleBtn.textContent = next;
+                    // Re-generate table to show/hide ranks
+                    try { generateNumberPickerTable(); setupNumberCellDragDrop(); } catch (e) { console.warn(e); }
+                });
+            }
 
             // Apply saved scale and add scale handle
             applyPopupScale();
@@ -4041,6 +4068,18 @@
 
             // Tải dữ liệu TRƯỚC khi render các cell
             await loadData();
+
+            // Compute global rank (by total count) so popup can show ranks
+            try {
+                const totalCounts = Array(46).fill(0);
+                rows.forEach(r => { if (r.nums && r.nums.length === 6) r.nums.forEach(v => { totalCounts[v] = (totalCounts[v] || 0) + 1; }); });
+                const ranked = [];
+                for (let v = 1; v <= 45; v++) ranked.push({ v, cnt: totalCounts[v] || 0 });
+                ranked.sort((a, b) => b.cnt - a.cnt || a.v - b.v);
+                const rankByTotal = {};
+                ranked.forEach((r, idx) => { rankByTotal[r.v] = idx + 1; });
+                window.rankByTotal = rankByTotal;
+            } catch (e) { window.rankByTotal = {}; }
 
             const showSection = createSectionSwitcher();
             // Renderer map for lazy section mounting
