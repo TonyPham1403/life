@@ -982,7 +982,7 @@
                 style="padding: 6px 10px; font-size: 12px;">Xóa</button>
             <label style="margin-left:6px;font-size:12px;">Rank:</label>
             <button id="rankToggle"
-                style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">unnank</button>
+                style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">rank</button>
             <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
             <button id="connectionToggle"
                 style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
@@ -3244,9 +3244,23 @@
                             const rankEnabled = !!rankToggleEl && rankToggleEl.textContent.trim() === 'rank';
                             if (rankEnabled) {
                                 const rankMap = window.rankByTotal || {};
-                                const r = rankMap[num] || '';
+                                const r = rankMap[num] ?? '';
+                                // Only render badge when we have a rank value
+                                let badgeHtml = '';
+                                if (r !== '' && r !== null && r !== undefined) {
+                                    const rankNum = Number(r);
+                                    let color = 'var(--muted)';
+                                    if (!isNaN(rankNum)) {
+                                        if (rankNum >= 1 && rankNum <= 9) color = '#08eb56';
+                                        else if (rankNum >= 10 && rankNum <= 18) color = '#00E5FF';
+                                        else if (rankNum >= 19 && rankNum <= 27) color = '#1a62ea';
+                                        else if (rankNum >= 28 && rankNum <= 36) color = '#ea3ade';
+                                        else if (rankNum >= 37 && rankNum <= 45) color = '#ea0313';
+                                    }
+                                    badgeHtml = `<span class="rank-in-cell" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:0.92em;font-weight:900;color:${color};background:transparent;opacity:1;z-index:2;-webkit-text-stroke:0.4px rgba(0,0,0,0.6);text-shadow:0 0 1px rgba(0,0,0,0.22);letter-spacing:0.6px;">#${rankNum}</span>`;
+                                }
                                 html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
-                                    `<span class="rank-in-cell" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:0.85em;font-weight:500;color:var(--muted);opacity:0.9;z-index:2;">[#${r}]</span>` +
+                                    `${badgeHtml}` +
                                     `<span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span>` +
                                     `</td>`;
                             } else {
@@ -4079,6 +4093,8 @@
                 const rankByTotal = {};
                 ranked.forEach((r, idx) => { rankByTotal[r.v] = idx + 1; });
                 window.rankByTotal = rankByTotal;
+                // Regenerate the number picker table now that ranks are available
+                try { if (typeof generateNumberPickerTable === 'function') generateNumberPickerTable(); } catch (e) { console.warn('regen number picker after rank compute', e); }
             } catch (e) { window.rankByTotal = {}; }
 
             const showSection = createSectionSwitcher();
