@@ -2120,6 +2120,18 @@
             ).join(" ");
         }
 
+        // Helper for main thread combos (same algorithm available inside worker)
+        function kCombinations(set, k) {
+            const combs = [];
+            const n = set.length;
+            function pick(start, acc) {
+                if (acc.length === k) { combs.push(acc.slice()); return; }
+                for (let i = start; i < n; i++) { acc.push(set[i]); pick(i + 1, acc); acc.pop(); }
+            }
+            pick(0, []);
+            return combs;
+        }
+
         // Cell9: draws containing user set
         function renderCell9() {
             const body = sectionShell("cell9", "Cell9 · Tổ hợp chứa bộ số hoặc label", "Chọn tìm theo bộ số (1-45) hoặc label (1-6). Có thể kéo thả giữa các vị trí.");
