@@ -1699,41 +1699,114 @@
             const body = sectionShell("cell8", "Cell8 · Tìm kiếm theo Label", "Nhập 6 ký tự label (1-6 hoặc _) để tìm các kỳ có label khớp. Có thể kéo thả giữa các vị trí.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "70px"; return inp; });
 
-            // Create draggable containers for inputs
+            // Create draggable containers for inputs and add small up/down arrows inside the input on the right
             const containers = inputs.map((inp, idx) => {
                 const container = document.createElement("div");
                 container.className = "drag-input-container";
-                container.style.cssText = "position:relative;display:inline-block;";
+                // container sized to the input; buttons will be absolutely positioned inside it
+                container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
                 container.draggable = false;
 
                 const dragHandle = document.createElement("div");
                 dragHandle.className = "drag-handle";
-                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+                // small left-side grip so it doesn't cover the whole input and block typing
+                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
 
-                inp.style.position = "relative";
-                inp.style.zIndex = "2";
+                // keep input as text to allow wildcard '_', but visually reserve space for buttons
+                inp.type = 'text';
+                inp.maxLength = 1;
+                inp.placeholder = '_';
+                inp.size = 1;
+                inp.style.width = '70px';
+                inp.style.paddingRight = '40px';
+                inp.style.boxSizing = 'border-box';
+                inp.style.position = 'relative';
+                inp.style.zIndex = '1';
 
-                container.appendChild(inp);
-                container.appendChild(dragHandle);
-                container.dataset.index = idx;
+                // small vertical arrow buttons inside the input, right-aligned
+                const btnGroup = document.createElement('div');
+                // absolutely position the buttons so they sit inside the input's right edge
+                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
 
-                const updateDraggable = () => {
-                    const hasValue = inp.value.trim() !== "" && inp.value.trim() !== "_";
-                    container.draggable = hasValue;
-                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
-                    container.style.opacity = hasValue ? "1" : "0.7";
-                    if (hasValue) {
-                        container.style.border = "2px solid var(--accent)";
-                        container.style.borderRadius = "10px";
-                        container.style.padding = "2px";
-                    } else {
-                        container.style.border = "none";
-                        container.style.padding = "0";
-                    }
+                // make arrows compact so they don't overflow the input border
+                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+
+                const up = document.createElement('button');
+                up.type = 'button';
+                up.className = 'arrow-up';
+                up.innerHTML = '▲';
+                up.title = 'Tăng 1';
+                up.style.cssText = arrowStyle;
+
+                const down = document.createElement('button');
+                down.type = 'button';
+                down.className = 'arrow-down';
+                down.innerHTML = '▼';
+                down.title = 'Giảm 1';
+                down.style.cssText = arrowStyle;
+
+                // clamp helper: allow '' and '_' as wildcard, otherwise clamp to [1,6]
+                const clampValue = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '' || raw === '_') return;
+                    const n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 6) inp.value = '6';
+                    else inp.value = String(n);
                 };
 
-                inp.addEventListener("input", updateDraggable);
+                up.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    // wrap-around: after 6 -> 1
+                    n = n + 1;
+                    if (n > 6) n = 1;
+                    if (n < 1) n = 1;
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+                down.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    // wrap-around: before 1 -> 6
+                    n = n - 1;
+                    if (n < 1) n = 6;
+                    if (n > 6) n = 6;
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+
+                btnGroup.appendChild(up);
+                btnGroup.appendChild(down);
+
+                const updateDraggable = () => {
+                    const v = String(inp.value ?? '').trim();
+                    const hasValue = v !== '' && v !== '_';
+                    container.draggable = hasValue;
+                    // only enable pointer events on the small grip (left) so the input remains editable
+                    dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                    dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                    // keep padding and border radius constant so container height doesn't jump
+                    container.style.borderRadius = '10px';
+                    container.style.padding = '2px';
+                    // use transparent border when empty to preserve box size, and accent border when filled
+                    container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                    container.style.opacity = hasValue ? '1' : '0.85';
+                };
+
+                inp.addEventListener('input', () => { clampValue(); updateDraggable(); });
+                inp.addEventListener('change', () => { clampValue(); updateDraggable(); });
                 updateDraggable();
+
+                container.appendChild(inp);
+                container.appendChild(btnGroup);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
 
                 return container;
             });
@@ -2281,42 +2354,124 @@
 
             let inputs = createInputs(cell9ModeState);
 
-            // Create draggable containers for inputs
+            // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
             const createContainers = (inputArray) => {
                 return inputArray.map((inp, idx) => {
                     const container = document.createElement("div");
                     container.className = "drag-input-container";
-                    container.style.cssText = "position:relative;display:inline-block;";
+                    container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
                     container.draggable = false;
 
+                    // small left-side grip so it doesn't cover the whole input and block typing
                     const dragHandle = document.createElement("div");
                     dragHandle.className = "drag-handle";
-                    dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+                    dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
 
+                    // reserve space on the right for buttons
                     inp.style.position = "relative";
-                    inp.style.zIndex = "2";
+                    inp.style.zIndex = "1";
+                    inp.style.paddingRight = '40px';
+                    inp.style.boxSizing = 'border-box';
 
-                    container.appendChild(inp);
-                    container.appendChild(dragHandle);
-                    container.dataset.index = idx;
+                    // button group inside input, right-aligned
+                    const btnGroup = document.createElement('div');
+                    btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                    const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                    const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                    const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
 
-                    const updateDraggable = () => {
-                        const hasValue = inp.type === "number" ? inp.value.trim() !== "" : (inp.value.trim() !== "" && inp.value.trim() !== "_");
-                        container.draggable = hasValue;
-                        dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
-                        container.style.opacity = hasValue ? "1" : "0.7";
-                        if (hasValue) {
-                            container.style.border = "2px solid var(--accent)";
-                            container.style.borderRadius = "10px";
-                            container.style.padding = "2px";
-                        } else {
-                            container.style.border = "none";
-                            container.style.padding = "0";
-                        }
+                    // helpers per mode
+                    const clampForNumberMode = () => {
+                        const raw = String(inp.value ?? '').trim();
+                        if (raw === '') return;
+                        let n = parseInt(raw, 10);
+                        if (!Number.isFinite(n)) { inp.value = ''; return; }
+                        if (n < 1) inp.value = '1';
+                        else if (n > 45) inp.value = '45';
+                        else inp.value = String(n);
                     };
 
-                    inp.addEventListener("input", updateDraggable);
+                    const clampForLabelMode = () => {
+                        const raw = String(inp.value ?? '').trim();
+                        if (raw === '' || raw === '_') return;
+                        let n = parseInt(raw, 10);
+                        if (!Number.isFinite(n)) { inp.value = ''; return; }
+                        if (n < 1) inp.value = '1';
+                        else if (n > 6) inp.value = '6';
+                        else inp.value = String(n);
+                    };
+
+                    up.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (cell9ModeState === 'number') {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n + 1;
+                            if (n > 45) n = 1; // wrap
+                            if (n < 1) n = 1;
+                            inp.value = String(n);
+                        } else {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n + 1;
+                            if (n > 6) n = 1; // wrap
+                            if (n < 1) n = 1;
+                            inp.value = String(n);
+                        }
+                        inp.dispatchEvent(new Event('input'));
+                        if (run) run();
+                    });
+                    down.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (cell9ModeState === 'number') {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n - 1;
+                            if (n < 1) n = 45; // wrap
+                            if (n > 45) n = 45;
+                            inp.value = String(n);
+                        } else {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n - 1;
+                            if (n < 1) n = 6; // wrap
+                            if (n > 6) n = 6;
+                            inp.value = String(n);
+                        }
+                        inp.dispatchEvent(new Event('input'));
+                        if (run) run();
+                    });
+
+                    btnGroup.appendChild(up);
+                    btnGroup.appendChild(down);
+
+                    const updateDraggable = () => {
+                        const v = String(inp.value ?? '').trim();
+                        const hasValue = inp.type === 'number' ? v !== '' : (v !== '' && v !== '_');
+                        container.draggable = hasValue;
+                        dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                        dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                        container.style.borderRadius = '10px';
+                        container.style.padding = '2px';
+                        container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                        container.style.opacity = hasValue ? '1' : '0.85';
+                    };
+
+                    // attach input handlers depending on mode
+                    inp.addEventListener('input', () => {
+                        if (cell9ModeState === 'number') clampForNumberMode(); else clampForLabelMode();
+                        updateDraggable();
+                    });
+                    inp.addEventListener('change', () => {
+                        if (cell9ModeState === 'number') clampForNumberMode(); else clampForLabelMode();
+                        updateDraggable();
+                    });
                     updateDraggable();
+
+                    container.appendChild(inp);
+                    container.appendChild(btnGroup);
+                    container.appendChild(dragHandle);
+                    container.dataset.index = idx;
 
                     return container;
                 });
@@ -2711,41 +2866,117 @@
             modeBtn.style.cursor = 'pointer';
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
 
-            // Create draggable containers for inputs
+            // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
             const containers = inputs.map((inp, idx) => {
                 const container = document.createElement("div");
                 container.className = "drag-input-container";
-                container.style.cssText = "position:relative;display:inline-block;";
+                container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
                 container.draggable = false;
 
                 const dragHandle = document.createElement("div");
                 dragHandle.className = "drag-handle";
-                dragHandle.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;cursor:move;z-index:1;pointer-events:none;`;
+                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
 
                 inp.style.position = "relative";
-                inp.style.zIndex = "2";
+                inp.style.zIndex = "1";
+                inp.style.paddingRight = '40px';
+                inp.style.boxSizing = 'border-box';
 
-                container.appendChild(inp);
-                container.appendChild(dragHandle);
-                container.dataset.index = idx;
+                const btnGroup = document.createElement('div');
+                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
 
-                const updateDraggable = () => {
-                    const hasValue = inp.value.trim() !== "";
-                    container.draggable = hasValue;
-                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
-                    container.style.opacity = hasValue ? "1" : "0.7";
-                    if (hasValue) {
-                        container.style.border = "2px solid var(--accent)";
-                        container.style.borderRadius = "10px";
-                        container.style.padding = "2px";
-                    } else {
-                        container.style.border = "none";
-                        container.style.padding = "0";
-                    }
+                const clampForNumber = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '') return;
+                    let n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 45) inp.value = '45';
+                    else inp.value = String(n);
+                };
+                const clampForColumn = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '') return;
+                    let n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 6) inp.value = '6';
+                    else inp.value = String(n);
                 };
 
-                inp.addEventListener("input", updateDraggable);
+                up.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (cell10ModeState === 'number') {
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n + 1;
+                        if (n > 45) n = 1;
+                        if (n < 1) n = 1;
+                        inp.value = String(n);
+                    } else {
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n + 1;
+                        if (n > 6) n = 1;
+                        if (n < 1) n = 1;
+                        inp.value = String(n);
+                    }
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+                down.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (cell10ModeState === 'number') {
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n - 1;
+                        if (n < 1) n = 45;
+                        if (n > 45) n = 45;
+                        inp.value = String(n);
+                    } else {
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n - 1;
+                        if (n < 1) n = 6;
+                        if (n > 6) n = 6;
+                        inp.value = String(n);
+                    }
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+
+                btnGroup.appendChild(up);
+                btnGroup.appendChild(down);
+
+                const updateDraggable = () => {
+                    const v = String(inp.value ?? '').trim();
+                    const hasValue = v !== '';
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                    dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                    container.style.borderRadius = '10px';
+                    container.style.padding = '2px';
+                    container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                    container.style.opacity = hasValue ? '1' : '0.85';
+                };
+
+                inp.addEventListener('input', () => {
+                    if (cell10ModeState === 'number') clampForNumber(); else clampForColumn();
+                    updateDraggable();
+                });
+                inp.addEventListener('change', () => {
+                    if (cell10ModeState === 'number') clampForNumber(); else clampForColumn();
+                    updateDraggable();
+                });
                 updateDraggable();
+
+                container.appendChild(inp);
+                container.appendChild(btnGroup);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
 
                 return container;
             });
@@ -3016,52 +3247,86 @@
             const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern số", "Nhập số (1-45) vào từng vị trí để tìm kỳ khớp. Có thể kéo thả số giữa các vị trí bằng chuột. Bỏ trống vị trí nào thì vị trí đó chấp nhận số bất kỳ.");
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
 
-            // Create draggable containers for inputs
+            // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
             const containers = inputs.map((inp, idx) => {
                 const container = document.createElement("div");
                 container.className = "drag-input-container";
-                container.style.cssText = "position:relative;display:inline-block;";
-                container.draggable = false; // Container không drag, chỉ nội dung bên trong
+                container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
+                container.draggable = false;
 
-                // Wrap input in a draggable area
+                // small left-side grip so it doesn't cover the whole input and block typing
                 const dragHandle = document.createElement("div");
                 dragHandle.className = "drag-handle";
-                dragHandle.style.cssText = `
-                    position:absolute;
-                    top:0;
-                    left:0;
-                    right:0;
-                    bottom:0;
-                    cursor:move;
-                    z-index:1;
-                    pointer-events:none;
-                `;
+                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
 
                 inp.style.position = "relative";
-                inp.style.zIndex = "2";
+                inp.style.zIndex = "1";
+                inp.style.paddingRight = '40px';
+                inp.style.boxSizing = 'border-box';
 
-                container.appendChild(inp);
-                container.appendChild(dragHandle);
-                container.dataset.index = idx;
+                const btnGroup = document.createElement('div');
+                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
 
-                // Enable drag only when there's a value
-                const updateDraggable = () => {
-                    const hasValue = inp.value.trim() !== "";
-                    container.draggable = hasValue;
-                    dragHandle.style.pointerEvents = hasValue ? "auto" : "none";
-                    container.style.opacity = hasValue ? "1" : "0.7";
-                    if (hasValue) {
-                        container.style.border = "2px solid var(--accent)";
-                        container.style.borderRadius = "10px";
-                        container.style.padding = "2px";
-                    } else {
-                        container.style.border = "none";
-                        container.style.padding = "0";
-                    }
+                // clamp to [1,45]
+                const clampNumber = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '') return;
+                    let n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 45) inp.value = '45';
+                    else inp.value = String(n);
                 };
 
-                inp.addEventListener("input", updateDraggable);
+                up.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n + 1;
+                    if (n > 45) n = 1; // wrap
+                    if (n < 1) n = 1;
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+                down.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n - 1;
+                    if (n < 1) n = 45; // wrap
+                    if (n > 45) n = 45;
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    if (run) run();
+                });
+
+                btnGroup.appendChild(up);
+                btnGroup.appendChild(down);
+
+                const updateDraggable = () => {
+                    const v = String(inp.value ?? '').trim();
+                    const hasValue = v !== '';
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                    dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                    container.style.borderRadius = '10px';
+                    container.style.padding = '2px';
+                    container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                    container.style.opacity = hasValue ? '1' : '0.85';
+                };
+
+                inp.addEventListener('input', () => { clampNumber(); updateDraggable(); });
+                inp.addEventListener('change', () => { clampNumber(); updateDraggable(); });
                 updateDraggable();
+
+                container.appendChild(inp);
+                container.appendChild(btnGroup);
+                container.appendChild(dragHandle);
+                container.dataset.index = idx;
 
                 return container;
             });
