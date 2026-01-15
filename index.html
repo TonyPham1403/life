@@ -1516,32 +1516,45 @@
                     `<div class='grid-centered' id='labelGroupGrid'></div>`;
                 const grid = wrap.querySelector('#labelGroupGrid');
 
-                // Caches for smoother back-scroll
-                const htmlCache = new Map(); // idx -> innerHTML
+                // Caches for smoother back-scroll (per-page keys `${idx}|${page}`)
+                const htmlCache = new Map(); // key -> innerHTML (key: `${idx}|${page}`)
                 const heightCache = new Map(); // idx -> measured height
                 const lruQueue = []; // maintain recency for limiting cache
-                const MAX_CACHE = 60;
+                const MAX_CACHE = 160;
                 const cardRefs = new Map(); // idx -> element
                 const mountedSet = new Set(); // idx currently mounted
                 const MAX_MOUNTED = 36; // limit live DOM to reduce churn
 
-                const setCache = (idx, html) => {
-                    htmlCache.set(idx, html);
-                    lruQueue.push(idx);
+                const setCache = (key, html) => {
+                    htmlCache.set(key, html);
+                    lruQueue.push(key);
                     if (lruQueue.length > MAX_CACHE) {
                         const rm = lruQueue.shift();
-                        if (!mountedSet.has(rm)) htmlCache.delete(rm);
+                        const rmIdx = String(rm).split('|')[0];
+                        if (!mountedSet.has(Number(rmIdx))) htmlCache.delete(rm);
                     }
                 };
 
                 const mount = (card, g, idx) => {
-                    if (card.dataset.mounted === '1') return;
                     const body = card.querySelector('.card-body');
-                    // Reuse cached HTML if available
-                    let inner = htmlCache.get(idx);
+                    const pageSizeRows = 20;
+                    const totalPages = Math.max(1, Math.ceil(g.rows.length / pageSizeRows));
+                    const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
+                    // if already mounted and the mounted page matches desired page, skip
+                    if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
+                    const cacheKey = `${idx}|${page}`;
+                    let inner = htmlCache.get(cacheKey);
                     if (!inner) {
-                        inner = "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
-                        g.rows.slice(0, 20).forEach(r => {
+                        const start = page * pageSizeRows;
+                        const slice = g.rows.slice(start, start + pageSizeRows);
+                        inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        inner += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        slice.forEach(r => {
                             const label = labelOf(r.nums);
                             const labelHtml = label.split("").map((ch, i) => ch !== g.base[i]
                                 ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`
@@ -1550,12 +1563,56 @@
                             inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                         });
                         inner += "</tbody></table>";
-                        if (g.rows.length > 20) inner += `<div class='muted'>... ${g.rows.length - 20} dòng nữa</div>`;
-                        setCache(idx, inner);
+                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='3' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        setCache(cacheKey, inner);
                     }
                     body.style.minHeight = "";
                     body.innerHTML = inner;
+                    // attach pagination handlers
+                    const prevBtns = body.querySelectorAll('.prev');
+                    const nextBtns = body.querySelectorAll('.next');
+                    prevBtns.forEach(prevBtn => prevBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur - 1 + totalPages) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, g, idx);
+                    }));
+                    nextBtns.forEach(nextBtn => nextBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur + 1) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, g, idx);
+                    }));
+
+                    // attach page input handlers
+                    const pageInputs = body.querySelectorAll('.page-input');
+                    pageInputs.forEach(inp => {
+                        inp.addEventListener('change', (ev) => {
+                            ev.stopPropagation();
+                            const v = Number(inp.value);
+                            if (!Number.isFinite(v)) { inp.value = String(page + 1); return; }
+                            const newPage = v - 1;
+                            if (newPage >= 0 && newPage < totalPages) {
+                                card.dataset.page = String(newPage);
+                                mount(card, idx);
+                            } else {
+                                inp.value = String(page + 1);
+                            }
+                        });
+                        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.dispatchEvent(new Event('change')); });
+                    });
+
                     card.dataset.mounted = '1';
+                    // record which page is currently rendered inside this card
+                    card.dataset.currentPage = String(page);
                     mountedSet.add(idx);
                     // Measure and cache height after first mount
                     if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
@@ -1613,6 +1670,8 @@
                         card.className = 'card';
                         card.dataset.index = String(i);
                         card.dataset.mounted = '0';
+                        card.dataset.page = '0';
+                        card.dataset.currentPage = '-1';
                         card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
                             `<strong>Base ${g.base}</strong>` +
                             `<span class='badge'>${g.rows.length} kỳ</span>` +
@@ -1977,46 +2036,107 @@
                 const grid = wrap.querySelector('#groupGrid');
 
                 // Caches and mount window for smooth scroll
-                const htmlCache = new Map(); // idx -> innerHTML
+                const htmlCache = new Map(); // key -> innerHTML (key: `${idx}|${page}`)
                 const heightCache = new Map(); // idx -> measured height
                 const lruQueue = [];
-                const MAX_CACHE = 80; // cell8 is capped to 100 groups
+                const MAX_CACHE = 160; // increase because we store per-page
                 const cardRefs = new Map();
                 const mountedSet = new Set();
                 const MAX_MOUNTED = 40;
 
-                const setCache = (idx, html) => {
-                    htmlCache.set(idx, html);
-                    lruQueue.push(idx);
+                const setCache = (cacheKey, html, idx) => {
+                    htmlCache.set(cacheKey, html);
+                    lruQueue.push(cacheKey);
                     if (lruQueue.length > MAX_CACHE) {
                         const rm = lruQueue.shift();
-                        if (!mountedSet.has(rm)) htmlCache.delete(rm);
+                        // only drop if not currently mounted
+                        if (!mountedSet.has(idx)) htmlCache.delete(rm);
                     }
                 };
 
                 // Lazy mount/unmount per-card table using viewport observation
                 const mount = (card, idx) => {
-                    if (card.dataset.mounted === '1') return;
                     const [key, list] = arr[idx] || [];
                     if (!key) return;
                     const body = card.querySelector('.card-body');
-                    let inner = htmlCache.get(idx);
+
+                    const pageSizeRows = 20;
+                    const totalPages = Math.max(1, Math.ceil(list.length / pageSizeRows));
+                    const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
+                    // if already mounted and the mounted page matches desired page, skip
+                    if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
+                    const cacheKey = `${idx}|${page}`;
+
+                    let inner = htmlCache.get(cacheKey);
                     if (!inner) {
                         const setValues = new Set(key.split('-').map(Number));
                         const x = parseInt(xSel.value, 10);
-                        inner = `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>`;
-                        list.slice(0, 20).forEach(r => {
+                        const start = page * pageSizeRows;
+                        const slice = list.slice(start, start + pageSizeRows);
+                        inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>`;
+                        slice.forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
                             inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
                         });
-                        if (list.length > 20) inner += `<tr><td colspan='3' class='muted'>... ${list.length - 20} dòng nữa</td></tr>`;
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='3' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
-                        setCache(idx, inner);
+                        // duplicate pagination controls under the table so users can navigate from bottom
+                        inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        setCache(cacheKey, inner, idx);
                     }
                     body.style.minHeight = '';
                     body.innerHTML = inner;
+                    // attach pagination handlers (attach to both top and bottom controls)
+                    const prevBtns = body.querySelectorAll('.prev');
+                    const nextBtns = body.querySelectorAll('.next');
+                    prevBtns.forEach(prevBtn => prevBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur - 1 + totalPages) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+                    nextBtns.forEach(nextBtn => nextBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur + 1) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+
+                    // attach page input handlers
+                    const pageInputs = body.querySelectorAll('.page-input');
+                    pageInputs.forEach(inp => {
+                        inp.addEventListener('change', (ev) => {
+                            ev.stopPropagation();
+                            const v = Number(inp.value);
+                            if (!Number.isFinite(v)) { inp.value = String(page + 1); return; }
+                            const newPage = v - 1;
+                            if (newPage >= 0 && newPage < totalPages) {
+                                card.dataset.page = String(newPage);
+                                mount(card, idx);
+                            } else {
+                                inp.value = String(page + 1);
+                            }
+                        });
+                        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.dispatchEvent(new Event('change')); });
+                    });
+
                     card.dataset.mounted = '1';
+                    // record which page is currently rendered inside this card
+                    card.dataset.currentPage = String(page);
                     mountedSet.add(idx);
                     if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
                     enforceMountedBudget(idx);
@@ -2067,6 +2187,8 @@
                         card.className = 'card';
                         card.dataset.index = String(i);
                         card.dataset.mounted = '0';
+                        card.dataset.page = '0';
+                        card.dataset.currentPage = '-1';
                         card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
                             `<strong>{${key.replace(/-/g, ',')}}</strong>` +
                             `<span class='badge'>${list.length} kỳ</span>` +
