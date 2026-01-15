@@ -1537,7 +1537,7 @@
 
                 const mount = (card, g, idx) => {
                     const body = card.querySelector('.card-body');
-                    const pageSizeRows = 20;
+                    const pageSizeRows = 15;
                     const totalPages = Math.max(1, Math.ceil(g.rows.length / pageSizeRows));
                     const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
                     // if already mounted and the mounted page matches desired page, skip
@@ -2060,7 +2060,7 @@
                     if (!key) return;
                     const body = card.querySelector('.card-body');
 
-                    const pageSizeRows = 20;
+                    const pageSizeRows = 15;
                     const totalPages = Math.max(1, Math.ceil(list.length / pageSizeRows));
                     const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
                     // if already mounted and the mounted page matches desired page, skip
