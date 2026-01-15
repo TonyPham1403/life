@@ -1299,7 +1299,8 @@
                 let data = [];
                 for (let v = 1; v <= 45; v++) {
                     const pcts = counts[v].map(c => total ? c / total : 0);
-                    data.push({ v, pcts, sum: pcts.reduce((a, b) => a + b, 0) });
+                    const countSum = counts[v].reduce((a, b) => a + b, 0);
+                    data.push({ v, pcts, sum: pcts.reduce((a, b) => a + b, 0), count: countSum });
                 }
                 if (sortSel.value === "total_desc") data.sort((a, b) => b.sum - a.sum); else data.sort((a, b) => a.v - b.v);
                 data = data.slice(0, parseInt(topSel.value, 10));
@@ -1312,7 +1313,7 @@
                     html += `<tr style="background:${bg};">` +
                         `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
                         row.pcts.map(p => `<td>${fmtPctCustom(p, decimals)}</td>`).join("") +
-                        `<td><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
+                        `<td><span class='muted' style='font-size:12px;margin-right:8px;'>${row.count}/${total}=</span><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
