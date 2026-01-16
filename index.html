@@ -1196,7 +1196,7 @@
         const anchorNav = [
             { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
             { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
-            { id: "cell6", label: "Cell6 · Nhóm bộ số" },
+            { id: "cell6", label: "Cell6 · Cặp phổ biến" },
             { id: "cell7", label: "Cell7 · Nhóm label" },
             { id: "cell8", label: "Cell8 · Tìm label" },
             { id: "cell9", label: "Cell9 · Tổ hợp tùy chọn" },
@@ -2024,10 +2024,10 @@
 
         // Cell8: group by same number set size x
         function renderCell8() {
-            const body = sectionShell("cell6", "Cell6 · Phân nhóm theo bộ số", "Chọn kích thước bộ số (1-6), tùy chọn liền kề, sắp xếp.");
+            const body = sectionShell("cell6", "Cell6 · Cặp phổ biến", "Chọn kích thước bộ số (1-6), tùy chọn liền kề, sắp xếp.");
             const controls = document.createElement("div"); controls.className = "controls";
             const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
-            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = true;
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             controls.append("Bộ số:", xSel, consecLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
