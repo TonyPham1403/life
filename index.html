@@ -4016,17 +4016,29 @@
             }
 
             function setupNumberCellDragDrop() {
-                const numberCells = document.querySelectorAll('.number-cell');
-                numberCells.forEach(cell => {
-                    cell.addEventListener('dragstart', (e) => {
-                        draggedNumber = cell.dataset.number;
+                // Use event delegation on the table to ensure handlers work
+                // after the table is re-rendered and to avoid duplicate listeners.
+                if (!numberPickerTable) return;
+                if (numberPickerTable.dataset.dragDelegation === 'true') return;
+                numberPickerTable.dataset.dragDelegation = 'true';
+
+                numberPickerTable.addEventListener('dragstart', (e) => {
+                    const cell = e.target.closest('.number-cell');
+                    if (!cell) return;
+                    // Respect explicit draggable attribute set on cells
+                    const draggableAttr = cell.getAttribute('draggable');
+                    if (draggableAttr === 'false') return;
+                    draggedNumber = cell.dataset.number;
+                    try {
                         e.dataTransfer.effectAllowed = 'copy';
                         e.dataTransfer.setData('text/plain', draggedNumber);
-                    });
+                    } catch (err) {
+                        // Some environments may restrict dataTransfer; fail silently
+                    }
+                });
 
-                    cell.addEventListener('dragend', () => {
-                        draggedNumber = null;
-                    });
+                numberPickerTable.addEventListener('dragend', () => {
+                    draggedNumber = null;
                 });
             }
 
