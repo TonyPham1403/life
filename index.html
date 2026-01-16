@@ -946,6 +946,26 @@
             pointer-events: none;
             z-index: 0;
         }
+
+        /* Make controls inside Cell8/9/10/11 stick under the header when scrolling.
+           Keep them in normal flow so they match other sections visually.
+        */
+        #cell8 .controls,
+        #cell9 .controls,
+        #cell10 .controls,
+        #cell11 .controls {
+            position: sticky;
+            top: 64px;
+            /* space for sticky header */
+            z-index: 11;
+            /* blue-gray → dark-gray gradient to match normal section look */
+            background: linear-gradient(135deg, #334155 0%, #1f2937 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 8px 12px;
+            margin: 0 0 14px 0;
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+        }
     </style>
 </head>
 
@@ -1962,7 +1982,6 @@
             const hint = document.createElement("div");
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
-            hint.innerHTML = "💡 Mẹo: Kéo thả giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
             wrapInputs.appendChild(hint);
 
             function run() {
@@ -2645,7 +2664,6 @@
             const hint = document.createElement("div");
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
-            hint.innerHTML = "💡 Mẹo: Kéo thả giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
             controls.appendChild(hint);
 
             function run() {
@@ -3118,7 +3136,6 @@
             const hint = document.createElement("div");
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
-            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại. Dùng phím ← → để di chuyển.";
             controls.appendChild(hint);
 
             function run(changeIdx) {
@@ -3453,7 +3470,6 @@
             const hint = document.createElement("div");
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
-            hint.innerHTML = "💡 Mẹo: Kéo thả số giữa các ô để sắp xếp lại pattern. Dùng phím ← → để di chuyển giữa các ô.";
             controls.appendChild(hint);
 
             function run(changeIdx) {
