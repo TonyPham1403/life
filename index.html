@@ -1373,7 +1373,7 @@
                         const [v, c] = arr[rank];
                         const pct = rows.length ? (c / rows.length) : 0;
                         const col = getCol(v);
-                        cells.push(`<td><div><strong>${v}</strong> <span class='muted'>[C${col}]</span></div><div class='muted'>${fmtPctCustom(pct, decimals)}</div></td>`);
+                        cells.push(`<td><div><strong>${v}</strong> <span class='muted'>[C${col}]</span></div><div class='muted'>${c}/${rows.length}= ${fmtPctCustom(pct, decimals)}</div></td>`);
                     }
                     const bg = rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
                     html += `<tr style="background:${bg};"><td>#${rank + 1}</td>${cells.join("")}</tr>`;
@@ -1419,7 +1419,7 @@
                         // Lấy cột ở rank này (rank - 1 vì rank bắt đầu từ 1)
                         const { col: topCol, count: topCount } = sortedCols[rank - 1];
                         const pct = rows.length ? (topCount / rows.length) : 0;
-                        cells.push(`<td><div><strong>C${topCol}</strong></div><div class='muted'>${fmtPctCustom(pct, parseInt(decimalSel.value, 10))}</div></td>`);
+                        cells.push(`<td><div><strong>C${topCol}</strong></div><div class='muted'>${topCount}/${rows.length}= ${fmtPctCustom(pct, parseInt(decimalSel.value, 10))}</div></td>`);
                     }
                     const bg = rank % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
                     html += `<tr style="background:${bg};"><td>#${rank}</td>${cells.join("")}</tr>`;
