@@ -135,7 +135,8 @@
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
             display: none;
             max-width: 500px;
-            max-height: 600px;
+            max-height: 800px;
+            /* increased to reduce internal scrolling when mode wraps */
             overflow-y: auto;
             left: 0;
             top: 0;
@@ -355,6 +356,7 @@
             cursor: grab;
             user-select: none;
             transition: all 0.2s;
+            position: relative;
         }
 
         .place-container:hover {
@@ -367,6 +369,7 @@
             gap: 8px;
             justify-content: center;
             flex-wrap: wrap;
+            position: relative;
         }
 
         .place-box {
@@ -387,6 +390,43 @@
             user-select: none;
             flex-direction: column;
             gap: 4px;
+        }
+
+        /* Overlay distance label between adjacent place boxes */
+        .place-distance-overlay {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.95);
+            color: #000;
+            padding: 0 6px;
+            height: 16px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 10px;
+            line-height: 16px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            min-width: 24px;
+        }
+
+        [data-theme="dark"] .place-distance-overlay {
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 0 6px;
+            height: 16px;
+            border-radius: 4px;
+            font-size: 10px;
+            line-height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
         }
 
         .place-box.filled {
@@ -422,6 +462,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
+            /* allow items to wrap to next line */
         }
 
         .mode-selector select {
@@ -701,6 +743,43 @@
             font-family: monospace;
         }
 
+        /* Euclid small framed pills (orange) */
+        .euclid-pill {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            /* single soft orange for lower glare */
+            background: #f8f333;
+            color: #000;
+            white-space: nowrap;
+            margin: 0 1px 0 0;
+            font-family: monospace;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        .euclid-pill.empty {
+            opacity: 0.45;
+        }
+
+        .euclid-total-pill {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2px 5px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            background: #38ef7d;
+            color: #072018;
+            margin-left: 3px;
+            font-family: monospace;
+            min-width: 38px;
+            text-align: center;
+        }
+
         .label-chip {
             display: inline-block;
             min-width: 18px;
@@ -812,6 +891,54 @@
         .card {
             content-visibility: auto;
             contain: content;
+        }
+
+        /* Marker for cards nested inside "card-inner" wrappers.
+           JS will add the class 'card-inner-child' to any .card inside .card.card-inner.
+           Use this selector to style inner cards separately. */
+        .card-inner-child {
+            /* empty by default; add overrides as needed */
+            box-sizing: border-box;
+            /* harmless default to avoid empty-selector warning */
+        }
+
+        /* Layout rule: make the inner wrapper a flex container so we can
+           enforce max 2 child cards per row. Each child gets up to 50%
+           width and will be centered when it's the only child. */
+        .card.card-inner {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .card.card-inner>.card-inner-child {
+            flex: 0 0 calc(50% - 6px) !important;
+            max-width: calc(50% - 6px) !important;
+            box-sizing: border-box;
+        }
+
+        /* Some renderers create .card elements nested deeper than direct children.
+           Ensure any descendant marked with .card-inner-child gets the same sizing. */
+        .card.card-inner .card-inner-child {
+            flex: 0 0 calc(50% - 6px) !important;
+            max-width: calc(50% - 6px) !important;
+            width: calc(50% - 6px) !important;
+            box-sizing: border-box;
+        }
+
+        /* If a wrapper contains a single child, center it horizontally */
+        .card.card-inner>.card-inner-child:only-child {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Small screens: stack to single column */
+        @media (max-width: 768px) {
+            .card.card-inner>.card-inner-child {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
         }
 
         /* Reduce paint/layout when card bodies are offscreen */
@@ -966,6 +1093,40 @@
             border-radius: 8px;
             backdrop-filter: blur(4px);
         }
+
+        /* Mode selector two-row layout + swap control */
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        .mode-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .mode-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mode-rows.reversed {
+            flex-direction: column-reverse;
+        }
+
+        #swapRowsBtn {
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -993,21 +1154,35 @@
                 <!-- Generated by JS: 6 place boxes V1-V6 -->
             </div>
         </div>
-        <div class="mode-selector">
-            <label style="font-size: 12px;">Mode:</label>
-            <button id="modeSelector"
-                style="width: 100px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);">Số
-                (1-45)</button>
-            <button id="clearPlaceBtn" class="clear-btn" title="Xóa toàn bộ place"
-                style="padding: 6px 10px; font-size: 12px;">Xóa</button>
-            <label style="margin-left:6px;font-size:12px;">Rank:</label>
-            <button id="rankToggle"
-                style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">rank</button>
-            <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
-            <button id="connectionToggle"
-                style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
-                title="Hiện/ẩn đường nối giữa các số liên tiếp">Hiện</button>
-            <!-- color picker removed per user request -->
+        <div class="mode-selector" id="modeSelectorContainer">
+            <div class="mode-rows reversed" id="modeRows">
+                <div class="mode-row" id="modeRowTop">
+                    <label style="font-size: 12px;">Mode:</label>
+                    <button id="modeSelector"
+                        style="width: 100px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);">Số
+                        (1-45)</button>
+                    <button id="clearPlaceBtn" class="clear-btn" title="Xóa toàn bộ place"
+                        style="padding: 6px 10px; font-size: 12px;">Xóa</button>
+                    <label style="margin-left:6px;font-size:12px;">Rank:</label>
+                    <button id="rankToggle"
+                        style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">rank</button>
+                </div>
+                <div class="mode-row" id="modeRowBottom">
+                    <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
+                    <button id="connectionToggle"
+                        style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
+                        title="Hiện/ẩn đường nối giữa các số liên tiếp">Hiện</button>
+                    <label style="font-size: 12px;" id="euclidToggleLabel">Euclid:</label>
+                    <button id="euclidToggle"
+                        style="width: 50px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);"
+                        title="Hiện/ẩn hiển thị khoảng cách Euclid">Hiện</button>
+                    <span id="euclidTotal"
+                        style="margin-left:8px;font-size:13px;font-weight:700;color:var(--text-strong);opacity:1;">Σ:&nbsp;&nbsp;
+                        <span id="euclidTotalValue"
+                            style="color:#38ef7d;font-weight:900;margin-left:8px;font-size:16px;text-shadow:0 0 8px rgba(56,239,125,0.22);">0.00</span>
+                    </span>
+                </div>
+            </div>
         </div>
     </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
@@ -1304,7 +1479,7 @@
             controls.append("Hiển thị:", topSel, "Sắp xếp:", sortSel, "Độ chính xác:", decimalSel);
             body.appendChild(controls);
             const wrap = document.createElement("div");
-            wrap.className = "card";
+            wrap.className = "card card-inner";
             body.appendChild(wrap);
 
             function draw() {
@@ -1356,7 +1531,7 @@
             controls.append("Hiển thị:", topSel, "Độ chính xác:", decimalSel);
             body.appendChild(controls);
             const wrap = document.createElement("div");
-            wrap.className = "card";
+            wrap.className = "card card-inner";
             body.appendChild(wrap);
 
             function draw() {
@@ -1448,7 +1623,7 @@
             [["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
 
             let groupCache = null;
@@ -1574,17 +1749,58 @@
                             `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
-                        inner += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        inner += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
                         slice.forEach(r => {
                             const label = labelOf(r.nums);
                             const labelHtml = label.split("").map((ch, i) => ch !== g.base[i]
                                 ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`
                                 : `<span>${ch}</span>`).join(" ");
                             const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            // compute euclidean distances between adjacent numbers (5 values) and total
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) {
+                                        euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    } else {
+                                        euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                    }
+                                }
+                            } catch (e) {
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         inner += "</tbody></table>";
-                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='3' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -1975,7 +2191,7 @@
             const labelText = document.createElement("span"); labelText.textContent = "Label:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             wrapInputs.appendChild(labelText);
             containers.forEach(c => wrapInputs.appendChild(c)); body.appendChild(wrapInputs);
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; wrapInputs.appendChild(clearBtn);
 
@@ -1997,14 +2213,55 @@
                 let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < records.length; i += chunk) {
-                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th></tr></thead><tbody>";
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
                     records.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_"
                             ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
                             : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`
                         ).join(" ");
                         const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
-                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        // compute euclidean distances between adjacent numbers (5 values) and total
+                        let euclidPartsHtml = [];
+                        let euclidTotal = 0;
+                        try {
+                            const npTable = document.getElementById('numberPickerTable');
+                            const tbody = npTable ? npTable.querySelector('tbody') : null;
+                            const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                            for (let j = 0; j < 5; j++) {
+                                const n1 = r.nums[j];
+                                const n2 = r.nums[j + 1];
+                                let part = '';
+                                if (npTable && tbodyRows.length > 0) {
+                                    const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                    const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                    if (cell1 && cell2) {
+                                        const rowElem1 = cell1.parentElement;
+                                        const rowElem2 = cell2.parentElement;
+                                        const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                        const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                        const logicalRow1 = 7 - rowIdx1;
+                                        const logicalRow2 = 7 - rowIdx2;
+                                        const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                        const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                        const dx = colIdx2 - colIdx1;
+                                        const dy = logicalRow2 - logicalRow1;
+                                        const d = Math.sqrt(dx * dx + dy * dy);
+                                        part = isFinite(d) ? d.toFixed(2) : '';
+                                        euclidTotal += isFinite(d) ? d : 0;
+                                    }
+                                }
+                                if (part) {
+                                    euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                } else {
+                                    euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                }
+                            }
+                        } catch (e) {
+                            for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                        }
+                        const totalStr = euclidTotal.toFixed(2);
+                        const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -2031,7 +2288,7 @@
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             controls.append("Bộ số:", xSel, consecLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
 
             let groupCache = null;
@@ -2172,13 +2429,56 @@
                             `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
-                        inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>`;
+                        inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
                         slice.forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            // compute euclidean distances between adjacent numbers (5 values) and total
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) {
+                                        euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    } else {
+                                        euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore euclid errors, leave parts empty
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            // Let CSS handle centering and fixed width; avoid left-padding with NBSPs
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
-                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='3' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         // duplicate pagination controls under the table so users can navigate from bottom
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
@@ -2657,7 +2957,7 @@
             containersToAdd.forEach(c => controls.appendChild(c));
             controls.append(consecLabel);
             body.appendChild(controls);
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
@@ -2688,11 +2988,52 @@
                     let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < records.length; i += chunk) {
-                        html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                        html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
                         records.slice(i, i + chunk).forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
-                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            // compute euclidean distances between adjacent numbers (5 values) and total
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) {
+                                        euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    } else {
+                                        euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                    }
+                                }
+                            } catch (e) {
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -2769,7 +3110,48 @@
                             }
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, highlightedNums, totalCount, consec.checked);
                             const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
-                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                            // compute euclidean distances between adjacent numbers (5 values) and total
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) {
+                                        euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    } else {
+                                        euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                    }
+                                }
+                            } catch (e) {
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -3129,7 +3511,7 @@
             // Add mode toggle button
             controls.append(modeBtn);
             containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
@@ -3463,7 +3845,7 @@
             containers.forEach(c => controls.appendChild(c));
             body.appendChild(controls);
 
-            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
             // Add hint text
@@ -3487,12 +3869,53 @@
                 let html = `<div class='muted'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < results.length; i += chunk) {
-                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
+                    html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
                     results.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                         const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
                         const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
-                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td></tr>`;
+                        // compute euclidean distances between adjacent numbers (5 values) and total
+                        let euclidPartsHtml = [];
+                        let euclidTotal = 0;
+                        try {
+                            const npTable = document.getElementById('numberPickerTable');
+                            const tbody = npTable ? npTable.querySelector('tbody') : null;
+                            const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                            for (let j = 0; j < 5; j++) {
+                                const n1 = r.nums[j];
+                                const n2 = r.nums[j + 1];
+                                let part = '';
+                                if (npTable && tbodyRows.length > 0) {
+                                    const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                    const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                    if (cell1 && cell2) {
+                                        const rowElem1 = cell1.parentElement;
+                                        const rowElem2 = cell2.parentElement;
+                                        const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                        const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                        const logicalRow1 = 7 - rowIdx1;
+                                        const logicalRow2 = 7 - rowIdx2;
+                                        const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                        const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                        const dx = colIdx2 - colIdx1;
+                                        const dy = logicalRow2 - logicalRow1;
+                                        const d = Math.sqrt(dx * dx + dy * dy);
+                                        part = isFinite(d) ? d.toFixed(2) : '';
+                                        euclidTotal += isFinite(d) ? d : 0;
+                                    }
+                                }
+                                if (part) {
+                                    euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                } else {
+                                    euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                }
+                            }
+                        } catch (e) {
+                            for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                        }
+                        const totalStr = euclidTotal.toFixed(2);
+                        const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -3704,6 +4127,8 @@
             function drawConnections() {
                 const connectionToggle = document.getElementById('connectionToggle');
                 const connectionsEnabled = !!connectionToggle && connectionToggle.textContent.trim() === 'Hiện';
+                const euclidToggle = document.getElementById('euclidToggle');
+                const euclidEnabled = !!euclidToggle && euclidToggle.textContent.trim() === 'Hiện';
                 // Only draw in number mode and when connections are enabled
                 if (currentMode !== 'number' || !connectionsEnabled) {
                     const existingCanvas = document.getElementById('connectionCanvas');
@@ -3834,6 +4259,71 @@
                     ctx.moveTo(startX, startY);
                     ctx.lineTo(endX, endY);
                     ctx.stroke();
+
+                    // --- Draw Euclidean distance (in grid cell units) near the middle of the line ---
+                    try {
+                        // Find grid row/col indices by inspecting tbody rows and cell positions
+                        const tbody = numberPickerTable.querySelector('tbody');
+                        const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                        const cell1 = numberPickerTable.querySelector(`td[data-number="${num1}"]`);
+                        const cell2 = numberPickerTable.querySelector(`td[data-number="${num2}"]`);
+                        if (cell1 && cell2 && tbodyRows.length > 0) {
+                            const rowElem1 = cell1.parentElement;
+                            const rowElem2 = cell2.parentElement;
+                            const rowIdx1 = tbodyRows.indexOf(rowElem1); // 0..n-1 (top -> bottom)
+                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+
+                            // In generator rows are created from row=7 down to 0, so logicalRow = 7 - rowIndex
+                            const logicalRow1 = 7 - rowIdx1;
+                            const logicalRow2 = 7 - rowIdx2;
+
+                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1); // 0..5 left->right
+                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+
+                            const dx = colIdx2 - colIdx1;
+                            const dy = logicalRow2 - logicalRow1;
+                            const gridDistance = Math.sqrt(dx * dx + dy * dy);
+
+                            // Midpoint of drawn segment
+                            const midX = (startX + endX) / 2;
+                            const midY = (startY + endY) / 2;
+
+                            // Place label directly on the line midpoint (overlay the connection)
+                            const labelX = midX;
+                            const labelY = midY;
+
+                            // Draw label background for readability (only when euclid toggle enabled)
+                            if (euclidEnabled) {
+                                const labelText = gridDistance.toFixed(2);
+                                ctx.save();
+                                ctx.setLineDash([]);
+                                ctx.font = '12px Inter, system-ui, sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                // measure
+                                const metrics = ctx.measureText(labelText);
+                                const paddingX = 6;
+                                const paddingY = 3;
+                                const rectW = metrics.width + paddingX * 2;
+                                const rectH = 12 + paddingY * 2;
+
+                                // Semi-transparent background
+                                ctx.fillStyle = currentTheme === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)';
+                                ctx.beginPath();
+                                ctx.roundRect
+                                    ? ctx.roundRect(labelX - rectW / 2, labelY - rectH / 2, rectW, rectH, 4)
+                                    : ctx.rect(labelX - rectW / 2, labelY - rectH / 2, rectW, rectH);
+                                ctx.fill();
+
+                                // Draw text
+                                ctx.fillStyle = currentTheme === 'light' ? '#000' : '#fff';
+                                ctx.fillText(labelText, labelX, labelY);
+                                ctx.restore();
+                            }
+                        }
+                    } catch (e) {
+                        // ignore label drawing errors to avoid breaking connections
+                    }
                 });
             }
 
@@ -3964,6 +4454,86 @@
 
                     placesGrid.appendChild(placeBox);
                 }
+                // remove old overlays if any
+                const existing = numberPickerPopup.querySelectorAll('.place-distance-overlay');
+                existing.forEach(n => n.remove());
+
+                // helper: compute grid distance like drawConnections does
+                function computeGridDistance(n1, n2) {
+                    try {
+                        const tbody = numberPickerTable.querySelector('tbody');
+                        const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                        const cell1 = numberPickerTable.querySelector(`td[data-number="${n1}"]`);
+                        const cell2 = numberPickerTable.querySelector(`td[data-number="${n2}"]`);
+                        if (!cell1 || !cell2 || tbodyRows.length === 0) return null;
+                        const rowElem1 = cell1.parentElement;
+                        const rowElem2 = cell2.parentElement;
+                        const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                        const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                        const logicalRow1 = 7 - rowIdx1;
+                        const logicalRow2 = 7 - rowIdx2;
+                        const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                        const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                        const dx = colIdx2 - colIdx1;
+                        const dy = logicalRow2 - logicalRow1;
+                        return Math.sqrt(dx * dx + dy * dy);
+                    } catch (e) { return null; }
+                }
+
+                // For each adjacent pair, if both filled and euclid enabled, create overlay
+                const boxes = placesGrid.querySelectorAll('.place-box');
+                // position overlays relative to the places grid so they sit centered
+                // between the .place-box elements even when the popup is scrolled
+                const containerRect = placesGrid.getBoundingClientRect();
+                for (let i = 0; i < boxes.length - 1; i++) {
+                    const a = placeValues[i];
+                    const b = placeValues[i + 1];
+                    if (currentMode === 'number' && euclidState && a && b && !isNaN(a) && !isNaN(b)) {
+                        const boxA = boxes[i];
+                        const boxB = boxes[i + 1];
+                        if (!boxA || !boxB) continue;
+                        // compute centers relative to placesGrid using offset values
+                        const aCenterX = boxA.offsetLeft + boxA.offsetWidth / 2;
+                        const bCenterX = boxB.offsetLeft + boxB.offsetWidth / 2;
+                        const aCenterY = boxA.offsetTop + boxA.offsetHeight / 2;
+                        const bCenterY = boxB.offsetTop + boxB.offsetHeight / 2;
+                        const midX = (aCenterX + bCenterX) / 2;
+                        const midY = (aCenterY + bCenterY) / 2;
+                        const overlay = document.createElement('div');
+                        overlay.className = 'place-distance-overlay';
+                        const dist = computeGridDistance(parseInt(a, 10), parseInt(b, 10));
+                        overlay.textContent = dist === null ? '' : dist.toFixed(2);
+                        // set position inside placesGrid (no viewport -> container conversion needed)
+                        overlay.style.left = midX + 'px';
+                        overlay.style.top = midY + 'px';
+                        placesGrid.appendChild(overlay);
+                    }
+                }
+                // Compute total Euclidean distance for adjacent pairs and update display
+                try {
+                    const euclidTotalEl = document.getElementById('euclidTotal');
+                    let total = 0;
+                    for (let j = 0; j < boxes.length - 1; j++) {
+                        const a = placeValues[j];
+                        const b = placeValues[j + 1];
+                        if (currentMode === 'number' && a && b && !isNaN(a) && !isNaN(b)) {
+                            const d = computeGridDistance(parseInt(a, 10), parseInt(b, 10));
+                            if (d !== null) total += d;
+                        }
+                    }
+                    if (euclidTotalEl) {
+                        // update nested value span if present
+                        const valEl = document.getElementById('euclidTotalValue');
+                        if (valEl) {
+                            valEl.textContent = total.toFixed(2);
+                            // ensure accent green emphasis remains
+                            valEl.style.color = '#38ef7d';
+                        } else {
+                            euclidTotalEl.textContent = `Σ: ${total.toFixed(2)}`;
+                        }
+                        euclidTotalEl.style.opacity = (euclidState && currentMode === 'number') ? '1' : '0.5';
+                    }
+                } catch (e) { /* ignore */ }
             }
 
             function setupPlaceContainerListeners() {
@@ -4137,7 +4707,7 @@
                 setNumberPickerMode(modeState, 'picker');
             });
 
-
+            const modeRows = document.getElementById('modeRows');
             // Sync mode button when mode changes from external sources (cell9/10)
             if (window.onNumberPickerModeChange) {
                 window.onNumberPickerModeChange((mode) => {
@@ -4149,6 +4719,8 @@
             // Connection toggle
             const connectionToggle = document.getElementById('connectionToggle');
             const connectionToggleLabel = document.getElementById('connectionToggleLabel');
+            const euclidToggle = document.getElementById('euclidToggle');
+            const euclidToggleLabel = document.getElementById('euclidToggleLabel');
 
             const updateConnectionToggleState = () => {
                 const isNumberMode = currentMode === 'number';
@@ -4158,6 +4730,19 @@
                 }
                 connectionToggle.style.opacity = isNumberMode ? '1' : '0.5';
                 connectionToggle.style.cursor = isNumberMode ? 'pointer' : 'not-allowed';
+
+                // Euclid toggle should follow same availability rules as connection toggle
+                if (euclidToggle) euclidToggle.disabled = !isNumberMode;
+                if (euclidToggleLabel) euclidToggleLabel.style.opacity = isNumberMode ? '1' : '0.5';
+                if (euclidToggle) euclidToggle.style.opacity = isNumberMode ? '1' : '0.5';
+                if (euclidToggle) euclidToggle.style.cursor = isNumberMode ? 'pointer' : 'not-allowed';
+
+                // Update Euclid total display availability
+                const euclidTotalEl = document.getElementById('euclidTotal');
+                if (euclidTotalEl) euclidTotalEl.style.opacity = (isNumberMode && euclidState) ? '1' : '0.5';
+                // also dim the numeric value if present
+                const euclidValEl = document.getElementById('euclidTotalValue');
+                if (euclidValEl) euclidValEl.style.opacity = (isNumberMode && euclidState) ? '1' : '0.5';
 
                 // Redraw when toggled
                 drawConnections();
@@ -4172,6 +4757,19 @@
                 connectionToggle.textContent = connectionState ? 'Hiện' : 'Ẩn';
                 drawConnections();
             });
+
+            // Euclid toggle state and handler
+            let euclidState = true; // default visible
+            if (euclidToggle) {
+                euclidToggle.textContent = euclidState ? 'Hiện' : 'Ẩn';
+                euclidToggle.addEventListener('click', () => {
+                    euclidState = !euclidState;
+                    euclidToggle.textContent = euclidState ? 'Hiện' : 'Ẩn';
+                    drawConnections();
+                    // Refresh place overlays and Euclid total display
+                    try { generatePlaceBoxes(); } catch (e) { /* ignore if not ready */ }
+                });
+            }
 
             // Initialize connection toggle state
             updateConnectionToggleState();
@@ -4559,6 +5157,26 @@
                 showSection(id || "cell4");
             });
         }
+
+        // Tag nested cards inside `.card.card-inner` with `card-inner-child`.
+        (function markInnerChildCards() {
+            function mark() {
+                document.querySelectorAll('.card.card-inner').forEach(wrapper => {
+                    wrapper.querySelectorAll('.card').forEach(child => {
+                        if (!child.classList.contains('card-inner-child')) child.classList.add('card-inner-child');
+                    });
+                });
+            }
+            // initial pass
+            try { mark(); } catch (e) { }
+            // watch for future additions
+            try {
+                const mo = new MutationObserver(mark);
+                mo.observe(document.body, { childList: true, subtree: true });
+                // expose for debugging if needed
+                window.__markInnerChildObserver = mo;
+            } catch (e) { }
+        })();
 
         bootstrap();
     </script>
