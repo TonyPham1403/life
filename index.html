@@ -1415,6 +1415,15 @@
         const COL_MAP = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 2, 10: 2, 11: 2, 12: 2, 13: 2, 14: 2, 15: 2, 16: 2, 17: 3, 18: 3, 19: 3, 20: 3, 21: 3, 22: 3, 23: 3, 24: 3, 25: 4, 26: 4, 27: 4, 28: 4, 29: 4, 30: 4, 31: 4, 32: 5, 33: 5, 34: 5, 35: 5, 36: 5, 37: 5, 38: 5, 39: 6, 40: 6, 41: 6, 42: 6, 43: 6, 44: 6, 45: 6 };
         const getCol = (v) => COL_MAP[v] ?? 0;
 
+        // Safe focus helper: prefer preventing scroll when moving focus programmatically
+        function safeFocus(el) {
+            if (!el) return;
+            try {
+                el.focus({ preventScroll: true });
+            } catch (e) {
+                try { el.focus(); } catch (e2) { /* ignore */ }
+            }
+        }
         // ===== Web Worker Setup =====
         // Tạo web worker inline để xử lý tính toán nặng
         const workerCode = `
@@ -1663,7 +1672,16 @@
 
                 // Restore vị trí scroll của section mới
                 requestAnimationFrame(() => {
-                    const savedPosition = scrollPositions.get(id);
+                    // Prefer per-input saved scroll for cell10 when available
+                    let savedPosition;
+                    try {
+                        if (id === 'cell10' && window._cell10LastIndex !== undefined && window._cell10LastIndex !== null && window._cell10ScrollByIndex instanceof Map) {
+                            const p = window._cell10ScrollByIndex.get(window._cell10LastIndex);
+                            if (p !== undefined) savedPosition = p;
+                        }
+                    } catch (e) { }
+
+                    if (savedPosition === undefined) savedPosition = scrollPositions.get(id);
                     if (savedPosition !== undefined) {
                         window.scrollTo(0, savedPosition);
                     } else {
@@ -3487,6 +3505,10 @@
             modeBtn.style.cursor = 'pointer';
             const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
 
+            // per-input scroll memory and last active index for cell10
+            window._cell10ScrollByIndex = window._cell10ScrollByIndex || new Map();
+            window._cell10LastIndex = window._cell10LastIndex ?? null;
+
             // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
             const containers = inputs.map((inp, idx) => {
                 const container = document.createElement("div");
@@ -3732,7 +3754,7 @@
             // Add mode toggle button
             controls.append(modeBtn);
             containers.forEach(c => controls.appendChild(c)); body.appendChild(controls);
-            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
+            const wrap = document.createElement("div"); wrap.className = "card"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; controls.appendChild(clearBtn);
 
@@ -3742,6 +3764,15 @@
             controls.appendChild(hint);
 
             function run(changeIdx) {
+                const prevScroll = window.scrollY;
+                try {
+                    if (changeIdx !== undefined && changeIdx !== null) {
+                        window._cell10LastIndex = changeIdx;
+                        window._cell10ScrollByIndex = window._cell10ScrollByIndex || new Map();
+                        window._cell10ScrollByIndex.set(changeIdx, prevScroll);
+                    }
+                } catch (e) { }
+
                 const filled = inputs.map((inp, idx) => ({ idx, val: parseInt(inp.value, 10) })).filter(x => !isNaN(x.val));
                 if (filled.length > 1 && changeIdx !== undefined) {
                     filled.filter(f => f.idx !== changeIdx).forEach(f => {
@@ -3755,6 +3786,10 @@
                     wrap.innerHTML = cell10ModeState === "number"
                         ? "<div class='loader'>Điền 1 số (1–45) vào 1 ô...</div>"
                         : "<div class='loader'>Điền 1 cột (1–6) vào 1 ô...</div>";
+                    // restore scroll for same-input edits
+                    if (changeIdx !== undefined && changeIdx !== null && window._cell10LastIndex === changeIdx) {
+                        setTimeout(() => window.scrollTo(0, prevScroll), 0);
+                    }
                     return;
                 }
                 const order = single.idx + 1; const value = single.val;
@@ -3770,7 +3805,11 @@
                 });
                 if (!hit) {
                     const what = cell10ModeState === "number" ? value : `cột ${value}`;
-                    wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${what} ở vị trí ${order}</div>`; return;
+                    wrap.innerHTML = `<div class='error'>Không có kỳ nào với ${what} ở vị trí ${order}</div>`;
+                    if (changeIdx !== undefined && changeIdx !== null && window._cell10LastIndex === changeIdx) {
+                        setTimeout(() => window.scrollTo(0, prevScroll), 0);
+                    }
+                    return;
                 }
                 const pattern = Array(6).fill("_"); pattern[order - 1] = (cell10ModeState === "number") ? value : `C${value}`;
                 let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
@@ -3814,6 +3853,11 @@
                 if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsBefore.map(renderPosTable) : positionsBefore.map(renderPosTableColumn)).join('')}</div>`;
                 if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsAfter.map(renderPosTable) : positionsAfter.map(renderPosTableColumn)).join('')}</div>`;
                 wrap.innerHTML = html;
+                // restore scroll for same-input edits (prevent jump-to-top)
+                if (changeIdx !== undefined && changeIdx !== null && window._cell10LastIndex === changeIdx) {
+                    // small timeout to let layout settle
+                    setTimeout(() => window.scrollTo(0, prevScroll), 0);
+                }
             }
             inputs.forEach((inp, idx) => {
                 inp.oninput = () => run(idx);
@@ -3821,6 +3865,13 @@
                     if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
                     if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
                 };
+                inp.addEventListener('focus', () => {
+                    try {
+                        window._cell10LastIndex = idx;
+                        window._cell10ScrollByIndex = window._cell10ScrollByIndex || new Map();
+                        window._cell10ScrollByIndex.set(idx, window.scrollY);
+                    } catch (e) { }
+                });
             });
             clearBtn.onclick = () => {
                 inputs.forEach(i => {
