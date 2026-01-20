@@ -2524,8 +2524,9 @@
             const controls = document.createElement("div"); controls.className = "controls";
             const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
+            const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
-            controls.append("Bộ số:", xSel, consecLabel, "Sắp xếp:", sortSel);
+            controls.append("Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -2537,7 +2538,7 @@
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
-                const newCacheKey = `${xSel.value}|${consec.checked}|${sortSel.value}`;
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -2564,7 +2565,7 @@
                         if (consec.checked) {
                             for (let i = 0; i <= nums.length - x; i++) {
                                 const slice = nums.slice(i, i + x).slice();
-                                const key = slice.sort((a, b) => a - b).join("-");
+                                const key = order.checked ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
                                 if (!groups.has(key)) groups.set(key, new Set());
                                 groups.get(key).add(rowIndex);
                             }
@@ -2612,6 +2613,7 @@
                         rows: rowsForWorker,
                         xSel: xSel.value,
                         consec: consec.checked,
+                        order: order.checked,
                         sortSel: sortSel.value,
                         workerType: 'groupBySet'
                     });
@@ -2670,7 +2672,9 @@
                             `</div>`;
                         inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
                         slice.forEach(r => {
-                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked);
+                            const orderedSeq = key.split('-').map(Number);
+                            const requireOrder = !!(consec.checked && order && order.checked);
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked, orderedSeq, requireOrder);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
                             // compute euclidean distances between adjacent numbers (5 values) and total
                             let euclidPartsHtml = [];
@@ -2836,7 +2840,13 @@
             }
 
             const debouncedGroup = createDebounce(group, 300);
-            xSel.onchange = consec.onchange = sortSel.onchange = debouncedGroup;
+            // enable/disable order checkbox depending on consec
+            consec.onchange = () => {
+                order.disabled = !consec.checked;
+                if (!consec.checked) order.checked = false;
+                debouncedGroup();
+            };
+            xSel.onchange = sortSel.onchange = order.onchange = debouncedGroup;
             group();
         }
         function compareKey(a, b) {
@@ -2844,12 +2854,21 @@
             for (let i = 0; i < Math.min(pa.length, pb.length); i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; }
             return pa.length - pb.length;
         }
-        function findHighlightPositions(nums, setValues, blockSize, requireConsecutive) {
+        function findHighlightPositions(nums, setValues, blockSize, requireConsecutive, orderedSeq, requireOrder) {
             if (requireConsecutive) {
                 for (let i = 0; i <= nums.length - blockSize; i++) {
                     const block = nums.slice(i, i + blockSize);
-                    if (block.length === blockSize && block.every(v => setValues.has(v)) && new Set(block).size === setValues.size) {
-                        return Array.from({ length: blockSize }, (_, k) => i + k);
+                    if (block.length !== blockSize) continue;
+                    if (requireOrder && Array.isArray(orderedSeq) && orderedSeq.length === blockSize) {
+                        let matches = true;
+                        for (let k = 0; k < blockSize; k++) {
+                            if (block[k] !== orderedSeq[k]) { matches = false; break; }
+                        }
+                        if (matches) return Array.from({ length: blockSize }, (_, k) => i + k);
+                    } else {
+                        if (block.every(v => setValues.has(v)) && new Set(block).size === setValues.size) {
+                            return Array.from({ length: blockSize }, (_, k) => i + k);
+                        }
                     }
                 }
             }
@@ -2857,8 +2876,8 @@
             nums.forEach((v, idx) => { if (setValues.has(v)) positions.push(idx); });
             return positions;
         }
-        function renderHighlightedNums(nums, setValues, blockSize, requireConsecutive) {
-            const positions = findHighlightPositions(nums, setValues, blockSize, requireConsecutive);
+        function renderHighlightedNums(nums, setValues, blockSize, requireConsecutive, orderedSeq, requireOrder) {
+            const positions = findHighlightPositions(nums, setValues, blockSize, requireConsecutive, orderedSeq, requireOrder);
             const posSet = new Set(positions);
             const html = nums.map((v, idx) => posSet.has(idx)
                 ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
