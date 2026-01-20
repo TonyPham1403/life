@@ -967,6 +967,31 @@
             box-sizing: border-box;
         }
 
+        /* When a .card.card-inner contains exactly one inner card, center that
+           inner card horizontally and allow it to size to its content (up to
+           the wrapper width). This centers narrow tables while still allowing
+           wider tables to grow up to the container. */
+        .card.card-inner.single-child {
+            justify-content: center;
+        }
+
+        .card.card-inner.single-child .card-inner-child {
+            flex: 0 1 auto !important;
+            max-width: 100% !important;
+            width: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+
+        /* Prefer intrinsic table width inside a centered single child; allow
+           the table to grow up to the wrapper width but not force 100% width. */
+        .card.card-inner.single-child .card-inner-child table {
+            width: auto !important;
+            max-width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+
         /* If a wrapper contains a single child, center it horizontally */
         .card.card-inner>.card-inner-child:only-child {
             margin-left: auto;
@@ -5461,6 +5486,13 @@
                     wrapper.querySelectorAll('.card').forEach(child => {
                         if (!child.classList.contains('card-inner-child')) child.classList.add('card-inner-child');
                     });
+                    // If the wrapper contains exactly one descendant marked as card-inner-child,
+                    // mark the wrapper with `single-child` so CSS can target descendant-only cases.
+                    try {
+                        const innerChildren = wrapper.querySelectorAll('.card-inner-child');
+                        if (innerChildren.length === 1) wrapper.classList.add('single-child');
+                        else wrapper.classList.remove('single-child');
+                    } catch (e) { /* ignore */ }
                 });
             }
             // initial pass
