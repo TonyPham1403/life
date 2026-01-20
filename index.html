@@ -278,16 +278,56 @@
             box-shadow: 0 4px 12px rgba(56, 239, 125, 0.3);
         }
 
-        .number-picker-table td.disabled {
+        /* Highlighted numbers (when placed or hovered via quick-place)
+           Use the same (day.html) "placed" visual: a solid/soft green fill
+           rather than the gradient. This matches the place-box.filled style. */
+        #numberPickerPopup #numberPickerTable td.number-cell.selected-number {
+            /* Use dark placed-background from day.html */
+            background: #1a2a3a !important;
+            /* Do not set a global text color on the cell so rank badges keep their own color.
+               Color for the main number is applied to the number span below. */
+            transform: none !important;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18) !important;
+            border-style: solid !important;
+            border-color: rgba(0, 0, 0, 0.12) !important;
+        }
+
+        /* Target only the main number span inside the cell; exclude rank badge spans */
+        #numberPickerPopup #numberPickerTable td.number-cell.selected-number>span:not(.rank-in-cell) {
+            color: #00ff00 !important;
+            font-weight: 900;
+        }
+
+        #numberPickerPopup #numberPickerTable td.disabled {
             opacity: 1;
             cursor: not-allowed;
             background: #1a2a3a !important;
             pointer-events: none;
-            color: #00ff00 !important;
+            /* avoid changing all nested text color (rank badges must keep their own color) */
             font-weight: 700 !important;
         }
 
-        [data-theme="light"] .number-picker-table td.disabled {
+        /* For disabled cells, color only the displayed number span (not the rank badge) */
+        #numberPickerPopup #numberPickerTable td.disabled>span:not(.rank-in-cell) {
+            color: #00ff00 !important;
+        }
+
+        /* If a disabled cell is also selected/placed, show the selected highlight instead
+           (override the darker disabled styling). This ensures dragging a number into a place
+           will display the same accent highlight as hover/selection and will be cleared
+           by the normal highlight-sync logic. */
+        #numberPickerPopup #numberPickerTable td.number-cell.selected-number,
+        #numberPickerPopup #numberPickerTable td.selected-number.disabled,
+        #numberPickerPopup #numberPickerTable td.number-cell.disabled.selected-number {
+            background: #1a2a3a !important;
+            color: #00ff00 !important;
+            transform: none !important;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18) !important;
+            border-style: solid !important;
+            border-color: rgba(0, 0, 0, 0.12) !important;
+        }
+
+        [data-theme="light"] #numberPickerPopup #numberPickerTable td.disabled {
             background: #e8f4f8 !important;
             color: #1a1a1a !important;
         }
@@ -1112,7 +1152,10 @@
             display: flex;
             gap: 8px;
             align-items: center;
-            flex-wrap: wrap;
+            /* Keep controls on a single row; allow horizontal scroll when space is tight */
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .mode-rows.reversed {
@@ -1127,6 +1170,153 @@
             color: var(--text);
             cursor: pointer;
         }
+
+        /* === Exact place styles copied from day.html to match visuals === */
+        .place-container {
+            margin-top: 16px;
+            padding: 18px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background: rgba(56, 239, 125, 0.08);
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .place-container:hover {
+            background: rgba(56, 239, 125, 0.12);
+            border-color: var(--accent-2);
+        }
+
+        .places-grid {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            position: relative;
+        }
+
+        .place-box {
+            width: 60px;
+            height: 60px;
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            background: rgba(56, 239, 125, 0.1);
+            color: var(--accent);
+            cursor: grab;
+            transition: all 0.2s;
+            position: relative;
+            user-select: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* Overlay distance label between adjacent place boxes */
+        .place-distance-overlay {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.95);
+            color: #000;
+            padding: 0 6px;
+            height: 16px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 10px;
+            line-height: 16px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            min-width: 24px;
+        }
+
+        [data-theme="dark"] .place-distance-overlay {
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 0 6px;
+            height: 16px;
+            border-radius: 4px;
+            font-size: 10px;
+            line-height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
+        }
+
+        .place-box.filled {
+            background: rgba(56, 239, 125, 0.25);
+            border-style: solid;
+            border-color: var(--accent);
+        }
+
+        [data-theme="light"] .place-box.filled {
+            background: #0f9f5c;
+            color: var(--highlight-text);
+            border-color: #0f9f5c;
+        }
+
+        .place-box-label {
+            position: absolute;
+            top: -20px;
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .place-box-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .mode-selector {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: rgba(56, 239, 125, 0.05);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            /* allow items to wrap to next line */
+        }
+
+        .mode-selector select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .clear-btn {
+            background: #ef4444 !important;
+            color: #fff !important;
+            border-color: #dc2626 !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            font-weight: 500 !important;
+        }
+
+        .clear-btn:hover {
+            background: #dc2626 !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
+        }
+
+        /* === End copied styles === */
     </style>
 </head>
 
@@ -1166,6 +1356,10 @@
                     <label style="margin-left:6px;font-size:12px;">Rank:</label>
                     <button id="rankToggle"
                         style="width:80px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">rank</button>
+                    <label style="margin-left:6px;font-size:12px;">Hover:</label>
+                    <button id="quickPlaceToggle"
+                        style="width:auto;min-width:48px;font-size:11px;padding:6px 4px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);box-sizing:border-box;max-width:100%;"
+                        title="Toggle hover mode: 'Normal' = dblclick copies; 'Hover' = hover fills places">Normal</button>
                 </div>
                 <div class="mode-row" id="modeRowBottom">
                     <label style="margin-left: 6px; font-size: 12px;" id="connectionToggleLabel">Nối:</label>
@@ -1336,6 +1530,8 @@
         const handleRowCopyDblClick = (e) => {
             const row = e.target.closest("tr[data-result]");
             if (!row || !row.dataset.result) return;
+            // Only allow dblclick-copy when quick-place mode is 'normal' (if toggle exists)
+            if (window.getQuickPlaceMode && window.getQuickPlaceMode() !== 'normal') return;
             const text = row.dataset.result;
 
             const flash = () => {
@@ -3983,6 +4179,80 @@
                 return () => modeListeners.delete(cb);
             };
 
+            // Quick-place toggle: two modes -> 'normal' (default) and 'hover' (hover a record to fill places)
+            const quickPlaceToggleEl = document.getElementById('quickPlaceToggle');
+            let quickPlaceMode = localStorage.getItem('quickPlaceMode') || 'normal';
+            const setQuickPlaceMode = (mode) => {
+                quickPlaceMode = mode === 'hover' ? 'hover' : 'normal';
+                if (quickPlaceToggleEl) {
+                    quickPlaceToggleEl.textContent = quickPlaceMode === 'normal' ? 'Normal' : 'Hover';
+                    quickPlaceToggleEl.title = quickPlaceMode === 'normal'
+                        ? "Normal: dblclick copies record to clipboard (existing behavior)"
+                        : "Hover: hovering a record fills the place boxes (dblclick-copy disabled)";
+                }
+                localStorage.setItem('quickPlaceMode', quickPlaceMode);
+            };
+            window.getQuickPlaceMode = () => quickPlaceMode;
+            // initialize
+            setQuickPlaceMode(quickPlaceMode);
+            if (quickPlaceToggleEl) {
+                quickPlaceToggleEl.addEventListener('click', () => {
+                    setQuickPlaceMode(quickPlaceMode === 'normal' ? 'hover' : 'normal');
+                });
+            }
+
+            // Hover handler: when in 'hover' mode, moving mouse over any record row (tr[data-result])
+            // will populate the placeValues and refresh place boxes. Throttled to avoid excessive updates.
+            const hoverToPlaceHandler = createThrottle((e) => {
+                try {
+                    if (quickPlaceMode !== 'hover') return;
+                    const tr = e.target.closest && e.target.closest('tr[data-result]');
+                    if (!tr) return;
+                    const text = tr.dataset.result;
+                    if (!text) return;
+                    const arr = text.split(',').map(s => (s || '').trim());
+                    if (arr.length !== 6) return;
+
+                    // Normalize and compare to avoid unnecessary work
+                    let identical = true;
+                    for (let i = 0; i < 6; i++) {
+                        const v = arr[i] || '';
+                        if ((placeValues[i] || '') !== v) { identical = false; break; }
+                    }
+                    if (identical) return;
+
+                    // Clear previous visual highlights and overlays first to avoid stale backgrounds
+                    try {
+                        if (numberPickerTable) {
+                            const prev = numberPickerTable.querySelectorAll('td.number-cell.selected-number');
+                            prev.forEach(p => p.classList.remove('selected-number'));
+                            const disabledCells = numberPickerTable.querySelectorAll('td.number-cell.disabled');
+                            disabledCells.forEach(c => c.classList.remove('selected-number'));
+                        }
+                        const existingOverlays = numberPickerPopup.querySelectorAll('.place-distance-overlay');
+                        existingOverlays.forEach(n => n.remove());
+                        const placeBoxes = placesGrid.querySelectorAll('.place-box');
+                        placeBoxes.forEach(pb => {
+                            pb.classList.remove('filled');
+                            const val = pb.querySelector('.place-box-value');
+                            if (val) val.textContent = '_';
+                            pb.style.removeProperty('backgroundColor');
+                            pb.style.removeProperty('borderColor');
+                        });
+                    } catch (err) { /* ignore visual cleanup errors */ }
+
+                    // Apply hovered values (replace all previous values)
+                    for (let i = 0; i < 6; i++) placeValues[i] = arr[i] || '';
+
+                    // Re-render and sync highlights/connections
+                    generateNumberPickerTable();
+                    generatePlaceBoxes();
+                    try { if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights(); } catch (e) { }
+                    drawConnections();
+                } catch (err) { /* ignore */ }
+            }, 80);
+            document.addEventListener('mousemove', hoverToPlaceHandler, true);
+
             // Popup scale state
             const popupScaleState = { scale: 1.0 };
 
@@ -4534,6 +4804,14 @@
                         euclidTotalEl.style.opacity = (euclidState && currentMode === 'number') ? '1' : '0.5';
                     }
                 } catch (e) { /* ignore */ }
+                // Sync label and number highlights and redraw connections
+                try {
+                    updateLabelCellStyles();
+                } catch (e) { /* ignore */ }
+                try {
+                    if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights();
+                } catch (e) { /* ignore */ }
+                try { drawConnections(); } catch (e) { /* ignore */ }
             }
 
             function setupPlaceContainerListeners() {
@@ -4629,7 +4907,8 @@
             }
 
             function setupLabelCellDragDrop() {
-                const labelCells = document.querySelectorAll('.label-cell');
+                if (!numberPickerTable) return;
+                const labelCells = numberPickerTable.querySelectorAll('.label-cell');
                 labelCells.forEach(cell => {
                     // Skip if already setup (has data attribute)
                     if (cell.dataset.dragSetup === 'true') return;
@@ -4657,14 +4936,13 @@
 
             // Update label cell styling based on place values
             function updateLabelCellStyles() {
-                const tfoot = document.querySelector('.number-picker-table tfoot');
+                if (!numberPickerTable) return;
+                const tfoot = numberPickerTable.tFoot;
 
                 if (currentMode !== 'number') {
-                    // In label mode, make all label cells bright and draggable
-                    const labelCells = document.querySelectorAll('.label-cell');
-                    labelCells.forEach(cell => {
-                        cell.classList.add('with-values');
-                    });
+                    // In label mode, make all label cells bright and draggable (only inside popup)
+                    const labelCells = numberPickerTable.querySelectorAll('.label-cell');
+                    labelCells.forEach(cell => cell.classList.add('with-values'));
                     if (tfoot) tfoot.classList.remove('disabled');
                     return;
                 }
@@ -4687,7 +4965,7 @@
                 }
 
                 // Update label cell styling
-                const labelCells = document.querySelectorAll('.label-cell');
+                const labelCells = numberPickerTable.querySelectorAll('.label-cell');
                 labelCells.forEach(cell => {
                     const label = cell.dataset.label; // e.g., "C1", "C2", ...
                     const colNum = parseInt(label.substring(1), 10); // Extract column number
@@ -4696,6 +4974,24 @@
                     } else {
                         cell.classList.remove('with-values');
                     }
+                });
+            }
+
+            // Update number-cell highlights to match placeValues
+            function updateNumberCellHighlights() {
+                if (!numberPickerTable) return;
+                // remove previous highlights
+                const prev = numberPickerTable.querySelectorAll('td.number-cell.selected-number');
+                prev.forEach(p => p.classList.remove('selected-number'));
+
+                if (currentMode !== 'number') return;
+
+                // add highlight for each placed number
+                placeValues.forEach(v => {
+                    if (!v || v === '' || isNaN(v)) return;
+                    const num = String(parseInt(v, 10));
+                    const cell = numberPickerTable.querySelector(`td[data-number="${num}"]`);
+                    if (cell) cell.classList.add('selected-number');
                 });
             }
 
