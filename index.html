@@ -1602,6 +1602,7 @@
             { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
             { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
             { id: "cell6", label: "Cell6 · Cặp phổ biến" },
+            { id: "cell6_5", label: "Cell6.5 · Truy x" },
             { id: "cell7", label: "Cell7 · Nhóm label" },
             { id: "cell8", label: "Cell8 · Tìm label" },
             { id: "cell9", label: "Cell9 · Tổ hợp tùy chọn" },
@@ -2166,6 +2167,326 @@
             const debouncedGroup = createDebounce(group, 300);
             diffSel.onchange = consec.onchange = debouncedGroup;
             sortSel.onchange = () => groupCache && renderGroups(groupCache);
+            group();
+        }
+
+        // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
+        function renderCell6_5() {
+            const body = sectionShell("cell6_5", "Cell6.5 · Truy x", "Chọn số x (1-45) và kích thước bộ để liệt kê chỉ những bộ liên quan tới x.");
+            const controls = document.createElement("div"); controls.className = "controls";
+            const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
+            const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
+            const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            const xFilter = document.createElement("input"); xFilter.type = "number"; xFilter.min = 1; xFilter.max = 45; xFilter.placeholder = "Số x (1-45)"; xFilter.style.width = '88px';
+            controls.append("Số x:", xFilter, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
+            body.appendChild(controls);
+            const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
+            wrap.addEventListener('dblclick', handleRowCopyDblClick);
+
+            let groupCache = null;
+            let cacheKey = null;
+            let isComputing = false;
+
+            function group() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}`;
+                if (cacheKey === newCacheKey && groupCache) {
+                    renderGroupTable(groupCache);
+                    return;
+                }
+
+                if (isComputing) return;
+                isComputing = true;
+                wrap.innerHTML = "<div class='loader'>Đang xử lý (trên background thread)...</div>";
+
+                const x = parseInt(xSel.value, 10);
+
+                if (x <= 2 || consec.checked) {
+                    computeQuick();
+                } else {
+                    computeWithWorker();
+                }
+
+                function computeQuick() {
+                    const groups = new Map();
+                    rows.forEach((r, rowIndex) => {
+                        const nums = r.nums;
+                        if (consec.checked) {
+                            for (let i = 0; i <= nums.length - x; i++) {
+                                const slice = nums.slice(i, i + x).slice();
+                                const key = order.checked ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            }
+                        } else {
+                            const indexed = nums.map((v, i) => [i, v]);
+                            const combos = kCombinations(indexed, x);
+                            combos.forEach(combo => {
+                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                const key = values.join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            });
+                        }
+                    });
+
+                    let arr = [...groups.entries()]
+                        .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
+                        .filter(([, list]) => list.length >= 2);
+
+                    // filter by xFilter if provided
+                    const fx = parseInt(xFilter.value, 10);
+                    if (!Number.isNaN(fx)) arr = arr.filter(([key]) => key.split('-').map(Number).includes(fx));
+
+                    const sort = sortSel.value;
+                    if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
+                    else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
+                    else if (sort === "count_asc") arr.sort((a, b) => a[1].length - b[1].length);
+                    else arr.sort((a, b) => b[1].length - a[1].length);
+                    groupCache = arr;
+                    cacheKey = newCacheKey;
+                    isComputing = false;
+                    renderGroupTable(arr);
+                }
+
+                function computeWithWorker() {
+                    const worker = getWorker();
+                    const rowsForWorker = rows.map(r => ({ nums: r.nums, date: r.date, label: r.label }));
+
+                    worker.onmessage = (e) => {
+                        let arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
+                        const fx = parseInt(xFilter.value, 10);
+                        if (!Number.isNaN(fx)) arr = arr.filter(([key]) => key.split('-').map(Number).includes(fx));
+
+                        groupCache = arr;
+                        cacheKey = newCacheKey;
+                        isComputing = false;
+                        renderGroupTable(arr);
+                    };
+
+                    worker.postMessage({
+                        rows: rowsForWorker,
+                        xSel: xSel.value,
+                        consec: consec.checked,
+                        order: order.checked,
+                        sortSel: sortSel.value,
+                        workerType: 'groupBySet'
+                    });
+                }
+            }
+
+            function renderGroupTable(arr) {
+                // Header + empty grid container so the browser can paint quickly
+                wrap.innerHTML = `<div class='muted'>${arr.length} nhóm (>=2 kỳ) — lọc theo Số x</div>` +
+                    `<div class='grid-centered' id='groupGrid'></div>`;
+                const grid = wrap.querySelector('#groupGrid');
+
+                // Caches and mount window for smooth scroll
+                const htmlCache = new Map(); // key -> innerHTML (key: `${idx}|${page}`)
+                const heightCache = new Map(); // idx -> measured height
+                const lruQueue = [];
+                const MAX_CACHE = 160;
+                const cardRefs = new Map();
+                const mountedSet = new Set();
+                const MAX_MOUNTED = 40;
+
+                const setCache = (cacheKey, html, idx) => {
+                    htmlCache.set(cacheKey, html);
+                    lruQueue.push(cacheKey);
+                    if (lruQueue.length > MAX_CACHE) {
+                        const rm = lruQueue.shift();
+                        if (!mountedSet.has(idx)) htmlCache.delete(rm);
+                    }
+                };
+
+                const mount = (card, idx) => {
+                    const [key, list] = arr[idx] || [];
+                    if (!key) return;
+                    const body = card.querySelector('.card-body');
+
+                    const pageSizeRows = 15;
+                    const totalPages = Math.max(1, Math.ceil(list.length / pageSizeRows));
+                    const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
+                    if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
+                    const cacheKey = `${idx}|${page}`;
+
+                    let inner = htmlCache.get(cacheKey);
+                    if (!inner) {
+                        const setValues = new Set(key.split('-').map(Number));
+                        const x = parseInt(xSel.value, 10);
+                        const start = page * pageSizeRows;
+                        const slice = list.slice(start, start + pageSizeRows);
+                        inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
+                        slice.forEach(r => {
+                            const orderedSeq = key.split('-').map(Number);
+                            const requireOrder = !!(consec.checked && order && order.checked);
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked, orderedSeq, requireOrder);
+                            const labelHtml = renderHighlightedLabel(r.label, positions);
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                }
+                            } catch (e) {
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                        });
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        inner += `</tbody></table>`;
+                        inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        setCache(cacheKey, inner, idx);
+                    }
+                    body.style.minHeight = '';
+                    body.innerHTML = inner;
+                    const prevBtns = body.querySelectorAll('.prev');
+                    const nextBtns = body.querySelectorAll('.next');
+                    prevBtns.forEach(prevBtn => prevBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur - 1 + totalPages) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+                    nextBtns.forEach(nextBtn => nextBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur + 1) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+
+                    const pageInputs = body.querySelectorAll('.page-input');
+                    pageInputs.forEach(inp => {
+                        inp.addEventListener('change', (ev) => {
+                            ev.stopPropagation();
+                            const v = Number(inp.value);
+                            if (!Number.isFinite(v)) { inp.value = String(page + 1); return; }
+                            const newPage = v - 1;
+                            if (newPage >= 0 && newPage < totalPages) {
+                                card.dataset.page = String(newPage);
+                                mount(card, idx);
+                            } else {
+                                inp.value = String(page + 1);
+                            }
+                        });
+                        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.dispatchEvent(new Event('change')); });
+                    });
+
+                    card.dataset.mounted = '1';
+                    card.dataset.currentPage = String(page);
+                    mountedSet.add(idx);
+                    if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
+                    enforceMountedBudget(idx);
+                };
+
+                const unmount = (card, idx) => {
+                    if (card.dataset.mounted !== '1') return;
+                    const body = card.querySelector('.card-body');
+                    const h = heightCache.get(idx);
+                    if (h) body.style.minHeight = `${h}px`;
+                    body.innerHTML = '';
+                    card.dataset.mounted = '0';
+                    mountedSet.delete(idx);
+                };
+
+                const enforceMountedBudget = (preferKeepIdx) => {
+                    if (mountedSet.size <= MAX_MOUNTED) return;
+                    const vh = window.innerHeight; const center = vh / 2;
+                    const candidates = Array.from(mountedSet).filter(i => i !== preferKeepIdx).map(i => {
+                        const el = cardRefs.get(i);
+                        const rect = el ? el.getBoundingClientRect() : { top: 1e9 };
+                        return { i, d: Math.abs(rect.top - center) };
+                    }).sort((a, b) => b.d - a.d);
+                    while (mountedSet.size > MAX_MOUNTED && candidates.length) {
+                        const { i } = candidates.shift();
+                        const el = cardRefs.get(i);
+                        if (el) unmount(el, i);
+                    }
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        if (Number.isNaN(idx)) return;
+                        if (entry.isIntersecting) mount(entry.target, idx);
+                        else unmount(entry.target, idx);
+                    });
+                }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+
+                // Create card shells in chunks
+                let created = 0;
+                const chunkSize = 8;
+                const createChunk = () => {
+                    const end = Math.min(created + chunkSize, arr.length);
+                    for (let i = created; i < end; i++) {
+                        const [key, list] = arr[i];
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.dataset.index = String(i);
+                        card.dataset.mounted = '0';
+                        card.dataset.page = '0';
+                        card.dataset.currentPage = '-1';
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<span class='badge'>${list.length} kỳ</span>` +
+                            `</div><div class='card-body' style='min-height:120px'></div>`;
+                        grid.appendChild(card);
+                        cardRefs.set(i, card);
+                        observer.observe(card);
+                    }
+                    created = end;
+                    if (created < arr.length) requestAnimationFrame(createChunk);
+                };
+                createChunk();
+            }
+
+            const debouncedGroup = createDebounce(group, 300);
+            consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; debouncedGroup(); };
+            xSel.onchange = sortSel.onchange = order.onchange = debouncedGroup;
+            xFilter.onchange = debouncedGroup;
             group();
         }
 
@@ -5521,6 +5842,7 @@
                 cell5: renderCell5,
                 // Note: mismatched creators – keep ids aligned with sections created inside
                 cell6: renderCell8, // Phân nhóm theo bộ số
+                cell6_5: renderCell6_5, // Truy x (lọc theo số x)
                 cell7: renderCell6, // Nhóm theo label
                 cell8: renderCell7, // Tìm kiếm theo Label
                 cell9: renderCell9,
