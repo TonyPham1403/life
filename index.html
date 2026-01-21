@@ -181,6 +181,34 @@
             opacity: 1;
         }
 
+        /* Inline opacity control placed next to Σ */
+        .inline-opacity-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 12px;
+        }
+
+        .inline-opacity-container input[type="range"] {
+            width: 100px;
+            max-width: 100%;
+            height: 6px;
+            accent-color: var(--accent);
+        }
+
+        /* Smaller slider when placed inside compact mode rows/selectors */
+        .mode-rows .inline-opacity-container input[type="range"],
+        .mode-selector .inline-opacity-container input[type="range"] {
+            width: 72px;
+        }
+
+        .inline-opacity-container .inline-percent {
+            min-width: 36px;
+            font-weight: 800;
+            font-size: 13px;
+            color: var(--text-strong);
+        }
+
         .number-picker-table {
             width: 100%;
             border-collapse: collapse;
@@ -5623,6 +5651,18 @@
             applyPopupScale();
             addPopupScaleHandle();
 
+            // Helper: desired popup alpha based on inline slider (preserve across open/close)
+            const __POPUP_MIN_ALPHA = 0.15;
+            function __desiredPopupAlpha() {
+                try {
+                    const el = document.getElementById('popupOpacityRangeInline');
+                    if (!el) return 1;
+                    const pct = Number(el.value || 0);
+                    if (pct === 0) return 1;
+                    return 1 - (pct / 100) * (1 - __POPUP_MIN_ALPHA);
+                } catch (e) { return 1; }
+            }
+
             // Close button
             const closeNumberPickerBtn = document.getElementById('closeNumberPickerBtn');
             closeNumberPickerBtn.addEventListener('click', (e) => {
@@ -5660,12 +5700,12 @@
                         numberPickerPopup.style.left = `${rect.left}px`;
                     }
 
-                    // Set display and opacity 0, then fade in after scale applied
+                    // Set display and opacity 0, then fade in to slider-target alpha after scale applied
                     numberPickerPopup.style.display = 'block';
                     numberPickerPopup.style.opacity = '0';
 
                     requestAnimationFrame(() => {
-                        numberPickerPopup.style.opacity = '1';
+                        numberPickerPopup.style.opacity = String(__desiredPopupAlpha());
                     });
                 } else {
                     numberPickerPopup.style.opacity = '0';
@@ -5710,12 +5750,12 @@
                             numberPickerPopup.style.left = `${rect.left}px`;
                         }
 
-                        // Set display and opacity 0, then fade in after scale applied
+                        // Set display and opacity 0, then fade in to slider-target alpha after scale applied
                         numberPickerPopup.style.display = 'block';
                         numberPickerPopup.style.opacity = '0';
 
                         requestAnimationFrame(() => {
-                            numberPickerPopup.style.opacity = '1';
+                            numberPickerPopup.style.opacity = String(__desiredPopupAlpha());
                         });
                     } else {
                         numberPickerPopup.style.opacity = '0';
@@ -5896,6 +5936,91 @@
                 // expose for debugging if needed
                 window.__markInnerChildObserver = mo;
             } catch (e) { }
+        })();
+
+        // Setup inline opacity slider next to Σ and bind it to popup background alpha
+        (function setupInlineOpacityControl() {
+            const euclidTotal = document.getElementById('euclidTotal');
+            const popup = document.getElementById('numberPickerPopup');
+            if (!euclidTotal) return;
+
+            // create container next to Σ if not exists
+            if (!document.getElementById('popupOpacityRangeInline')) {
+                const container = document.createElement('span');
+                container.className = 'inline-opacity-container';
+                container.innerHTML = `
+                    <input id="popupOpacityRangeInline" type="range" min="0" max="100" value="0">
+                    <div class="inline-percent" id="popupOpacityInlineValue">0%</div>
+                `;
+                euclidTotal.parentNode.insertBefore(container, euclidTotal.nextSibling);
+
+                const range = container.querySelector('#popupOpacityRangeInline');
+                const label = container.querySelector('#popupOpacityInlineValue');
+
+                function parseRGB(str) {
+                    const m = String(str).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+                    if (m) return [m[1], m[2], m[3]];
+                    return [255, 255, 255];
+                }
+
+                function updateAlpha(v) {
+                    label.textContent = `${v}%`;
+                    const pct = Number(v);
+                    if (!popup) return;
+
+                    // Prevent fully transparent popup: reserve a minimum visible alpha.
+                    const MIN_ALPHA = 0.15; // keep at least 15% opacity so popup never fully hides
+
+                    // 0% should preserve the original visuals exactly (no inline overrides)
+                    if (pct === 0) {
+                        popup.style.backgroundColor = '';
+                        popup.style.borderColor = '';
+                        popup.style.boxShadow = '';
+                        // If popup is currently displayed, ensure it remains visible (opacity 1).
+                        // Otherwise clear inline opacity so it falls back to CSS when hidden.
+                        try {
+                            const csDisp = getComputedStyle(popup).display;
+                            if (csDisp && csDisp !== 'none') {
+                                popup.style.opacity = '1';
+                            } else {
+                                popup.style.opacity = '';
+                            }
+                        } catch (e) {
+                            popup.style.opacity = '';
+                        }
+                        return;
+                    }
+
+                    // Map slider 0..100 -> alpha 1..MIN_ALPHA (linear)
+                    const alpha = 1 - (pct / 100) * (1 - MIN_ALPHA);
+
+                    const cs = getComputedStyle(popup);
+                    const bg = cs.backgroundColor || 'rgb(255,255,255)';
+                    const [r, g, b] = parseRGB(bg);
+
+                    // Apply opacity to the whole popup so all children fade together
+                    popup.style.opacity = String(alpha);
+                    // Also set background rgba to preserve backdrop color when semi-transparent
+                    popup.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+
+                    // Soften border and shadow proportionally (keep a minimum subtle border)
+                    try {
+                        const bc = cs.borderColor || 'rgb(0,0,0)';
+                        const [br, bg2, bb] = parseRGB(bc);
+                        const borderAlpha = Math.max(0.08, alpha * 0.9);
+                        popup.style.borderColor = `rgba(${br}, ${bg2}, ${bb}, ${borderAlpha})`;
+                    } catch (e) { }
+
+                    try {
+                        const shadowAlpha = 0.28 * alpha + 0.02;
+                        popup.style.boxShadow = `0 8px 24px rgba(0,0,0,${shadowAlpha})`;
+                    } catch (e) { }
+                }
+
+                // initialize
+                updateAlpha(range.value);
+                range.addEventListener('input', (e) => updateAlpha(e.target.value));
+            }
         })();
 
         bootstrap();
