@@ -2165,6 +2165,7 @@
                 }, { root: null, rootMargin: '600px 0px', threshold: 0 });
 
                 // Chunked creation of cards to avoid main-thread spikes
+                const totalGroups = groups.length;
                 let created = 0;
                 const chunkSize = 6;
                 const createChunk = () => {
@@ -2177,9 +2178,13 @@
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
                         card.dataset.currentPage = '-1';
-                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                        // show rank/total to the left of the count badge
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
                             `<strong>Base ${g.base}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
                             `<span class='badge'>${g.rows.length} kỳ</span>` +
+                            `</div>` +
                             `</div><div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
                         cardRefs.set(i, card);
@@ -2573,6 +2578,7 @@
                 }, { root: null, rootMargin: '600px 0px', threshold: 0 });
 
                 // Create card shells in chunks
+                const totalGroups = arr.length;
                 let created = 0;
                 const chunkSize = 8;
                 const createChunk = () => {
@@ -2585,9 +2591,13 @@
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
                         card.dataset.currentPage = '-1';
-                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                        // Add rank indicator (x/totalGroups) next to the count badge
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
                             `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
                             `<span class='badge'>${list.length} kỳ</span>` +
+                            `</div>` +
                             `</div><div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
                         cardRefs.set(i, card);
@@ -3250,6 +3260,7 @@
                 }, { root: null, rootMargin: '600px 0px', threshold: 0 });
 
                 // Create card shells in chunks
+                const totalGroups = arr.length;
                 let created = 0;
                 const chunkSize = 8;
                 const createChunk = () => {
@@ -3262,9 +3273,12 @@
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
                         card.dataset.currentPage = '-1';
-                        card.innerHTML = `<div class='flex' style='justify-content:space-between'>` +
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
                             `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
                             `<span class='badge'>${list.length} kỳ</span>` +
+                            `</div>` +
                             `</div><div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
                         cardRefs.set(i, card);
