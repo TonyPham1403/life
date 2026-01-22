@@ -1170,6 +1170,7 @@
         /* Make controls inside Cell8/9/10/11 stick under the header when scrolling.
            Keep them in normal flow so they match other sections visually.
         */
+        #cell6_5 .controls,
         #cell8 .controls,
         #cell9 .controls,
         #cell10 .controls,
@@ -1185,6 +1186,24 @@
             margin: 0 0 14px 0;
             border-radius: 8px;
             backdrop-filter: blur(4px);
+        }
+
+        /* Some browsers prevent sticky when an ancestor uses 'contain' or
+           'content-visibility'. Disable containment for this specific
+           section so the controls can stick correctly. */
+        #cell6_5,
+        #cell8,
+        #cell9,
+        #cell10,
+        #cell11 {
+            contain: none;
+            content-visibility: visible;
+        }
+
+        /* JS fallback will add this class when it needs to pin the controls */
+        .controls.stuck {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.24);
+            transition: box-shadow 0.12s ease;
         }
 
         /* Mode selector two-row layout + swap control */
@@ -1456,14 +1475,7 @@
         // Tạo web worker inline để xử lý tính toán nặng
         const workerCode = `
             // Helpers for worker
-            const compareKey = (a, b) => {
-                const pa = a.split("-").map(Number); 
-                const pb = b.split("-").map(Number);
-                for (let i = 0; i < Math.min(pa.length, pb.length); i++) { 
-                    if (pa[i] !== pb[i]) return pa[i] - pb[i]; 
-                } 
-                return pa.length - pb.length;
-            };
+            const compareKey = (a, b) => { const pa = a.split("-").map(Number); const pb = b.split("-").map(Number); for (let i = 0; i < Math.min(pa.length, pb.length); i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; } return pa.length - pb.length; };
 
             function kCombinations(set, k) {
                 const combs = [];
@@ -1471,32 +1483,30 @@
                     if (combo.length === k) { combs.push([...combo]); return; }
                     for (let i = start; i < set.length; i++) { combo.push(set[i]); recur(i + 1, combo); combo.pop(); }
                 };
-                recur(0, []); 
+                recur(0, []);
                 return combs;
             }
 
             self.onmessage = (e) => {
-                const { rows, xSel, consec, sortSel, workerType } = e.data;
-                
+                const { rows, xSel, consec, order, sortSel, workerType } = e.data;
                 if (workerType === 'groupBySet') {
                     const x = parseInt(xSel, 10);
                     const groups = new Map();
-                    
+
                     rows.forEach((r, rowIndex) => {
                         const nums = r.nums;
                         if (consec) {
                             for (let i = 0; i <= nums.length - x; i++) {
                                 const slice = nums.slice(i, i + x).slice();
-                                const key = slice.sort((a, b) => a - b).join("-");
+                                const key = order ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
                                 if (!groups.has(key)) groups.set(key, new Set());
                                 groups.get(key).add(rowIndex);
                             }
                         } else {
-                            // Optimize: skip large combos calculation
                             if (x > 4) {
                                 for (let i = 0; i <= nums.length - x; i++) {
                                     const slice = nums.slice(i, i + x).slice();
-                                    const key = slice.sort((a, b) => a - b).join("-");
+                                    const key = slice.slice().sort((a, b) => a - b).join("-");
                                     if (!groups.has(key)) groups.set(key, new Set());
                                     groups.get(key).add(rowIndex);
                                 }
@@ -1512,17 +1522,12 @@
                             }
                         }
                     });
-                    
-                    let arr = [...groups.entries()]
-                        .map(([key, indices]) => [key, indices])
-                        .filter(([, indices]) => indices.size >= 2)
-                        .sort((a, b) => {
-                            const sort = sortSel;
-                            if (sort === "value_asc") return compareKey(a[0], b[0]);
-                            if (sort === "value_desc") return compareKey(b[0], a[0]);
-                            if (sort === "count_asc") return a[1].size - b[1].size;
-                            return b[1].size - a[1].size;
-                        });
+
+                    let arr = [...groups.entries()].filter(([, indices]) => indices.size >= 2);
+                    if (sortSel === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
+                    else if (sortSel === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
+                    else if (sortSel === "count_asc") arr.sort((a, b) => a[1].size - b[1].size);
+                    else arr.sort((a, b) => b[1].size - a[1].size);
 
                     self.postMessage({ result: arr.map(([k, v]) => [k, Array.from(v)]) });
                 }
@@ -1780,6 +1785,8 @@
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
+                // ensure viewport shows controls + results consistently
+                setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
             }
             topSel.onchange = sortSel.onchange = decimalSel.onchange = draw;
             draw();
@@ -2194,6 +2201,9 @@
                     if (created < groups.length) requestAnimationFrame(createChunk);
                 };
                 createChunk();
+                // After rendering group cards, ensure page scrolls to 240px
+                // Use a small delay to allow layout to settle before scrolling
+                try { setTimeout(() => { window.scrollTo({ top: 240, behavior: 'smooth' }); }, 50); } catch (e) { try { setTimeout(() => { window.scrollTo(0, 240); }, 50); } catch (er) { /* ignore */ } }
             }
 
             // Dùng debounce để tránh tính toán quá tần suất
@@ -2208,6 +2218,8 @@
             const body = sectionShell("cell6_5", "Cell6.5 · Truy x", "Chọn số x (1-45) và kích thước bộ để liệt kê chỉ những bộ liên quan tới x.");
             const controls = document.createElement("div"); controls.className = "controls";
             const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
+            // remember previous comb so we only clear extras when shrinking the set
+            let prevComb = parseInt(xSel.value, 10) || 1;
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
             const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
@@ -2251,6 +2263,45 @@
             xContainer.appendChild(xFilter);
             xContainer.appendChild(btnGroup);
 
+            // Make the input container draggable like Cell9 inputs: allow dragging-out to clear value
+            let dropHandledX = false;
+            let draggedX = false;
+
+            const updateXDraggable = () => {
+                const v = String(xFilter.value ?? '').trim();
+                const has = v !== '';
+                xContainer.draggable = has;
+                xContainer.style.cursor = has ? 'grab' : 'default';
+                xContainer.style.opacity = has ? '' : '';
+            };
+            updateXDraggable();
+            xFilter.addEventListener('input', () => {
+                updateXDraggable();
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+
+            xContainer.addEventListener('dragstart', (e) => {
+                draggedX = true;
+                dropHandledX = false;
+                xContainer.style.opacity = '0.5';
+                try { e.dataTransfer.effectAllowed = 'copyMove'; } catch (er) { }
+                e.dataTransfer.setData('text/plain', String(xFilter.value ?? ''));
+                // include full place set for richer drops
+                try { e.dataTransfer.setData('application/x-place-set', JSON.stringify(window.getPlaceValues ? window.getPlaceValues() : [])); } catch (er) { }
+            });
+
+            xContainer.addEventListener('dragend', (e) => {
+                xContainer.style.opacity = '';
+                // If drag ended without a handled drop, clear the input (like Cell9 behavior)
+                if (!dropHandledX && draggedX && String(xFilter.value ?? '').trim() !== '') {
+                    xFilter.value = '';
+                    xFilter.dispatchEvent(new Event('input'));
+                    if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                }
+                draggedX = false;
+                dropHandledX = false;
+            });
+
             // Accept drags from number picker popup (single number, place index or place set)
             xContainer.addEventListener('dragover', (e) => {
                 e.preventDefault();
@@ -2263,6 +2314,7 @@
             xContainer.addEventListener('drop', (e) => {
                 e.preventDefault();
                 xContainer.style.backgroundColor = '';
+                dropHandledX = true;
                 const txt = e.dataTransfer.getData('text/plain');
                 const placeIndexData = e.dataTransfer.getData('application/x-place-index');
                 const placeSetData = e.dataTransfer.getData('application/x-place-set');
@@ -2300,19 +2352,202 @@
                 }
             });
 
-            controls.append("Số x:", xContainer, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
+            // Container for extra combo inputs (comb - 1) shown when user selects comb > 1
+            const comboExtras = document.createElement('div');
+            comboExtras.style.cssText = 'display:flex;gap:6px;align-items:center;margin-left:6px;flex-wrap:wrap;';
+
+            // Build or rebuild the (comb - 1) extra inputs based on xSel
+            function rebuildComboExtras(prefill = []) {
+                comboExtras.innerHTML = '';
+                const comb = parseInt(xSel.value, 10) || 1;
+                const count = Math.max(0, comb - 1);
+                for (let i = 0; i < count; i++) {
+                    // container mimics Cell9 input container with drag handle and up/down buttons
+                    const container = document.createElement('div');
+                    container.className = 'combo-extra-container';
+                    container.style.cssText = 'position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;padding:2px;border-radius:8px;border:2px solid #f8f333;background:rgba(248,243,180,0.04);';
+
+                    const inp = document.createElement('input');
+                    inp.type = 'number';
+                    inp.min = 1; inp.max = 45;
+                    inp.placeholder = `v${i + 1}`;
+                    inp.className = 'combo-extra';
+                    inp.style.cssText = 'width:64px;padding:8px;border-radius:6px;border:0;background:transparent;color:var(--text);box-sizing:border-box;';
+                    // prefill if value for this index was provided (preserve when increasing comb)
+                    if (prefill && prefill[i] !== undefined && String(prefill[i]).trim() !== '') {
+                        const parsed = parseInt(String(prefill[i]).trim(), 10);
+                        if (Number.isFinite(parsed)) {
+                            const clamped = Math.max(1, Math.min(45, parsed));
+                            inp.value = String(clamped);
+                        }
+                    }
+
+                    // right-side up/down buttons
+                    const btnGroup = document.createElement('div');
+                    btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                    const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                    const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                    const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
+                    btnGroup.appendChild(up); btnGroup.appendChild(down);
+
+                    // drag handle (visual)
+                    const dragHandle = document.createElement('div');
+                    dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);pointer-events:none;`;
+
+                    // attach behaviors
+                    let dropHandled = false;
+                    let dragging = false;
+
+                    const updateDraggable = () => {
+                        const v = String(inp.value ?? '').trim();
+                        const has = v !== '';
+                        container.draggable = has;
+                        dragHandle.style.pointerEvents = has ? 'auto' : 'none';
+                        dragHandle.style.cursor = has ? 'grab' : 'default';
+                        // Always show yellow border even when empty
+                        container.style.borderColor = '#f8f333';
+                    };
+
+                    up.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n + 1; if (n > 45) n = 1; if (n < 1) n = 1;
+                        inp.value = String(n); inp.dispatchEvent(new Event('input'));
+                        if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                    });
+                    down.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        let n = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isFinite(n)) n = 0;
+                        n = n - 1; if (n < 1) n = 45; if (n > 45) n = 45;
+                        inp.value = String(n); inp.dispatchEvent(new Event('input'));
+                        if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                    });
+
+                    container.addEventListener('dragstart', (e) => {
+                        dragging = true; dropHandled = false;
+                        container.style.opacity = '0.5';
+                        try { e.dataTransfer.effectAllowed = 'copyMove'; } catch (er) { }
+                        e.dataTransfer.setData('text/plain', String(inp.value ?? ''));
+                        try { e.dataTransfer.setData('application/x-place-set', JSON.stringify(window.getPlaceValues ? window.getPlaceValues() : [])); } catch (er) { }
+                    });
+                    container.addEventListener('dragend', () => {
+                        container.style.opacity = '';
+                        if (!dropHandled && dragging && String(inp.value ?? '').trim() !== '') {
+                            inp.value = '';
+                            inp.dispatchEvent(new Event('input'));
+                            if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                        }
+                        dragging = false; dropHandled = false; updateDraggable();
+                    });
+
+                    container.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (er) { } container.style.backgroundColor = 'rgba(248,243,180,0.06)'; });
+                    container.addEventListener('dragleave', () => { container.style.backgroundColor = ''; });
+                    container.addEventListener('drop', (e) => {
+                        e.preventDefault(); container.style.backgroundColor = '';
+                        dropHandled = true;
+                        const txt = e.dataTransfer.getData('text/plain');
+                        const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                        const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                        const labelData = e.dataTransfer.getData('application/x-label');
+                        let value = null;
+                        if (placeIndexData) {
+                            const idx = parseInt(placeIndexData, 10);
+                            const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                            if (!isNaN(idx) && placeVals && idx >= 0 && idx < 6) value = placeVals[idx];
+                        } else if (placeSetData) {
+                            try { const arr = JSON.parse(placeSetData); if (Array.isArray(arr) && arr.length) { for (const v of arr) { if (v !== null && v !== undefined && String(v).trim() !== '') { value = v; break; } } } } catch (err) { }
+                        } else if (txt) { value = txt; } else if (labelData) { value = labelData; }
+
+                        if (value !== null && value !== undefined) {
+                            let n = parseInt(String(value).trim(), 10);
+                            if (Number.isFinite(n)) {
+                                if (n < 1) n = 1; if (n > 45) n = 45;
+                                inp.value = String(n); inp.dispatchEvent(new Event('input'));
+                                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                            }
+                        }
+                    });
+
+                    inp.addEventListener('input', () => {
+                        const raw = String(inp.value ?? '').trim();
+                        if (raw === '') { updateDraggable(); if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); return; }
+                        let n = parseInt(raw, 10);
+                        if (!Number.isFinite(n)) { inp.value = ''; updateDraggable(); if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); return; }
+                        if (n < 1) n = 1; if (n > 45) n = 45; inp.value = String(n);
+                        updateDraggable();
+                        if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                    });
+
+                    container.appendChild(inp);
+                    container.appendChild(btnGroup);
+                    container.appendChild(dragHandle);
+                    container.dataset.index = String(i);
+                    comboExtras.appendChild(container);
+                    updateDraggable();
+                }
+
+                // attach left/right arrow navigation matching Cell9
+                const containersList = Array.from(comboExtras.querySelectorAll('.combo-extra-container'));
+                const navOrder = containersList.map(c => parseInt(c.dataset.index, 10));
+                const inputsList = Array.from(comboExtras.querySelectorAll('input.combo-extra'));
+                inputsList.forEach((inp, logicalIdx) => {
+                    inp.onkeydown = (e) => {
+                        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                        e.preventDefault();
+                        const pos = navOrder.indexOf(logicalIdx);
+                        if (pos === -1) return;
+                        const nextPos = e.key === 'ArrowLeft'
+                            ? (pos > 0 ? pos - 1 : navOrder.length - 1)
+                            : (pos < navOrder.length - 1 ? pos + 1 : 0);
+                        const targetIdx = navOrder[nextPos];
+                        inputsList[targetIdx]?.focus();
+                    };
+                });
+            }
+
+            // rebuild extras when comb selection changes
+            xSel.addEventListener('change', () => {
+                const newComb = parseInt(xSel.value, 10) || 1;
+                const oldCount = Math.max(0, prevComb - 1);
+                const newCount = Math.max(0, newComb - 1);
+                if (newCount >= oldCount) {
+                    // preserve existing values when increasing or same size
+                    const existing = Array.from(comboExtras.querySelectorAll('input[type="number"].combo-extra')).map(i => i.value ?? '');
+                    rebuildComboExtras(existing);
+                    // dispatch input for preserved values to trigger any UI updates
+                    comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach(inp => { if ((inp.value ?? '').trim() !== '') inp.dispatchEvent(new Event('input')); });
+                } else {
+                    // shrinking: rebuild and clear extras
+                    rebuildComboExtras([]);
+                }
+                prevComb = newComb;
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+            // initial build
+            rebuildComboExtras();
+
+            controls.append("Số x:", xContainer, comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
 
             let groupCache = null;
             let cacheKey = null;
+            // baseline (unfiltered) groups for current comb/settings
+            let baselineArrAll = null;
             let isComputing = false;
 
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}`;
+                // include extra combo inputs values in cache key so changing them invalidates cache
+                const extraValsKey = (() => {
+                    const inputs = comboExtras.querySelectorAll('input[type="number"].combo-extra');
+                    return Array.from(inputs).map(i => (i.value ?? '').trim()).join(',');
+                })();
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -2357,9 +2592,37 @@
                         .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
                         .filter(([, list]) => list.length >= 2);
 
-                    // filter by xFilter if provided
-                    const fx = parseInt(xFilter.value, 10);
-                    if (!Number.isNaN(fx)) arr = arr.filter(([key]) => key.split('-').map(Number).includes(fx));
+                    // apply main x filter first (if provided) so baseline is the set of combos containing x
+                    const mainX = parseInt(xFilter.value, 10);
+                    if (!Number.isNaN(mainX)) {
+                        arr = arr.filter(([key]) => {
+                            const nums = key.split('-').map(Number);
+                            return nums.includes(mainX);
+                        });
+                    }
+
+                    // capture baseline (after main x filter, before dynamic extras)
+                    baselineArrAll = arr.slice();
+                    // sort baseline according to current sortSel so rank/sum are stable
+                    const baselineSort = sortSel.value;
+                    if (baselineSort === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
+                    else if (baselineSort === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
+                    else if (baselineSort === "count_asc") baselineArrAll.sort((a, b) => a[1].length - b[1].length);
+                    else baselineArrAll.sort((a, b) => b[1].length - a[1].length);
+
+                    // now apply dynamic extra filters (extras besides mainX)
+                    const extras = [];
+                    comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach(inp => {
+                        const v = parseInt(String(inp.value ?? '').trim(), 10);
+                        if (!Number.isNaN(v)) extras.push(v);
+                    });
+                    if (extras.length > 0) {
+                        arr = arr.filter(([key]) => {
+                            const nums = key.split('-').map(Number);
+                            for (const f of extras) if (!nums.includes(f)) return false;
+                            return true;
+                        });
+                    }
 
                     const sort = sortSel.value;
                     if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
@@ -2378,8 +2641,36 @@
 
                     worker.onmessage = (e) => {
                         let arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
-                        const fx = parseInt(xFilter.value, 10);
-                        if (!Number.isNaN(fx)) arr = arr.filter(([key]) => key.split('-').map(Number).includes(fx));
+                        // apply main x filter first so baseline reflects combos that include x
+                        const mainXw = parseInt(xFilter.value, 10);
+                        if (!Number.isNaN(mainXw)) {
+                            arr = arr.filter(([key]) => {
+                                const nums = key.split('-').map(Number);
+                                return nums.includes(mainXw);
+                            });
+                        }
+
+                        // capture baseline before applying dynamic extras and sort it the same way
+                        baselineArrAll = arr.slice();
+                        const baselineSortW = sortSel.value;
+                        if (baselineSortW === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
+                        else if (baselineSortW === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
+                        else if (baselineSortW === "count_asc") baselineArrAll.sort((a, b) => a[1].length - b[1].length);
+                        else baselineArrAll.sort((a, b) => b[1].length - a[1].length);
+
+                        // now apply dynamic extras (excluding mainX)
+                        const extrasW = [];
+                        comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach(inp => {
+                            const v = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isNaN(v)) extrasW.push(v);
+                        });
+                        if (extrasW.length > 0) {
+                            arr = arr.filter(([key]) => {
+                                const nums = key.split('-').map(Number);
+                                for (const f of extrasW) if (!nums.includes(f)) return false;
+                                return true;
+                            });
+                        }
 
                         groupCache = arr;
                         cacheKey = newCacheKey;
@@ -2400,7 +2691,30 @@
 
             function renderGroupTable(arr) {
                 // Header + empty grid container so the browser can paint quickly
-                wrap.innerHTML = `<div class='muted'>${arr.length} nhóm (>=2 kỳ) — lọc theo Số x</div>` +
+                // Use baselineArrAll (unfiltered) for totals/rank while grid shows filtered arr
+                const baselineTotal = (typeof baselineArrAll !== 'undefined' && baselineArrAll && Array.isArray(baselineArrAll)) ? baselineArrAll.length : arr.length;
+                // build a readable filter text from xFilter + extras
+                const fs = [];
+                const mx = parseInt(xFilter.value, 10);
+                if (!Number.isNaN(mx)) fs.push(String(mx));
+                comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach(inp => {
+                    const v = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isNaN(v)) fs.push(String(v));
+                });
+                const filterText = fs.length ? ` — lọc theo Số x: {${fs.join(',')}}` : ' — lọc theo Số x';
+
+                // determine baseline rank/occ for the first displayed group
+                let rankText = '';
+                if (arr.length > 0 && baselineArrAll && baselineArrAll.length > 0) {
+                    const firstKey = arr[0][0];
+                    const idxInBaseline = baselineArrAll.findIndex(([k]) => k === firstKey);
+                    if (idxInBaseline >= 0) {
+                        const occ = baselineArrAll[idxInBaseline][1].length;
+                        rankText = ` — vị trí ${idxInBaseline + 1}/${baselineArrAll.length} (\u00A0${occ} kỳ)`;
+                    }
+                }
+
+                wrap.innerHTML = `<div class='muted' style='flex-basis:100%;margin-bottom:8px'>${baselineTotal} nhóm (>=2 kỳ)${filterText}${rankText}</div>` +
                     `<div class='grid-centered' id='groupGrid'></div>`;
                 const grid = wrap.querySelector('#groupGrid');
 
@@ -2591,12 +2905,28 @@
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
                         card.dataset.currentPage = '-1';
-                        // Add rank indicator (x/totalGroups) next to the count badge
+                        // Prefer baseline values for rank/occurrence when baselineArrAll is available
+                        let rankDisplay = `${i + 1}/${totalGroups}`;
+                        let occDisplay = `${list.length} kỳ`;
+                        if (baselineArrAll && Array.isArray(baselineArrAll)) {
+                            const baselineTotal = baselineArrAll.length;
+                            const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
+                            if (idxInBaseline >= 0) {
+                                rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
+                                occDisplay = `${baselineArrAll[idxInBaseline][1].length} kỳ`;
+                            } else {
+                                // If not found in baseline (unlikely), fall back to filtered values
+                                rankDisplay = `${i + 1}/${totalGroups}`;
+                                occDisplay = `${list.length} kỳ`;
+                            }
+                        }
+
+                        // Add rank indicator (baselineRank/baselineTotal) next to the count badge
                         card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
                             `<strong>{${key.replace(/-/g, ',')}}</strong>` +
                             `<div style='display:flex;align-items:center;gap:8px'>` +
-                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
-                            `<span class='badge'>${list.length} kỳ</span>` +
+                            `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                            `<span class='badge'>${occDisplay}</span>` +
                             `</div>` +
                             `</div><div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
@@ -2607,6 +2937,20 @@
                     if (created < arr.length) requestAnimationFrame(createChunk);
                 };
                 createChunk();
+
+                // After chunked creation completes, scroll viewport to 240px so
+                // the `.controls` area and new results are visible. Use a small
+                // timeout + rAF to wait for layout/paint to settle.
+                setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        try {
+                            window.scrollTo({ top: 240, behavior: 'auto' });
+                        } catch (e) {
+                            try { document.scrollingElement.scrollTop = 240; } catch (err) { }
+                        }
+                    });
+                }, 160);
+
             }
 
             const debouncedGroup = createDebounce(group, 300);
@@ -2953,6 +3297,8 @@
                 }
                 html += "</div>";
                 wrap.innerHTML = html;
+                // scroll to 240px so the controls sit under header consistently
+                setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
             }
             inputs.forEach((inp, idx) => {
                 inp.oninput = run;
@@ -3288,6 +3634,14 @@
                     if (created < arr.length) requestAnimationFrame(createChunk);
                 };
                 createChunk();
+
+                // scroll to 240px after chunked creation (wait for layout)
+                setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        try { window.scrollTo({ top: 240, behavior: 'auto' }); }
+                        catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } }
+                    });
+                }, 160);
             }
 
             const debouncedGroup = createDebounce(group, 300);
@@ -3748,6 +4102,8 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
+                    // ensure viewport shows controls + results consistently
+                    setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
                 } else {
                     const labels = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : null; }).filter(v => v !== null);
                     if (!labels.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 ký tự...</div>"; return; }
@@ -3866,6 +4222,8 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
+                    // ensure viewport shows controls + results consistently
+                    setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
                 }
             }
 
@@ -6125,7 +6483,67 @@
             }
         })();
 
-        bootstrap();
+        // Run bootstrap then enable sticky fallback for multiple sections
+        bootstrap().then(() => {
+            (function enableStickyFallbackForSections() {
+                const SECTIONS = ['cell6_5', 'cell8', 'cell9', 'cell10', 'cell11'];
+                const HEADER_OFFSET = 64; // matches CSS top
+
+                SECTIONS.forEach(sectionId => {
+                    const sec = document.getElementById(sectionId);
+                    if (!sec) return;
+                    const controls = sec.querySelector('.controls');
+                    if (!controls) return;
+
+                    let placeholder = null;
+
+                    function update() {
+                        const secRect = sec.getBoundingClientRect();
+                        const ctrlRect = controls.getBoundingClientRect();
+                        const shouldPin = secRect.top < HEADER_OFFSET && (secRect.bottom > (HEADER_OFFSET + ctrlRect.height));
+
+                        if (shouldPin && !controls.classList.contains('stuck')) {
+                            // create placeholder to preserve layout
+                            placeholder = document.createElement('div');
+                            placeholder.style.height = ctrlRect.height + 'px';
+                            controls.parentNode.insertBefore(placeholder, controls);
+
+                            controls.classList.add('stuck');
+                            controls.style.position = 'fixed';
+                            controls.style.top = HEADER_OFFSET + 'px';
+                            controls.style.left = Math.max(0, secRect.left) + 'px';
+                            controls.style.width = secRect.width + 'px';
+                            controls.style.zIndex = 1100;
+                        } else if (!shouldPin && controls.classList.contains('stuck')) {
+                            controls.classList.remove('stuck');
+                            controls.style.position = '';
+                            controls.style.top = '';
+                            controls.style.left = '';
+                            controls.style.width = '';
+                            controls.style.zIndex = '';
+                            if (placeholder) { placeholder.remove(); placeholder = null; }
+                        }
+                    }
+
+                    // listeners
+                    window.addEventListener('scroll', update, { passive: true });
+                    window.addEventListener('resize', () => {
+                        if (controls.classList.contains('stuck')) {
+                            const secRect = sec.getBoundingClientRect();
+                            controls.style.left = Math.max(0, secRect.left) + 'px';
+                            controls.style.width = secRect.width + 'px';
+                        }
+                    });
+
+                    // mutation observer to handle dynamic content
+                    const mo = new MutationObserver(() => setTimeout(update, 50));
+                    mo.observe(sec, { childList: true, subtree: true });
+
+                    // initial check
+                    setTimeout(update, 120);
+                });
+            })();
+        });
     </script>
 </body>
 
