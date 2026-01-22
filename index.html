@@ -2207,7 +2207,95 @@
             const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             const xFilter = document.createElement("input"); xFilter.type = "number"; xFilter.min = 1; xFilter.max = 45; xFilter.placeholder = "Số x (1-45)"; xFilter.style.width = '88px';
-            controls.append("Số x:", xFilter, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
+            // Create +/- buttons styled and behaving like Cell9 arrows
+            const xContainer = document.createElement('div');
+            xContainer.style.cssText = 'position:relative;display:inline-block;vertical-align:middle;margin-right:8px;';
+            xFilter.style.paddingRight = '40px';
+            xFilter.style.boxSizing = 'border-box';
+            const btnGroup = document.createElement('div');
+            btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+            const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+            const upBtn = document.createElement('button'); upBtn.type = 'button'; upBtn.className = 'arrow-up'; upBtn.innerHTML = '▲'; upBtn.title = 'Tăng 1'; upBtn.style.cssText = arrowStyle;
+            const downBtn = document.createElement('button'); downBtn.type = 'button'; downBtn.className = 'arrow-down'; downBtn.innerHTML = '▼'; downBtn.title = 'Giảm 1'; downBtn.style.cssText = arrowStyle;
+
+            upBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                let n = parseInt(String(xFilter.value ?? '').trim(), 10);
+                if (!Number.isFinite(n)) n = 0;
+                n = n + 1;
+                if (n > 45) n = 1; // wrap like cell9
+                if (n < 1) n = 1;
+                xFilter.value = String(n);
+                xFilter.dispatchEvent(new Event('input'));
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+            downBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                let n = parseInt(String(xFilter.value ?? '').trim(), 10);
+                if (!Number.isFinite(n)) n = 0;
+                n = n - 1;
+                if (n < 1) n = 45; // wrap like cell9
+                if (n > 45) n = 45;
+                xFilter.value = String(n);
+                xFilter.dispatchEvent(new Event('input'));
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+
+            btnGroup.appendChild(upBtn);
+            btnGroup.appendChild(downBtn);
+            xContainer.appendChild(xFilter);
+            xContainer.appendChild(btnGroup);
+
+            // Accept drags from number picker popup (single number, place index or place set)
+            xContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                try { e.dataTransfer.dropEffect = 'copy'; } catch (er) { }
+                xContainer.style.backgroundColor = 'rgba(56, 239, 125, 0.08)';
+            });
+            xContainer.addEventListener('dragleave', () => {
+                xContainer.style.backgroundColor = '';
+            });
+            xContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                xContainer.style.backgroundColor = '';
+                const txt = e.dataTransfer.getData('text/plain');
+                const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                const labelData = e.dataTransfer.getData('application/x-label');
+                let value = null;
+                if (placeIndexData) {
+                    const idx = parseInt(placeIndexData, 10);
+                    const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                    if (!isNaN(idx) && placeVals && idx >= 0 && idx < 6) value = placeVals[idx];
+                } else if (placeSetData) {
+                    try {
+                        const arr = JSON.parse(placeSetData);
+                        if (Array.isArray(arr) && arr.length) {
+                            // pick first numeric value in the set
+                            for (const v of arr) {
+                                if (v !== null && v !== undefined && String(v).trim() !== '') { value = v; break; }
+                            }
+                        }
+                    } catch (err) { }
+                } else if (txt) {
+                    value = txt;
+                } else if (labelData) {
+                    value = labelData;
+                }
+
+                if (value !== null && value !== undefined) {
+                    let n = parseInt(String(value).trim(), 10);
+                    if (Number.isFinite(n)) {
+                        if (n < 1) n = 1;
+                        if (n > 45) n = 45;
+                        xFilter.value = String(n);
+                        xFilter.dispatchEvent(new Event('input'));
+                        if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                    }
+                }
+            });
+
+            controls.append("Số x:", xContainer, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
