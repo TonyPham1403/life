@@ -1597,8 +1597,7 @@
         const handleRowCopyDblClick = (e) => {
             const row = e.target.closest("tr[data-result]");
             if (!row || !row.dataset.result) return;
-            // Only allow dblclick-copy when quick-place mode is 'normal' (if toggle exists)
-            if (window.getQuickPlaceMode && window.getQuickPlaceMode() !== 'normal') return;
+            // Always allow dblclick-copy regardless of quick-place mode
             const text = row.dataset.result;
 
             const flash = () => {
