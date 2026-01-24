@@ -1171,6 +1171,7 @@
            Keep them in normal flow so they match other sections visually.
         */
         #cell6_5 .controls,
+        #cell6_6 .controls,
         #cell8 .controls,
         #cell9 .controls,
         #cell10 .controls,
@@ -1192,6 +1193,7 @@
            'content-visibility'. Disable containment for this specific
            section so the controls can stick correctly. */
         #cell6_5,
+        #cell6_6,
         #cell8,
         #cell9,
         #cell10,
@@ -1635,6 +1637,7 @@
             { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
             { id: "cell6", label: "Cell6 · Cặp phổ biến" },
             { id: "cell6_5", label: "Cell6.5 · Truy x" },
+            { id: "cell6_6", label: "Cell6.6 · Mổ pattern" },
             { id: "cell7", label: "Cell7 · Nhóm label" },
             { id: "cell8", label: "Cell8 · Tìm label" },
             { id: "cell9", label: "Cell9 · Tổ hợp tùy chọn" },
@@ -2179,7 +2182,7 @@
                     for (let i = created; i < end; i++) {
                         const g = groups[i];
                         const card = document.createElement('div');
-                        card.className = 'card';
+                        card.className = 'card card-inner-child';
                         card.dataset.index = String(i);
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
@@ -2212,6 +2215,588 @@
             group();
         }
 
+        // Helper: parse a comma/space separated string into six valid numbers (1-45), or return null
+        function parseSixNumbersFromString(s) {
+            if (!s || typeof s !== 'string') return null;
+            // split on any non-digit characters
+            const parts = s.split(/[^0-9]+/).map(p => p.trim()).filter(Boolean);
+            if (parts.length !== 6) return null;
+            const nums = parts.map(p => parseInt(p, 10));
+            if (nums.some(n => !Number.isFinite(n) || n < 1 || n > 45)) return null;
+            const uniq = new Set(nums);
+            if (uniq.size !== 6) return null;
+            return nums;
+        }
+
+        // Helper: apply an array of 6 numbers into the cell6_6 inputs (if present)
+        function applySixToCell6_6(nums) {
+            try {
+                if (!Array.isArray(nums) || nums.length !== 6) return false;
+                const sec = document.getElementById('cell6_6');
+                if (!sec) return false;
+                const inputs = Array.from(sec.querySelectorAll('.drag-input-container input'));
+                if (!inputs || inputs.length < 6) return false;
+                for (let i = 0; i < 6; i++) {
+                    inputs[i].value = String(nums[i]);
+                    inputs[i].dispatchEvent(new Event('input'));
+                }
+                // small visual feedback: pulse the first input container
+                try {
+                    const cont = inputs[0].parentElement;
+                    if (cont) {
+                        cont.animate([{ boxShadow: '0 0 0 6px rgba(56,239,125,0.18)' }, { boxShadow: '0 0 0 0 rgba(56,239,125,0)' }], { duration: 450 });
+                    }
+                } catch (e) { }
+                return true;
+            } catch (e) { return false; }
+        }
+
+        // Delegated dblclick behavior: read clipboard and, when a place-box or a cell6_6 input is double-clicked,
+        // parse a 6-number string and apply it to the Cell6.6 inputs. Use document-level delegation so listeners
+        // work regardless of render order.
+        (function setupClipboardDoubleClickHandlersDelegated() {
+            try {
+                document.addEventListener('dblclick', async (ev) => {
+                    // Only handle dblclick when user targets a place-box or one of the six input containers
+                    const box = ev.target.closest('.place-box');
+                    const inputContainer = ev.target.closest('.drag-input-container');
+                    if (!box && !inputContainer) return;
+
+                    let text = null;
+                    // Try clipboard API first
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.readText) {
+                            text = await navigator.clipboard.readText();
+                        }
+                    } catch (err) {
+                        // ignore and fall back to prompt
+                        text = null;
+                    }
+
+                    // If clipboard API not available or returned empty, fall back to prompt
+                    if (!text || String(text).trim() === '') {
+                        try {
+                            const promptStr = 'Paste 6 numbers (comma or space separated), e.g. 29,3,35,24,18,30';
+                            const res = window.prompt(promptStr, '');
+                            if (res && String(res).trim() !== '') text = res.trim();
+                        } catch (e) { text = null; }
+                    }
+
+                    if (!text) return;
+
+                    try {
+                        const nums = parseSixNumbersFromString(text);
+                        const targetElem = box || inputContainer || ev.target;
+                        if (nums) {
+                            applySixToCell6_6(nums);
+                            try { if (targetElem) targetElem.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (e) { }
+                        } else {
+                            try { if (targetElem) targetElem.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (e) { }
+                        }
+                    } catch (err) { console.warn('clipboard parse/apply failed', err); }
+                }, true);
+            } catch (e) { }
+        })();
+
+        // Cell6.6: Mổ pattern — accept exactly 6 distinct numbers and list all combinations
+        function renderCell6_6() {
+            const body = sectionShell("cell6_6", "Cell6.6 · Mổ pattern", "Nhập đủ 6 số (1-45) và chọn kích thước tổ hợp để liệt kê.");
+            const controls = document.createElement("div"); controls.className = "controls";
+
+            // six fixed number inputs with per-input +/- buttons and global left/right navigation
+            const rawInputs = Array.from({ length: 6 }, (_, i) => {
+                const inp = document.createElement('input');
+                inp.type = 'number'; inp.min = 1; inp.max = 45; inp.placeholder = `#${i + 1}`;
+                inp.style.width = '70px'; inp.style.boxSizing = 'border-box';
+                return inp;
+            });
+
+            // create select controls
+            const combSel = document.createElement('select');[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = `Bộ ${v}`; combSel.appendChild(o); }); combSel.value = '3';
+            const sortSel = document.createElement('select');[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+
+            // consecutive & order toggles (same behavior as Cell6/Cell6.5)
+            const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
+            const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
+
+            // (no global nav buttons — per-input arrow buttons and keyboard arrows remain)
+
+            const inputs = [];
+            // create per-input container with up/down buttons (same behavior as Cell9)
+            rawInputs.forEach((inp, idx) => {
+                const container = document.createElement('div');
+                container.className = 'drag-input-container';
+                container.style.cssText = 'position:relative;display:inline-block;margin-right:6px;vertical-align:middle;';
+                container.draggable = false;
+
+                // small left-side grip (visual) — kept but pointer-events managed by updateDraggable
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
+
+                // reserve space on the right for buttons to match Cell9
+                inp.style.position = 'relative'; inp.style.zIndex = '1'; inp.style.paddingRight = '40px'; inp.style.boxSizing = 'border-box';
+
+                const btnGroup = document.createElement('div');
+                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
+
+                // clamp helper for numeric input
+                const clampForNumber = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '') return;
+                    let n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 45) inp.value = '45';
+                    else inp.value = String(n);
+                };
+
+                up.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n + 1;
+                    if (n > 45) n = 1; // wrap
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    draw();
+                });
+                down.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n - 1;
+                    if (n < 1) n = 45; // wrap
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    draw();
+                });
+
+                btnGroup.appendChild(up); btnGroup.appendChild(down);
+                container.appendChild(inp); container.appendChild(btnGroup); container.appendChild(dragHandle);
+                container.dataset.index = idx;
+
+                // visual/state update for draggable container
+                const updateDraggable = () => {
+                    const v = String(inp.value ?? '').trim();
+                    const hasValue = v !== '';
+                    container.draggable = hasValue;
+                    dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                    dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                    container.style.borderRadius = '10px';
+                    container.style.padding = '2px';
+                    container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                    container.style.opacity = hasValue ? '1' : '0.85';
+                };
+
+                // keyboard left/right move (wrap)
+                inp.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'ArrowLeft') {
+                        ev.preventDefault();
+                        const prev = (idx - 1 + 6) % 6; rawInputs[prev].focus();
+                    } else if (ev.key === 'ArrowRight') {
+                        ev.preventDefault();
+                        const next = (idx + 1) % 6; rawInputs[next].focus();
+                    }
+                });
+
+                inp.addEventListener('input', () => { clampForNumber(); updateDraggable(); });
+                inp.addEventListener('change', () => { clampForNumber(); updateDraggable(); });
+                updateDraggable();
+
+                // drag/drop: allow dragging this input out to clear it, and swapping values with another input
+                container.__dropHandled = false;
+                container.__dragging = false;
+
+                container.addEventListener('dragstart', (e) => {
+                    container.__dragging = true;
+                    container.__dropHandled = false;
+                    container.style.opacity = '0.5';
+                    try { window.__draggingDynamic = { type: 'cell6_6', input: inp, container: container, value: String(inp.value ?? '') }; } catch (err) { }
+                    try { e.dataTransfer.effectAllowed = 'copyMove'; } catch (er) { }
+                    try { e.dataTransfer.setData('text/plain', String(inp.value ?? '')); } catch (er) { }
+                    try { e.dataTransfer.setData('application/x-place-set', JSON.stringify(window.getPlaceValues ? window.getPlaceValues() : [])); } catch (er) { }
+                });
+
+                container.addEventListener('dragend', (e) => {
+                    container.style.opacity = '';
+                    try { window.__draggingDynamic = null; } catch (err) { }
+                    if (!container.__dropHandled && container.__dragging && String(inp.value ?? '').trim() !== '') {
+                        inp.value = '';
+                        inp.dispatchEvent(new Event('input'));
+                        draw();
+                    }
+                    container.__dragging = false;
+                    container.__dropHandled = false;
+                });
+
+                container.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (er) { } container.style.backgroundColor = 'rgba(56, 239, 125, 0.04)'; });
+                container.addEventListener('dragleave', () => { container.style.backgroundColor = ''; });
+                container.addEventListener('drop', (e) => {
+                    e.preventDefault(); container.style.backgroundColor = ''; container.__dropHandled = true;
+                    const txt = e.dataTransfer.getData('text/plain');
+                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                    const labelData = e.dataTransfer.getData('application/x-label');
+                    let value = null;
+                    // If dragging from another dynamic input, swap values instead of replacing
+                    try {
+                        if (window.__draggingDynamic && window.__draggingDynamic.input && window.__draggingDynamic.input !== inp) {
+                            const srcInput = window.__draggingDynamic.input;
+                            const srcVal = String(srcInput.value ?? '');
+                            const tgtVal = String(inp.value ?? '');
+                            // perform swap
+                            srcInput.value = tgtVal;
+                            srcInput.dispatchEvent(new Event('input'));
+                            inp.value = srcVal;
+                            inp.dispatchEvent(new Event('input'));
+                            // mark both containers as handled to avoid clearing on dragend
+                            try { srcInput.parentElement.__dropHandled = true; } catch (e) { }
+                            container.__dropHandled = true;
+                            try { window.__draggingDynamic = null; } catch (err) { }
+                            draw();
+                            return;
+                        }
+                    } catch (err) { }
+
+                    if (placeIndexData) {
+                        const idx = parseInt(placeIndexData, 10);
+                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                        if (!isNaN(idx) && placeVals && idx >= 0 && idx < 6) value = placeVals[idx];
+                    } else if (placeSetData) {
+                        // If full place-set (6 values) is dropped, apply the entire 6-number state to the cell
+                        try {
+                            const arr = JSON.parse(placeSetData);
+                            if (Array.isArray(arr) && arr.length === 6) {
+                                try {
+                                    // write all six inputs
+                                    for (let k = 0; k < 6; k++) {
+                                        const v = arr[k];
+                                        if (v === null || v === undefined || String(v).trim() === '') {
+                                            inputs[k].value = '';
+                                        } else {
+                                            let nn = parseInt(String(v).trim(), 10);
+                                            if (!Number.isFinite(nn)) nn = '';
+                                            else {
+                                                if (nn < 1) nn = 1;
+                                                if (nn > 45) nn = 45;
+                                            }
+                                            inputs[k].value = nn === '' ? '' : String(nn);
+                                        }
+                                        inputs[k].dispatchEvent(new Event('input'));
+                                    }
+                                    // mark all containers handled so they won't clear on dragend
+                                    try { inputs.forEach(i => i.parentElement.__dropHandled = true); } catch (e) { }
+                                    try { window.__draggingDynamic = null; } catch (e) { }
+                                    draw();
+                                    return;
+                                } catch (err) { }
+                            }
+                            // fallback: pick first non-empty value in the set for this single input
+                            if (Array.isArray(arr) && arr.length) {
+                                for (const v of arr) { if (v !== null && v !== undefined && String(v).trim() !== '') { value = v; break; } }
+                            }
+                        } catch (err) { }
+                    } else if (txt && String(txt).trim() !== '' && !String(txt).trim().startsWith('[')) {
+                        value = txt;
+                    } else if (labelData) { value = labelData; }
+
+                    if (value !== null && value !== undefined) {
+                        let n = parseInt(String(value).trim(), 10);
+                        if (Number.isFinite(n)) {
+                            if (n < 1) n = 1;
+                            if (n > 45) n = 45;
+                            inp.value = String(n);
+                            inp.dispatchEvent(new Event('input'));
+                            draw();
+                        }
+                    }
+                });
+
+                inputs.push(inp);
+                controls.append(container);
+            });
+
+            controls.append('Kích thước:', combSel, 'Sắp xếp:', sortSel, consecLabel, orderLabel);
+            body.appendChild(controls);
+
+            const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
+
+            function draw() {
+                if (!rows || !rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                const vals = inputs.map(i => { const v = String(i.value ?? '').trim(); return v === '' ? NaN : parseInt(v, 10); });
+                if (vals.some(v => !Number.isFinite(v))) { wrap.innerHTML = "<div class='muted'>Vui lòng nhập đủ 6 số hợp lệ</div>"; return; }
+                const uniq = new Set(vals);
+                if (uniq.size !== 6) { wrap.innerHTML = "<div class='error'>Các số phải khác nhau</div>"; return; }
+
+                const m = parseInt(combSel.value, 10) || 1;
+
+                // generate all combinations from the user-provided 6 numbers
+                const combos = kCombinations(vals, m).map(c => c.slice().sort((a, b) => a - b));
+
+                // compute global counts for all combos of size m across rows
+                // respect consecutive/order toggles when counting
+                const globalCounts = Object.create(null);
+                const consecChecked = !!consec.checked;
+                const orderChecked = !!order.checked;
+                rows.forEach(r => {
+                    if (!r.nums || !Array.isArray(r.nums)) return;
+                    if (consecChecked) {
+                        for (let i = 0; i <= r.nums.length - m; i++) {
+                            const slice = r.nums.slice(i, i + m).slice();
+                            const key = orderChecked ? slice.join('-') : slice.slice().sort((a, b) => a - b).join('-');
+                            globalCounts[key] = (globalCounts[key] || 0) + 1;
+                        }
+                    } else {
+                        const combosRow = kCombinations(r.nums, m).map(c => c.slice().sort((a, b) => a - b));
+                        combosRow.forEach(c => { const k = c.join('-'); globalCounts[k] = (globalCounts[k] || 0) + 1; });
+                    }
+                });
+
+                // build results for user's combos
+                const results = combos.map(c => {
+                    const key = c.join('-');
+                    return { key, combo: c, cnt: globalCounts[key] || 0 };
+                });
+
+                // build ranking map over all global combos (use same baseline sort logic as other cells)
+                const globalArr = Object.keys(globalCounts).map(k => ({ k, cnt: globalCounts[k] }));
+                const baselineSort = sortSel.value;
+                if (baselineSort === "value_asc") globalArr.sort((a, b) => compareKey(a.k, b.k));
+                else if (baselineSort === "value_desc") globalArr.sort((a, b) => compareKey(b.k, a.k));
+                else if (baselineSort === "count_asc") globalArr.sort((a, b) => a.cnt - b.cnt);
+                else globalArr.sort((a, b) => b.cnt - a.cnt);
+                const rankMap = Object.create(null);
+                globalArr.forEach((it, idx) => { rankMap[it.k] = idx + 1; });
+
+                // apply requested sort
+                if (sortSel.value === 'value_asc') results.sort((a, b) => compareKey(a.key, b.key));
+                else if (sortSel.value === 'value_desc') results.sort((a, b) => compareKey(b.key, a.key));
+                else if (sortSel.value === 'count_asc') results.sort((a, b) => a.cnt - b.cnt);
+                else results.sort((a, b) => b.cnt - a.cnt);
+
+                // build groups for only the user's combos (map key -> rows array)
+                const userKeys = new Set(results.map(r => r.key));
+                const groups = new Map();
+                rows.forEach(r => {
+                    if (consecChecked) {
+                        for (let i = 0; i <= r.nums.length - m; i++) {
+                            const slice = r.nums.slice(i, i + m).slice();
+                            const key = orderChecked ? slice.join('-') : slice.slice().sort((a, b) => a - b).join('-');
+                            if (!userKeys.has(key)) continue;
+                            if (!groups.has(key)) groups.set(key, []);
+                            groups.get(key).push(r);
+                        }
+                    } else {
+                        const combosRow = kCombinations(r.nums, m);
+                        combosRow.forEach(c => {
+                            const values = c.slice().sort((a, b) => a - b);
+                            const k = values.join('-');
+                            if (!userKeys.has(k)) return;
+                            if (!groups.has(k)) groups.set(k, []);
+                            groups.get(k).push(r);
+                        });
+                    }
+                });
+
+                // build array of [key, list] for user's combos
+                // include combos with no records (empty list) so every user combo is shown
+                let arrGroups = results.map(r => [r.key, groups.get(r.key) || []]);
+
+                // build baseline over all global combos for ranking (same baseline sort logic)
+                const globalArrFull = Object.keys(globalCounts).map(k => [k, []]);
+                // populate counts into a map for baseline ordering
+                const baselineArrAll = Object.keys(globalCounts).map(k => [k, new Array(globalCounts[k])]);
+                // sort baseline keys according to baselineSort (reuse earlier `baselineSort`)
+                if (baselineSort === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
+                else if (baselineSort === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
+                else if (baselineSort === "count_asc") baselineArrAll.sort((a, b) => globalCounts[a[0]] - globalCounts[b[0]]);
+                else baselineArrAll.sort((a, b) => globalCounts[b[0]] - globalCounts[a[0]]);
+
+                // sort displayed groups according to user's sortSel
+                if (sortSel.value === 'value_asc') arrGroups.sort((a, b) => compareKey(a[0], b[0]));
+                else if (sortSel.value === 'value_desc') arrGroups.sort((a, b) => compareKey(b[0], a[0]));
+                else if (sortSel.value === 'count_asc') arrGroups.sort((a, b) => a[1].length - b[1].length);
+                else arrGroups.sort((a, b) => b[1].length - a[1].length);
+
+                // render cards similar to Cell6: one card per combo showing rows
+                // Create container and defer building full table HTML until a card is visible
+                wrap.innerHTML = `<div class='muted'>${arrGroups.length} tổ hợp · hiển thị tối đa ${arrGroups.length} bảng</div>` +
+                    `<div class='grid-centered' id='groupGrid'></div>`;
+                const grid = wrap.querySelector('#groupGrid');
+
+                // caches and mount management
+                const heightCache = new Map();
+                const mountedSet = new Set();
+                const cardRefs = new Map();
+                const MAX_MOUNTED = 40;
+
+                const mount = (card, idx) => {
+                    if (card.dataset.mounted === '1') return;
+                    const [key, list] = arrGroups[idx] || [];
+                    if (!key) return;
+                    const body = card.querySelector('.card-body');
+                    const maxRows = 200;
+                    const slice = list.slice(0, maxRows);
+                    const baselineTotal = baselineArrAll.length || arrGroups.length;
+                    const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
+                    let rankDisplay = `${idx + 1}/${arrGroups.length}`;
+                    let occDisplay = `${list.length} kỳ`;
+                    if (idxInBaseline >= 0) {
+                        rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
+                        occDisplay = `${globalCounts[key] || list.length} kỳ`;
+                    }
+
+                    let inner = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
+                        `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                        `<div style='display:flex;align-items:center;gap:8px'>` +
+                        `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                        `<span class='badge'>${occDisplay}</span>` +
+                        `</div>` +
+                        `</div>`;
+                    inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
+                    const setValues = new Set(key.split('-').map(Number));
+                    if (slice.length === 0) {
+                        inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
+                    } else {
+                        slice.forEach(r => {
+                            const orderedSeqForHighlight = (consecChecked && orderChecked) ? key.split('-').map(Number) : Array.from(setValues);
+                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, m, consecChecked, orderedSeqForHighlight, orderChecked);
+                            const labelHtml = renderHighlightedLabel(r.label, positions);
+                            let euclidPartsHtml = [];
+                            let euclidTotal = 0;
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                for (let j = 0; j < 5; j++) {
+                                    const n1 = r.nums[j];
+                                    const n2 = r.nums[j + 1];
+                                    let part = '';
+                                    if (npTable && tbodyRows.length > 0) {
+                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                        if (cell1 && cell2) {
+                                            const rowElem1 = cell1.parentElement;
+                                            const rowElem2 = cell2.parentElement;
+                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                            const logicalRow1 = 7 - rowIdx1;
+                                            const logicalRow2 = 7 - rowIdx2;
+                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                            const dx = colIdx2 - colIdx1;
+                                            const dy = logicalRow2 - logicalRow1;
+                                            const d = Math.sqrt(dx * dx + dy * dy);
+                                            part = isFinite(d) ? d.toFixed(2) : '';
+                                            euclidTotal += isFinite(d) ? d : 0;
+                                        }
+                                    }
+                                    if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                    else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                }
+                            } catch (e) {
+                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            }
+                            const totalStr = euclidTotal.toFixed(2);
+                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                        });
+                    }
+                    if (list.length > maxRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - maxRows} dòng nữa</td></tr>`;
+                    inner += `</tbody></table>`;
+
+                    body.innerHTML = inner;
+                    card.dataset.mounted = '1';
+                    mountedSet.add(idx);
+                    if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
+                    enforceMountedBudget(idx);
+                };
+
+                const unmount = (card, idx) => {
+                    if (card.dataset.mounted !== '1') return;
+                    const body = card.querySelector('.card-body');
+                    const h = heightCache.get(idx);
+                    if (h) body.style.minHeight = `${h}px`;
+                    body.innerHTML = '';
+                    card.dataset.mounted = '0';
+                    mountedSet.delete(idx);
+                };
+
+                const enforceMountedBudget = (preferKeepIdx) => {
+                    if (mountedSet.size <= MAX_MOUNTED) return;
+                    const vh = window.innerHeight; const center = vh / 2;
+                    const candidates = Array.from(mountedSet).filter(i => i !== preferKeepIdx).map(i => {
+                        const el = cardRefs.get(i);
+                        const rect = el ? el.getBoundingClientRect() : { top: 1e9 };
+                        return { i, d: Math.abs(rect.top - center) };
+                    }).sort((a, b) => b.d - a.d);
+                    while (mountedSet.size > MAX_MOUNTED && candidates.length) {
+                        const { i } = candidates.shift();
+                        const el = cardRefs.get(i);
+                        if (el) unmount(el, i);
+                    }
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        if (Number.isNaN(idx)) return;
+                        if (entry.isIntersecting) mount(entry.target, idx);
+                        else unmount(entry.target, idx);
+                    });
+                }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+
+                // create card shells in chunks to avoid blocking layout
+                const totalGroups = arrGroups.length;
+                let created = 0;
+                const chunkSize = 8;
+                const createChunk = () => {
+                    const end = Math.min(created + chunkSize, arrGroups.length);
+                    for (let i = created; i < end; i++) {
+                        const [key, list] = arrGroups[i];
+                        const card = document.createElement('div');
+                        card.className = 'card card-inner-child';
+                        card.dataset.index = String(i);
+                        card.dataset.mounted = '0';
+                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
+                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
+                            `<span class='badge'>${list.length} kỳ</span>` +
+                            `</div></div><div class='card-body' style='min-height:120px'></div>`;
+                        grid.appendChild(card);
+                        cardRefs.set(i, card);
+                        observer.observe(card);
+                    }
+                    created = end;
+                    if (created < arrGroups.length) requestAnimationFrame(createChunk);
+                };
+                createChunk();
+
+                if (arrGroups.length === 1) wrap.classList.add('single-child');
+
+                // After chunked creation completes, scroll viewport to keep controls visible
+                setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        try { window.scrollTo({ top: 240, behavior: 'auto' }); }
+                        catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } }
+                    });
+                }, 160);
+            }
+
+            // wire events: input changes trigger redraw
+            inputs.forEach((i) => i.addEventListener('input', draw));
+            combSel.addEventListener('change', draw);
+            sortSel.addEventListener('change', draw);
+            // consec toggles enable/disable order and trigger redraw
+            consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; draw(); };
+            order.addEventListener('change', draw);
+            draw();
+        }
         // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
         function renderCell6_5() {
             const body = sectionShell("cell6_5", "Cell6.5 · Truy x", "Chọn số x (1-45) và kích thước bộ để liệt kê chỉ những bộ liên quan tới x.");
@@ -6404,6 +6989,7 @@
                 // Note: mismatched creators – keep ids aligned with sections created inside
                 cell6: renderCell8, // Phân nhóm theo bộ số
                 cell6_5: renderCell6_5, // Truy x (lọc theo số x)
+                cell6_6: renderCell6_6, // Mổ pattern (6 số cố định)
                 cell7: renderCell6, // Nhóm theo label
                 cell8: renderCell7, // Tìm kiếm theo Label
                 cell9: renderCell9,
@@ -6547,7 +7133,7 @@
         // Run bootstrap then enable sticky fallback for multiple sections
         bootstrap().then(() => {
             (function enableStickyFallbackForSections() {
-                const SECTIONS = ['cell6_5', 'cell8', 'cell9', 'cell10', 'cell11'];
+                const SECTIONS = ['cell6_5', 'cell6_6', 'cell8', 'cell9', 'cell10', 'cell11'];
                 const HEADER_OFFSET = 64; // matches CSS top
 
                 SECTIONS.forEach(sectionId => {
