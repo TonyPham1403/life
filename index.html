@@ -2257,6 +2257,15 @@
         (function setupClipboardDoubleClickHandlersDelegated() {
             try {
                 document.addEventListener('dblclick', async (ev) => {
+                    // If the dblclick happened inside the number picker popup, let the
+                    // popup-local handlers handle it (they run on the target). The
+                    // global handler runs in capture mode and may cause unwanted
+                    // focus/scroll behavior; ignore events originating inside the popup.
+                    try {
+                        const popup = document.getElementById('numberPickerPopup');
+                        if (popup && popup.contains(ev.target)) return;
+                    } catch (e) { }
+
                     // Only handle dblclick when user targets a place-box or one of the six input containers
                     const box = ev.target.closest('.place-box');
                     const inputContainer = ev.target.closest('.drag-input-container');
