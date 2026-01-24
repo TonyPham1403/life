@@ -2762,12 +2762,9 @@
                         card.className = 'card card-inner-child';
                         card.dataset.index = String(i);
                         card.dataset.mounted = '0';
-                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
-                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
-                            `<div style='display:flex;align-items:center;gap:8px'>` +
-                            `<span class='muted' style='font-weight:800'>${i + 1}/${totalGroups}</span>` +
-                            `<span class='badge'>${list.length} kỳ</span>` +
-                            `</div></div><div class='card-body' style='min-height:120px'></div>`;
+                        // Only create an empty card body here. The card header (div.flex)
+                        // will be rendered inside the mounted body to avoid duplicate headers.
+                        card.innerHTML = `<div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
                         cardRefs.set(i, card);
                         observer.observe(card);
