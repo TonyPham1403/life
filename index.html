@@ -1505,25 +1505,19 @@
                                 groups.get(key).add(rowIndex);
                             }
                         } else {
-                            if (x > 4) {
-                                for (let i = 0; i <= nums.length - x; i++) {
-                                    const slice = nums.slice(i, i + x).slice();
-                                    const key = slice.slice().sort((a, b) => a - b).join("-");
-                                    if (!groups.has(key)) groups.set(key, new Set());
-                                    groups.get(key).add(rowIndex);
-                                }
-                            } else {
-                                const indexed = nums.map((v, i) => [i, v]);
-                                const combos = kCombinations(indexed, x);
-                                combos.forEach(combo => {
-                                    const values = combo.map(c => c[1]).sort((a, b) => a - b);
-                                    const key = values.join("-");
-                                    if (!groups.has(key)) groups.set(key, new Set());
+                            // Always enumerate combinations of size x from the 6 numbers.
+                            // This ensures sets like size 5 (and 6) are counted correctly
+                            // rather than only checking consecutive slices.
+                            const indexed = nums.map((v, i) => [i, v]);
+                            const combos = kCombinations(indexed, x);
+                            combos.forEach(combo => {
+                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                const key = values.join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
                                     groups.get(key).add(rowIndex);
                                 });
                             }
-                        }
-                    });
+                        });
 
                     let arr = [...groups.entries()].filter(([, indices]) => indices.size >= 2);
                     if (sortSel === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
