@@ -2460,7 +2460,7 @@
                         card.dataset.mounted = '0';
                         card.dataset.currentPage = '-1';
                         card.dataset.page = String(i);
-                        card.innerHTML = `<div style='font-weight:700;padding:8px 12px;border-bottom:1px solid var(--border);'>Bảng ${i + 1} · ${page.length} mục</div><div class='card-body' style='min-height:100px;padding:8px;'></div>`;
+                        card.innerHTML = `<div class='card-body' style='min-height:100px;padding:8px;'></div>`;
                         container.appendChild(card);
                         cardRefs.set(i, card);
                         observer.observe(card);
