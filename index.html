@@ -731,6 +731,16 @@
             z-index: 1;
         }
 
+        /* Allow opt-out of sticky table headers for small popup tables
+           — keep header visuals (background + text color) but disable sticky positioning */
+        table.no-sticky thead {
+            position: static !important;
+            top: auto !important;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+            color: white !important;
+            z-index: auto !important;
+        }
+
         th {
             padding: 8px 6px;
             text-align: center;
@@ -749,6 +759,14 @@
             text-align: center;
             border-right: 1px solid #eee;
             border-bottom: 1px solid #eee;
+        }
+
+        /* Ensure Cell5.5 table cells center their content (date and result pills) */
+        #cell5_5 table th,
+        #cell5_5 table td {
+            text-align: center !important;
+            vertical-align: middle !important;
+            display: table-cell !important;
         }
 
         [data-theme="dark"] td {
@@ -811,7 +829,7 @@
             font-family: monospace;
         }
 
-        /* Euclid small framed pills (orange) */
+        /* Euclid small framed pills (default style copied from day.html) */
         .euclid-pill {
             display: inline-block;
             padding: 2px 5px;
@@ -831,6 +849,69 @@
         .euclid-pill.empty {
             opacity: 0.45;
         }
+
+        /* Popup-scoped euclid pill appearance (keeps high-contrast pill look in info popup) */
+        table.no-sticky .euclid-pill {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 28px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 900;
+            background: #fffbea;
+            color: var(--text-strong);
+            margin: 0 6px 0 0;
+            font-family: monospace;
+            text-align: center;
+            border: none;
+            -webkit-text-stroke: 0.36px rgba(0, 0, 0, 0.6);
+            text-shadow: 0 0 1px rgba(0, 0, 0, 0.22);
+        }
+
+        /* Color the pill text according to 5 rank tiers (1..5) inside popup only */
+        table.no-sticky .euclid-pill.rank-tier-1 {
+            color: #08eb56;
+        }
+
+        table.no-sticky .euclid-pill.rank-tier-2 {
+            color: #00E5FF;
+        }
+
+        table.no-sticky .euclid-pill.rank-tier-3 {
+            color: #1a62ea;
+        }
+
+        table.no-sticky .euclid-pill.rank-tier-4 {
+            color: #ea3ade;
+        }
+
+        table.no-sticky .euclid-pill.rank-tier-5 {
+            color: #ea0313;
+        }
+
+        /* Info popup number pill (Số column) */
+        table.no-sticky td.num-cell {
+            text-align: center;
+        }
+
+        .info-num-pill {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 36px;
+            height: 22px;
+            padding: 2px 4px;
+            border-radius: 6px;
+            background: #2e7d32;
+            color: #ffffff;
+            font-weight: 800;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+
+        /* teal */
 
         .euclid-total-pill {
             display: inline-flex;
@@ -1170,6 +1251,7 @@
         /* Make controls inside Cell8/9/10/11 stick under the header when scrolling.
            Keep them in normal flow so they match other sections visually.
         */
+        #cell5_5 .controls,
         #cell6_5 .controls,
         #cell6_6 .controls,
         #cell8 .controls,
@@ -1192,6 +1274,7 @@
         /* Some browsers prevent sticky when an ancestor uses 'contain' or
            'content-visibility'. Disable containment for this specific
            section so the controls can stick correctly. */
+        #cell5_5,
         #cell6_5,
         #cell6_6,
         #cell8,
@@ -1548,12 +1631,56 @@
                 const res = await fetch("data.json");
                 if (!res.ok) throw new Error("Không tìm thấy data.json. Hãy xuất từ Excel trước.");
                 const raw = await res.json();
+                // Parse rows and normalize dates into a Date object + display string
+                function parseDateString(raw) {
+                    if (raw === undefined || raw === null) return { parsedDate: null, displayDate: '' };
+                    let s = String(raw).trim();
+                    // dd/mm/yyyy or dd/mm/yy
+                    if (s.includes('/')) {
+                        const parts = s.split('/').map(p => p.trim());
+                        if (parts.length >= 3) {
+                            let [dd, mm, yy] = parts;
+                            dd = dd.padStart(2, '0');
+                            mm = mm.padStart(2, '0');
+                            if (yy.length === 2) yy = '20' + yy;
+                            const date = new Date(Number(yy), Number(mm) - 1, Number(dd));
+                            if (!isNaN(date)) return { parsedDate: date, displayDate: `${dd}/${mm}/${yy}` };
+                        }
+                    }
+                    // only digits: try ddmmyyyy or ddmmyy (padded)
+                    const digits = s.replace(/\D/g, '');
+                    if (/^\d+$/.test(digits)) {
+                        if (digits.length === 8) {
+                            const dd = digits.slice(0, 2), mm = digits.slice(2, 4), yyyy = digits.slice(4, 8);
+                            const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+                            if (!isNaN(date)) return { parsedDate: date, displayDate: `${dd}/${mm}/${yyyy}` };
+                        }
+                        // pad to 6 digits (ddmmyy) — handles numbers like 10117 -> 010117
+                        const d6 = digits.padStart(6, '0');
+                        const dd = d6.slice(0, 2), mm = d6.slice(2, 4), yy = d6.slice(4, 6);
+                        const yyyy = 2000 + Number(yy);
+                        const date = new Date(yyyy, Number(mm) - 1, Number(dd));
+                        if (!isNaN(date)) return { parsedDate: date, displayDate: `${dd}/${mm}/${yyyy}` };
+                    }
+                    // fallback to Date.parse
+                    const dt = new Date(s);
+                    if (!isNaN(dt)) {
+                        const dd = String(dt.getDate()).padStart(2, '0');
+                        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                        const yyyy = dt.getFullYear();
+                        return { parsedDate: dt, displayDate: `${dd}/${mm}/${yyyy}` };
+                    }
+                    return { parsedDate: null, displayDate: s };
+                }
+
+                // Treat `date` as raw display string (don't attempt heavy parsing).
                 rows = raw
                     .map(r => {
                         if (!r.Result || typeof r.Result !== "string") return null;
                         const nums = r.Result.split(",").map(x => parseInt(x.trim(), 10)).filter(Number.isInteger);
                         if (nums.length !== 6) return null;
-                        return { date: r.date ?? "", nums, label: nums.map(getCol).join("") };
+                        const dateStr = String(r.date ?? r.Date ?? r.dateStr ?? r["date"] ?? '');
+                        return { dateRaw: dateStr, date: dateStr, parsedDate: null, nums, label: nums.map(getCol).join("") };
                     })
                     .filter(Boolean);
                 status.innerHTML = `<span class="success">Đã tải ${rows.length} dòng</span> · file: data.json`;
@@ -1629,6 +1756,7 @@
         const anchorNav = [
             { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
             { id: "cell5", label: "Cell5 · Xếp hạng vị trí" },
+            { id: "cell5_5", label: "Cell5.5 · Lịch sử" },
             { id: "cell6", label: "Cell6 · Cặp phổ biến" },
             { id: "cell6_5", label: "Cell6.5 · Truy x" },
             { id: "cell6_6", label: "Cell6.6 · Mổ pattern" },
@@ -1750,6 +1878,7 @@
             const wrap = document.createElement("div");
             wrap.className = "card";
             body.appendChild(wrap);
+            // (removed debug placeholder)
 
             function draw() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
@@ -1878,6 +2007,486 @@
             draw();
         }
 
+        // Cell5.5: Lịch sử — in ra toàn bộ bộ các kỳ, 3 bảng trên một hàng, loại bỏ cột euclid
+        function renderCell5_5() {
+            const body = sectionShell("cell5_5", "Cell5.5 · Lịch sử", "Hiển thị lịch sử toàn bộ bộ các kỳ. Lọc theo năm và sắp xếp theo thời gian.");
+            const controls = document.createElement("div");
+            controls.className = "controls";
+
+            const sortSel = document.createElement("select");
+            [["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            sortSel.value = 'desc';
+
+            const yearSel = document.createElement("select");
+            // will populate years after data is ready
+
+            const monthSel = document.createElement("select");
+            // will populate months after years are populated
+
+            // info button that shows counts popup on hover
+            const infoBtn = document.createElement('div');
+            infoBtn.textContent = 'info';
+            infoBtn.title = 'Di chuột để xem thống kê số lần xuất hiện (1..45) cho Năm/Tháng đã chọn';
+            infoBtn.style.padding = '8px 10px';
+            infoBtn.style.borderRadius = '8px';
+            infoBtn.style.border = '1px solid var(--border)';
+            infoBtn.style.background = 'var(--card)';
+            infoBtn.style.color = 'var(--text)';
+            infoBtn.style.cursor = 'pointer';
+            infoBtn.style.fontSize = '12px';
+            infoBtn.style.marginLeft = '6px';
+
+            controls.append("Sắp xếp:", sortSel, "Năm:", yearSel, "Tháng:", monthSel, infoBtn);
+            body.appendChild(controls);
+
+            const wrap = document.createElement("div");
+            wrap.className = "card";
+            body.appendChild(wrap);
+
+            // parse date string into sortable timestamp (reused by months/year builders)
+            function parseDateSortable(s) {
+                if (!s) return 0;
+                s = String(s).trim();
+                // dd/mm/yyyy or dd/mm/yy
+                let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                if (m) {
+                    let dd = Number(m[1]), mm = Number(m[2]), yy = Number(m[3]);
+                    if (yy < 100) yy += 2000;
+                    const dt = new Date(yy, mm - 1, dd);
+                    if (!isNaN(dt)) return dt.getTime();
+                }
+                // digits only: ddmmyyyy or ddmmyy
+                const digits = s.replace(/\D/g, '');
+                if (/^\d+$/.test(digits)) {
+                    if (digits.length === 8) {
+                        const dd = Number(digits.slice(0, 2)), mm = Number(digits.slice(2, 4)), yyyy = Number(digits.slice(4, 8));
+                        const dt = new Date(yyyy, mm - 1, dd);
+                        if (!isNaN(dt)) return dt.getTime();
+                    }
+                    const d6 = digits.padStart(6, '0');
+                    const dd = Number(d6.slice(0, 2)), mm = Number(d6.slice(2, 4)), yy = 2000 + Number(d6.slice(4, 6));
+                    const dt2 = new Date(yy, mm - 1, dd);
+                    if (!isNaN(dt2)) return dt2.getTime();
+                }
+                // fallback to Date parsing
+                const dtf = new Date(s);
+                if (!isNaN(dtf)) return dtf.getTime();
+                return 0;
+            }
+
+            function populateYears() {
+                const prev = yearSel.value;
+                yearSel.innerHTML = '';
+                const yearsSet = new Set();
+                rows.forEach(r => {
+                    const s = String(r.date || '');
+                    if (s.length >= 4) yearsSet.add(s.slice(-4));
+                });
+                const years = Array.from(yearsSet).filter(Boolean).sort((a, b) => b - a);
+                const oAll = document.createElement('option'); oAll.value = 'all'; oAll.textContent = 'Tất cả'; yearSel.appendChild(oAll);
+                years.forEach(y => { const o = document.createElement('option'); o.value = y; o.textContent = y; yearSel.appendChild(o); });
+                // restore previous selection if still available, otherwise default to 'all'
+                if (prev && Array.from(yearSel.options).some(o => o.value === prev)) {
+                    yearSel.value = prev;
+                } else {
+                    yearSel.value = 'all';
+                }
+                // populate months for the (possibly restored) year selection
+                populateMonths();
+            }
+
+            function populateMonths() {
+                const prev = monthSel.value;
+                monthSel.innerHTML = '';
+                const monthsSet = new Set();
+                const selectedYear = yearSel.value;
+                rows.forEach(r => {
+                    const s = String(r.date || '');
+                    if (!s) return;
+                    // if filtering by year, only consider rows matching that year (by last-4)
+                    if (selectedYear && selectedYear !== 'all') {
+                        if (s.length < 4 || s.slice(-4) !== selectedYear) return;
+                    }
+                    const ts = parseDateSortable(s);
+                    if (ts) {
+                        const dt = new Date(ts);
+                        const m = dt.getMonth() + 1;
+                        monthsSet.add(m);
+                    }
+                });
+                const months = Array.from(monthsSet).sort((a, b) => a - b);
+                const oAll = document.createElement('option'); oAll.value = 'all'; oAll.textContent = 'Tất cả'; monthSel.appendChild(oAll);
+                // if no months detected (e.g., non-parseable dates), include generic 1..12
+                if (!months.length) {
+                    for (let i = 1; i <= 12; i++) {
+                        const o = document.createElement('option'); o.value = String(i).padStart(2, '0'); o.textContent = `Tháng ${i}`; monthSel.appendChild(o);
+                    }
+                } else {
+                    months.forEach(m => { const o = document.createElement('option'); o.value = String(m).padStart(2, '0'); o.textContent = `Tháng ${m}`; monthSel.appendChild(o); });
+                }
+                if (prev && Array.from(monthSel.options).some(o => o.value === prev)) {
+                    monthSel.value = prev;
+                } else {
+                    monthSel.value = 'all';
+                }
+            }
+
+            // Create a floating popup for the info box (shared for all hovers)
+            const infoPopup = document.createElement('div');
+            infoPopup.style.position = 'absolute';
+            infoPopup.style.zIndex = 9999;
+            infoPopup.style.minWidth = '220px';
+            infoPopup.style.maxWidth = '480px';
+            infoPopup.style.maxHeight = '320px';
+            infoPopup.style.overflow = 'auto';
+            infoPopup.style.padding = '10px';
+            infoPopup.style.borderRadius = '8px';
+            infoPopup.style.border = '1px solid var(--border)';
+            infoPopup.style.background = 'var(--panel)';
+            infoPopup.style.color = 'var(--text)';
+            infoPopup.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+            infoPopup.style.display = 'none';
+            document.body.appendChild(infoPopup);
+
+            // Pre-compute global totals/rank (across all rows, full history)
+            const globalCounts = new Array(46).fill(0);
+            rows.forEach(r => {
+                const nums = r.nums || [];
+                nums.forEach(n => {
+                    const v = Number(n);
+                    if (v >= 1 && v <= 45) globalCounts[v]++;
+                });
+            });
+            const globalItems = [];
+            for (let i = 1; i <= 45; i++) globalItems.push({ n: i, c: globalCounts[i] });
+            globalItems.sort((a, b) => b.c - a.c || a.n - b.n);
+            const globalRankMap = {};
+            globalItems.forEach((it, idx) => { globalRankMap[it.n] = idx + 1; });
+
+            // Build counts for numbers 1..45 for currently selected year/month
+            let infoSort = 'desc'; // 'default' | 'desc' | 'asc' — default to Giảm dần
+            function buildCountsHtml() {
+                // filter rows by year/month similar to draw()
+                const filtered = rows.filter(r => {
+                    const s = String(r.date || '');
+                    if (!s) return false;
+                    if (yearSel.value && yearSel.value !== 'all') {
+                        if (s.length < 4 || s.slice(-4) !== yearSel.value) return false;
+                    }
+                    if (monthSel.value && monthSel.value !== 'all') {
+                        const ts = parseDateSortable(s);
+                        if (!ts) return false;
+                        const dt = new Date(ts);
+                        const m = String(dt.getMonth() + 1).padStart(2, '0');
+                        if (m !== monthSel.value) return false;
+                    }
+                    return true;
+                });
+
+                const counts = new Array(46).fill(0);
+                filtered.forEach(r => {
+                    const nums = r.nums || [];
+                    nums.forEach(n => {
+                        const v = Number(n);
+                        if (v >= 1 && v <= 45) counts[v]++;
+                    });
+                });
+
+                // prepare items and apply sorting
+                const items = [];
+                for (let i = 1; i <= 45; i++) items.push({ n: i, c: counts[i] });
+                if (infoSort === 'desc') items.sort((a, b) => b.c - a.c || a.n - b.n);
+                else if (infoSort === 'asc') items.sort((a, b) => a.c - b.c || a.n - b.n);
+
+                let html = `<div style="font-weight:700;margin-bottom:6px;">Thống kê xuất hiện (Năm: ${yearSel.value || 'Tất cả'} · Tháng: ${monthSel.value || 'Tất cả'})</div>`;
+                html += `<div style="margin-bottom:8px;"><select id="infoSortSel" style="padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);"><option value="default">Mặc định</option><option value="desc">Giảm dần (số lần)</option><option value="asc">Tăng dần (số lần)</option></select></div>`;
+                html += '<table class="no-sticky" style="width:100%;font-size:12px;border-collapse:collapse;">';
+                html += '<thead><tr><th style="width:28px;text-align:left;padding:6px;border-bottom:1px solid var(--border);">Hạng</th><th class="num-header" style="width:36px;text-align:center;padding:6px;border-bottom:1px solid var(--border);">Số</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border);">Số lần</th></tr></thead>';
+                html += '<tbody>';
+                items.forEach(it => {
+                    const rankNum = globalRankMap[it.n];
+                    const displayRank = rankNum || '-';
+                    let pillClass = 'euclid-pill';
+                    if (typeof rankNum === 'number') {
+                        let tier = Math.ceil(rankNum / 9); // 45 numbers → 5 tiers of ~9 each
+                        tier = Math.max(1, Math.min(5, tier));
+                        pillClass += ' rank-tier-' + tier;
+                    }
+                    html += `<tr><td style="padding:4px 6px;"><span class="${pillClass}">${displayRank}</span></td><td class="num-cell" style="padding:4px 6px;text-align:center;"><span class="info-num-pill">${it.n}</span></td><td style="padding:4px 6px;text-align:right;">${it.c}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                html += `<div style="margin-top:8px;color:var(--muted);font-size:11px;">Tổng kỳ: ${filtered.length}</div>`;
+                return html;
+            }
+
+            // Show/hide logic with pointer interaction (keep open if moving between btn and popup)
+            let hoverTimeout = null;
+            function renderInfoPopup() {
+                infoPopup.innerHTML = buildCountsHtml();
+                // wire the sort select inside popup
+                const sel = infoPopup.querySelector('#infoSortSel');
+                if (sel) {
+                    sel.value = infoSort;
+                    sel.onchange = () => {
+                        infoSort = sel.value; infoPopup.innerHTML = buildCountsHtml(); // re-wire recursively
+                        const sel2 = infoPopup.querySelector('#infoSortSel'); if (sel2) sel2.onchange = () => { infoSort = sel2.value; renderInfoPopup(); }
+                    };
+                }
+            }
+
+            function showInfoPopup() {
+                clearTimeout(hoverTimeout);
+                renderInfoPopup();
+                const rect = infoBtn.getBoundingClientRect();
+                const top = rect.bottom + window.scrollY + 8;
+                let left = rect.left + window.scrollX;
+                // keep popup within window width
+                const maxLeft = window.scrollX + window.innerWidth - 20 - parseInt(infoPopup.style.maxWidth || 480, 10);
+                if (left > maxLeft) left = maxLeft;
+                infoPopup.style.top = top + 'px';
+                infoPopup.style.left = left + 'px';
+                infoPopup.style.display = 'block';
+            }
+            function hideInfoPopupSoon() {
+                clearTimeout(hoverTimeout);
+                hoverTimeout = setTimeout(() => { infoPopup.style.display = 'none'; }, 180);
+            }
+
+            infoBtn.addEventListener('mouseenter', showInfoPopup);
+            infoBtn.addEventListener('mouseleave', hideInfoPopupSoon);
+            infoBtn.addEventListener('focus', showInfoPopup);
+            infoBtn.addEventListener('blur', hideInfoPopupSoon);
+            infoPopup.addEventListener('mouseenter', () => { clearTimeout(hoverTimeout); });
+            infoPopup.addEventListener('mouseleave', hideInfoPopupSoon);
+
+            // Update popup if filters change while it's visible
+            yearSel.addEventListener('change', () => { if (infoPopup.style.display === 'block') renderInfoPopup(); });
+            monthSel.addEventListener('change', () => { if (infoPopup.style.display === 'block') renderInfoPopup(); });
+
+            function draw() {
+                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                populateYears();
+                // Build data with parsedDate (if available) and display date
+                let data = rows.map(r => ({ date: r.date || '', parsedDate: r.parsedDate || null, nums: r.nums || [], label: r.label || '' }));
+                if (yearSel.value && yearSel.value !== 'all') {
+                    data = data.filter(d => {
+                        const s = String(d.date || '');
+                        return s.length >= 4 ? s.slice(-4) === yearSel.value : false;
+                    });
+                }
+                // filter by month if selected
+                if (monthSel.value && monthSel.value !== 'all') {
+                    data = data.filter(d => {
+                        const s = String(d.date || '');
+                        const ts = parseDateSortable(s);
+                        if (!ts) return false;
+                        const dt = new Date(ts);
+                        const m = String(dt.getMonth() + 1).padStart(2, '0');
+                        return m === monthSel.value;
+                    });
+                }
+                // Helper: parse common dd/mm/yyyy or dd/mm/yy or digit-only forms into timestamp
+                function parseDateSortable(s) {
+                    if (!s) return 0;
+                    s = String(s).trim();
+                    // dd/mm/yyyy or dd/mm/yy
+                    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                    if (m) {
+                        let dd = Number(m[1]), mm = Number(m[2]), yy = Number(m[3]);
+                        if (yy < 100) yy += 2000;
+                        const dt = new Date(yy, mm - 1, dd);
+                        if (!isNaN(dt)) return dt.getTime();
+                    }
+                    // digits only: ddmmyyyy or ddmmyy
+                    const digits = s.replace(/\D/g, '');
+                    if (/^\d+$/.test(digits)) {
+                        if (digits.length === 8) {
+                            const dd = Number(digits.slice(0, 2)), mm = Number(digits.slice(2, 4)), yyyy = Number(digits.slice(4, 8));
+                            const dt = new Date(yyyy, mm - 1, dd);
+                            if (!isNaN(dt)) return dt.getTime();
+                        }
+                        const d6 = digits.padStart(6, '0');
+                        const dd = Number(d6.slice(0, 2)), mm = Number(d6.slice(2, 4)), yy = 2000 + Number(d6.slice(4, 6));
+                        const dt2 = new Date(yy, mm - 1, dd);
+                        if (!isNaN(dt2)) return dt2.getTime();
+                    }
+                    // fallback to Date parsing
+                    const dtf = new Date(s);
+                    if (!isNaN(dtf)) return dtf.getTime();
+                    return 0;
+                }
+
+                data = data.slice().sort((a, b) => {
+                    const ta = a.parsedDate ? a.parsedDate.getTime() : parseDateSortable(a.date);
+                    const tb = b.parsedDate ? b.parsedDate.getTime() : parseDateSortable(b.date);
+                    return sortSel.value === 'desc' ? tb - ta : ta - tb;
+                });
+
+                if (!data.length) { wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>"; return; }
+
+                const pageSize = 20;
+                const pages = [];
+                for (let i = 0; i < data.length; i += pageSize) pages.push(data.slice(i, i + pageSize));
+
+                if (!pages.length) {
+                    wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>";
+                    return;
+                }
+
+                // Build lightweight card placeholders and mount content lazily to avoid scroll jank
+                wrap.innerHTML = '';
+                const infoBar = document.createElement('div');
+                infoBar.style.cssText = 'text-align:center;margin-bottom:10px;color:var(--muted);font-weight:700;';
+                infoBar.textContent = `Hiển thị ${data.length} mục · ${pages.length} bảng (tối đa ${pageSize}/bảng)`;
+                wrap.appendChild(infoBar);
+
+                const container = document.createElement('div');
+                container.className = 'grid-centered';
+                container.style.alignItems = 'flex-start';
+                wrap.appendChild(container);
+
+                const htmlCache = new Map();
+                const heightCache = new Map();
+                const mountedSet = new Set();
+                const cardRefs = new Map();
+                const MAX_MOUNTED = 36; // allow more mounted cards like Cell6.5 for snappier scroll
+                // background pre-cache queue: build page HTML off-main when browser is idle
+                const preCacheQueue = [];
+                let preCacheScheduled = false;
+                function runPreCache() {
+                    if (preCacheScheduled) return;
+                    preCacheScheduled = true;
+                    const process = (deadline) => {
+                        let count = 0;
+                        while (preCacheQueue.length && (deadline ? deadline.timeRemaining() > 0 : count < 6)) {
+                            const idx = preCacheQueue.shift();
+                            if (!htmlCache.has(idx)) {
+                                try {
+                                    const p = pages[idx];
+                                    if (p) htmlCache.set(idx, buildPageHtml(p, idx));
+                                } catch (e) { /* ignore build errors */ }
+                            }
+                            count++;
+                        }
+                        if (preCacheQueue.length) {
+                            if (window.requestIdleCallback) requestIdleCallback(process, { timeout: 200 });
+                            else setTimeout(() => process(null), 50);
+                        } else {
+                            preCacheScheduled = false;
+                        }
+                    };
+                    if (window.requestIdleCallback) requestIdleCallback(process, { timeout: 200 });
+                    else setTimeout(() => process(null), 50);
+                }
+
+                const buildPageHtml = (page, pIdx) => {
+                    const start = pIdx * pageSize;
+                    const firstDate = page[0] ? page[0].date : '';
+                    const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
+                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th></tr></thead><tbody>`;
+                    page.forEach((row, j) => {
+                        const result = (row.nums || []).join(',');
+                        const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                        table += `<tr data-result="${result}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
+                    });
+                    table += '</tbody></table>';
+                    const header = `<div style="font-weight:700; padding:8px 12px; border-bottom:1px solid var(--border);">Bảng ${pIdx + 1} · ${page.length} mục · ${firstDate} → ${lastDate}</div>`;
+                    return `<div>${header}<div style='padding:8px;'>${table}</div></div>`;
+                };
+
+                const mount = (card, page, idx) => {
+                    if (card.dataset.mounted === '1' && card.dataset.currentPage === String(idx)) return;
+                    const body = card.querySelector('.card-body');
+                    let inner = htmlCache.get(idx);
+                    if (!inner) {
+                        inner = buildPageHtml(page, idx);
+                        htmlCache.set(idx, inner);
+                    }
+                    body.innerHTML = inner;
+                    card.dataset.mounted = '1';
+                    card.dataset.currentPage = String(idx);
+                    mountedSet.add(idx);
+                    if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
+                    enforceMountedBudget(idx);
+                };
+
+                const unmount = (card, idx) => {
+                    if (card.dataset.mounted !== '1') return;
+                    const body = card.querySelector('.card-body');
+                    const h = heightCache.get(idx);
+                    if (h) body.style.minHeight = `${h}px`;
+                    body.innerHTML = '';
+                    card.dataset.mounted = '0';
+                    mountedSet.delete(idx);
+                };
+
+                const enforceMountedBudget = (preferKeepIdx) => {
+                    if (mountedSet.size <= MAX_MOUNTED) return;
+                    const vh = window.innerHeight;
+                    const center = vh / 2;
+                    const candidates = Array.from(mountedSet).filter(i => i !== preferKeepIdx).map(i => {
+                        const el = cardRefs.get(i);
+                        const rect = el ? el.getBoundingClientRect() : { top: 1e9 };
+                        return { i, d: Math.abs(rect.top - center) };
+                    }).sort((a, b) => b.d - a.d);
+                    while (mountedSet.size > MAX_MOUNTED && candidates.length) {
+                        const { i } = candidates.shift();
+                        const el = cardRefs.get(i);
+                        if (el) unmount(el, i);
+                    }
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        const page = pages[idx];
+                        if (!page) return;
+                        if (entry.isIntersecting) mount(entry.target, page, idx);
+                        else unmount(entry.target, idx);
+                    });
+                }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+
+                // chunked creation
+                const total = pages.length;
+                let created = 0;
+                const chunkSize = 6;
+                const createChunk = () => {
+                    const end = Math.min(created + chunkSize, total);
+                    for (let i = created; i < end; i++) {
+                        const page = pages[i];
+                        const card = document.createElement('div');
+                        card.className = 'card card-inner-child';
+                        card.dataset.index = String(i);
+                        card.dataset.mounted = '0';
+                        card.dataset.currentPage = '-1';
+                        card.dataset.page = String(i);
+                        card.innerHTML = `<div style='font-weight:700;padding:8px 12px;border-bottom:1px solid var(--border);'>Bảng ${i + 1} · ${page.length} mục</div><div class='card-body' style='min-height:100px;padding:8px;'></div>`;
+                        container.appendChild(card);
+                        cardRefs.set(i, card);
+                        observer.observe(card);
+                        // enqueue light-weight pre-build of this page's HTML
+                        preCacheQueue.push(i);
+                        runPreCache();
+                    }
+                    created = end;
+                    if (created < total) requestAnimationFrame(createChunk);
+                };
+                createChunk();
+
+                // after structure is ready, scroll viewport to 240px so controls sit under header
+                // Use a small timeout + rAF to wait for layout/paint to settle (match Cell6.5 behavior)
+                setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        try { window.scrollTo({ top: 240, behavior: 'auto' }); }
+                        catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (er) { } }
+                    });
+                }, 160);
+            }
+
+            sortSel.onchange = yearSel.onchange = monthSel.onchange = draw;
+            // If rows are already loaded, populate and draw; otherwise draw will handle once data present
+            draw();
+        }
         // Helpers for labels
         const labelOf = (nums) => nums.map(getCol).join("");
         const diffPositions = (a, b) => { const pos = []; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) pos.push(i); return pos; };
@@ -6986,6 +7595,7 @@
             const renderers = {
                 cell4: renderCell4,
                 cell5: renderCell5,
+                cell5_5: renderCell5_5,
                 // Note: mismatched creators – keep ids aligned with sections created inside
                 cell6: renderCell8, // Phân nhóm theo bộ số
                 cell6_5: renderCell6_5, // Truy x (lọc theo số x)
