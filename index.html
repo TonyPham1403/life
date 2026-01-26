@@ -181,6 +181,14 @@
             opacity: 1;
         }
 
+        /* Highlight the selected option inside native dropdowns where supported */
+        select option:checked,
+        select option.highlighted {
+            background: var(--highlight-bg) !important;
+            color: var(--highlight-text) !important;
+            font-weight: 800;
+        }
+
         /* Inline opacity control placed next to Σ */
         .inline-opacity-container {
             display: inline-flex;
@@ -1903,6 +1911,9 @@
                     sec.classList.toggle("hidden", sec.id !== id);
                 });
 
+                // notify other components which section is now active
+                try { document.dispatchEvent(new CustomEvent('sectionchange', { detail: { id } })); } catch (e) { }
+
                 // Restore vị trí scroll của section mới
                 requestAnimationFrame(() => {
                     // Prefer per-input saved scroll for cell10 when available
@@ -2167,6 +2178,8 @@
                     yearSel.value = 'all';
                 }
                 // populate months for the (possibly restored) year selection
+                // mark selected option visually
+                Array.from(yearSel.options).forEach(o => o.classList.toggle('highlighted', o.value === yearSel.value));
                 populateMonths();
             }
 
@@ -2204,11 +2217,14 @@
                 } else {
                     monthSel.value = 'all';
                 }
+                // mark selected option visually
+                Array.from(monthSel.options).forEach(o => o.classList.toggle('highlighted', o.value === monthSel.value));
             }
 
             // Create a floating popup for the info box (shared for all hovers)
             const infoPopup = document.createElement('div');
-            infoPopup.style.position = 'absolute';
+            // use fixed positioning so the popup stays aligned with sticky controls
+            infoPopup.style.position = 'fixed';
             infoPopup.style.zIndex = 9999;
             infoPopup.style.minWidth = '220px';
             infoPopup.style.maxWidth = '480px';
@@ -2309,34 +2325,142 @@
                 }
             }
 
+            // Positioning and show/hide helpers so the popup stays anchored
+            // under the sticky controls even while the page is scrolled.
+            let __infoPopupPositionBound = false;
+            function positionInfoPopup() {
+                try {
+                    const rect = infoBtn.getBoundingClientRect();
+                    const top = rect.bottom + 8;
+                    let left = rect.left;
+                    // Use actual popup width when available; fallback to declared maxWidth
+                    const popupRect = infoPopup.getBoundingClientRect();
+                    const popupWidth = (popupRect && popupRect.width) ? popupRect.width : parseInt(infoPopup.style.maxWidth || 480, 10);
+                    // keep popup within viewport with small padding
+                    const maxLeft = Math.max(8, window.innerWidth - popupWidth - 12);
+                    if (left > maxLeft) left = maxLeft;
+                    if (left < 8) left = 8;
+                    infoPopup.style.top = top + 'px';
+                    infoPopup.style.left = left + 'px';
+                } catch (e) { /* ignore positioning errors */ }
+            }
+
+            function bindPopupPositionListeners() {
+                if (__infoPopupPositionBound) return;
+                // capture scroll so reposition happens even when ancestor elements scroll
+                window.addEventListener('scroll', positionInfoPopup, true);
+                window.addEventListener('resize', positionInfoPopup);
+                __infoPopupPositionBound = true;
+            }
+
+            function unbindPopupPositionListeners() {
+                if (!__infoPopupPositionBound) return;
+                window.removeEventListener('scroll', positionInfoPopup, true);
+                window.removeEventListener('resize', positionInfoPopup);
+                __infoPopupPositionBound = false;
+            }
+
             function showInfoPopup() {
+                // only show when the Cell5.5 section is active
+                const cell5 = document.getElementById('cell5_5');
+                if (cell5 && cell5.classList.contains('hidden')) return;
                 clearTimeout(hoverTimeout);
                 renderInfoPopup();
-                const rect = infoBtn.getBoundingClientRect();
-                const top = rect.bottom + window.scrollY + 8;
-                let left = rect.left + window.scrollX;
-                // keep popup within window width
-                const maxLeft = window.scrollX + window.innerWidth - 20 - parseInt(infoPopup.style.maxWidth || 480, 10);
-                if (left > maxLeft) left = maxLeft;
-                infoPopup.style.top = top + 'px';
-                infoPopup.style.left = left + 'px';
+                // ensure popup is visible so we can measure and position it
                 infoPopup.style.display = 'block';
+                // position now and while scrolling/resizing
+                positionInfoPopup();
+                bindPopupPositionListeners();
             }
+
             function hideInfoPopupSoon() {
                 clearTimeout(hoverTimeout);
-                hoverTimeout = setTimeout(() => { infoPopup.style.display = 'none'; }, 180);
+                hoverTimeout = setTimeout(() => { hideInfoPopup(); }, 180);
             }
 
-            infoBtn.addEventListener('mouseenter', showInfoPopup);
-            infoBtn.addEventListener('mouseleave', hideInfoPopupSoon);
-            infoBtn.addEventListener('focus', showInfoPopup);
-            infoBtn.addEventListener('blur', hideInfoPopupSoon);
-            infoPopup.addEventListener('mouseenter', () => { clearTimeout(hoverTimeout); });
-            infoPopup.addEventListener('mouseleave', hideInfoPopupSoon);
+            // Click-to-toggle only: popup opens/closes when clicking the `infoBtn` itself.
+            infoBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (infoPopup.style.display === 'block') hideInfoPopup();
+                else showInfoPopup();
+            });
+            // make infoBtn focusable and allow keyboard toggle (Enter/Space)
+            infoBtn.tabIndex = 0;
+            infoBtn.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (infoPopup.style.display === 'block') hideInfoPopup();
+                    else showInfoPopup();
+                }
+            });
+
+            // immediate hide helper (used by click)
+            function hideInfoPopup() {
+                clearTimeout(hoverTimeout);
+                infoPopup.style.display = 'none';
+                try { unbindPopupPositionListeners(); } catch (e) { }
+            }
+
+            // Prevent outer page scrolling when the pointer is over the popup.
+            // Wheel: stop propagation and prevent default when appropriate.
+            infoPopup.addEventListener('wheel', function (ev) {
+                // allow scrolling inside the popup but prevent page scroll
+                const canScroll = infoPopup.scrollHeight > infoPopup.clientHeight;
+                if (!canScroll) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    return;
+                }
+                const delta = ev.deltaY;
+                const atTop = infoPopup.scrollTop === 0;
+                const atBottom = Math.abs(infoPopup.scrollHeight - infoPopup.clientHeight - infoPopup.scrollTop) < 1;
+                if ((delta > 0 && atBottom) || (delta < 0 && atTop)) {
+                    ev.preventDefault(); ev.stopPropagation();
+                } else {
+                    // consume the wheel so page doesn't move while interacting with popup
+                    ev.stopPropagation();
+                }
+            }, { passive: false });
+
+            // Touch support: prevent overscroll from reaching page on mobile
+            let __infoTouchStartY = 0;
+            infoPopup.addEventListener('touchstart', function (ev) {
+                if (ev.touches && ev.touches.length) __infoTouchStartY = ev.touches[0].clientY;
+            }, { passive: true });
+            infoPopup.addEventListener('touchmove', function (ev) {
+                const canScroll = infoPopup.scrollHeight > infoPopup.clientHeight;
+                if (!ev.touches || !ev.touches.length) return;
+                const curY = ev.touches[0].clientY;
+                const delta = __infoTouchStartY - curY;
+                const atTop = infoPopup.scrollTop === 0;
+                const atBottom = Math.abs(infoPopup.scrollHeight - infoPopup.clientHeight - infoPopup.scrollTop) < 1;
+                if (!canScroll || (delta > 0 && atBottom) || (delta < 0 && atTop)) {
+                    ev.preventDefault(); ev.stopPropagation();
+                } else {
+                    ev.stopPropagation();
+                }
+            }, { passive: false });
+
+            // hide the info popup whenever we switch to another section
+            document.addEventListener('sectionchange', (ev) => {
+                try {
+                    if (!ev || !ev.detail) return;
+                    if (ev.detail.id !== 'cell5_5') {
+                        hideInfoPopup();
+                    }
+                } catch (e) { }
+            });
 
             // Update popup if filters change while it's visible
-            yearSel.addEventListener('change', () => { if (infoPopup.style.display === 'block') renderInfoPopup(); });
-            monthSel.addEventListener('change', () => { if (infoPopup.style.display === 'block') renderInfoPopup(); });
+            yearSel.addEventListener('change', () => {
+                Array.from(yearSel.options).forEach(o => o.classList.toggle('highlighted', o.value === yearSel.value));
+                Array.from(monthSel.options).forEach(o => o.classList.toggle('highlighted', o.value === monthSel.value));
+                if (infoPopup.style.display === 'block') renderInfoPopup();
+            });
+            monthSel.addEventListener('change', () => {
+                Array.from(monthSel.options).forEach(o => o.classList.toggle('highlighted', o.value === monthSel.value));
+                if (infoPopup.style.display === 'block') renderInfoPopup();
+            });
 
             function draw() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
