@@ -2501,7 +2501,8 @@
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
             const sortSel = document.createElement("select");
             [["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
-            controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel);
+            const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
+            controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel, recencySel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -2513,7 +2514,7 @@
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
                 // Tạo key để kiểm tra cache
-                const newCacheKey = `${diffSel.value}|${consec.checked}`;
+                const newCacheKey = `${diffSel.value}|${consec.checked}|${recencySel ? recencySel.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroups(groupCache);
                     return;
@@ -2622,7 +2623,8 @@
                     let inner = htmlCache.get(cacheKey);
                     if (!inner) {
                         const start = page * pageSizeRows;
-                        const slice = g.rows.slice(start, start + pageSizeRows);
+                        const rowsToUse = (typeof recencySel !== 'undefined' && recencySel.value === 'desc') ? g.rows.slice().reverse() : g.rows.slice();
+                        const slice = rowsToUse.slice(start, start + pageSizeRows);
                         inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -2814,6 +2816,7 @@
             // Dùng debounce để tránh tính toán quá tần suất
             const debouncedGroup = createDebounce(group, 300);
             diffSel.onchange = consec.onchange = debouncedGroup;
+            recencySel.onchange = debouncedGroup;
             sortSel.onchange = () => groupCache && renderGroups(groupCache);
             group();
         }
@@ -2926,6 +2929,10 @@
             // create select controls
             const combSel = document.createElement('select');[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = `Bộ ${v}`; combSel.appendChild(o); }); combSel.value = '3';
             const sortSel = document.createElement('select');[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            // recency selector (Mới → Cũ / Cũ → Mới) — mirror Cell6.5 behavior
+            const recencySel = document.createElement('select');
+            [["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); });
+            recencySel.value = 'desc';
 
             // consecutive & order toggles (same behavior as Cell6/Cell6.5)
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
@@ -3132,7 +3139,7 @@
                 controls.append(container);
             });
 
-            controls.append('Kích thước:', combSel, 'Sắp xếp:', sortSel, consecLabel, orderLabel);
+            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Sắp xếp:', sortSel, recencySel);
             body.appendChild(controls);
 
             const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
@@ -3252,7 +3259,10 @@
                     if (!key) return;
                     const body = card.querySelector('.card-body');
                     const maxRows = 200;
-                    const slice = list.slice(0, maxRows);
+                    // respect recency selector when choosing which rows to display
+                    let displayList = list.slice();
+                    try { if (recencySel && recencySel.value === 'desc') displayList.reverse(); } catch (e) { }
+                    const slice = displayList.slice(0, maxRows);
                     const baselineTotal = baselineArrAll.length || arrGroups.length;
                     const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
                     let rankDisplay = `${idx + 1}/${arrGroups.length}`;
@@ -3401,6 +3411,7 @@
             inputs.forEach((i) => i.addEventListener('input', draw));
             combSel.addEventListener('change', draw);
             sortSel.addEventListener('change', draw);
+            if (recencySel) recencySel.addEventListener('change', draw);
             // consec toggles enable/disable order and trigger redraw
             consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; draw(); };
             order.addEventListener('change', draw);
@@ -3416,6 +3427,9 @@
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
             const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            const recencySel = document.createElement("select");
+            [["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); });
+            recencySel.value = 'desc';
             const xFilter = document.createElement("input"); xFilter.type = "number"; xFilter.min = 1; xFilter.max = 45; xFilter.placeholder = "Số x (1-45)"; xFilter.style.width = '88px';
             // Create +/- buttons styled and behaving like Cell9 arrows
             const xContainer = document.createElement('div');
@@ -3768,7 +3782,7 @@
             // initial build
             rebuildComboExtras();
 
-            controls.append("Số x:", xContainer, comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
+            controls.append("Số x:", xContainer, comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -3787,7 +3801,7 @@
                     const inputs = comboExtras.querySelectorAll('input[type="number"].combo-extra');
                     return Array.from(inputs).map(i => (i.value ?? '').trim()).join(',');
                 })();
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}`;
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${recencySel ? recencySel.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -3993,17 +4007,20 @@
                     const body = card.querySelector('.card-body');
 
                     const pageSizeRows = 15;
-                    const totalPages = Math.max(1, Math.ceil(list.length / pageSizeRows));
+                    // build a display list that respects recency selection; default is 'asc' (old->new)
+                    let displayList = (list && list.slice) ? list.slice() : [];
+                    try { if (recencySel && recencySel.value === 'desc') displayList.reverse(); } catch (e) { }
+                    const totalPages = Math.max(1, Math.ceil(displayList.length / pageSizeRows));
                     const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
                     if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
-                    const cacheKey = `${idx}|${page}`;
+                    const cacheKey = `${idx}|${page}|${recencySel ? recencySel.value : ''}`;
 
                     let inner = htmlCache.get(cacheKey);
                     if (!inner) {
                         const setValues = new Set(key.split('-').map(Number));
                         const x = parseInt(xSel.value, 10);
                         const start = page * pageSizeRows;
-                        const slice = list.slice(start, start + pageSizeRows);
+                        const slice = displayList.slice(start, start + pageSizeRows);
                         inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -4055,7 +4072,7 @@
                             const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
                             inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
-                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
@@ -4210,8 +4227,9 @@
 
             const debouncedGroup = createDebounce(group, 300);
             consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; debouncedGroup(); };
-            xSel.onchange = sortSel.onchange = order.onchange = debouncedGroup;
+            xSel.onchange = sortSel.onchange = order.onchange = recencySel.onchange = debouncedGroup;
             xFilter.onchange = debouncedGroup;
+            if (recencySel) recencySel.onchange = debouncedGroup;
             group();
         }
 
@@ -4475,7 +4493,10 @@
             const wrapInputs = document.createElement("div"); wrapInputs.className = "controls";
             const labelText = document.createElement("span"); labelText.textContent = "Label:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             wrapInputs.appendChild(labelText);
-            containers.forEach(c => wrapInputs.appendChild(c)); body.appendChild(wrapInputs);
+            containers.forEach(c => wrapInputs.appendChild(c));
+            const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
+            recencySel.addEventListener('change', run);
+            body.appendChild(wrapInputs);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
             const clearBtn = document.createElement("button"); clearBtn.textContent = "Xóa"; clearBtn.className = "clear-btn"; wrapInputs.appendChild(clearBtn);
@@ -4484,6 +4505,7 @@
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
             wrapInputs.appendChild(hint);
+            try { wrapInputs.appendChild(recencySel); } catch (e) { }
 
             function run() {
                 const pattern = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : "_"; }).join("");
@@ -4495,11 +4517,13 @@
                     return true;
                 });
                 if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
+                let display = records.slice();
+                if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                 let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                 const chunk = 15;
-                for (let i = 0; i < records.length; i += chunk) {
+                for (let i = 0; i < display.length; i += chunk) {
                     html += "<div class='card'><table><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
-                    records.slice(i, i + chunk).forEach(r => {
+                    display.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_"
                             ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
                             : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`
@@ -4574,7 +4598,9 @@
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
             const order = document.createElement("input"); order.type = "checkbox"; const orderLabel = document.createElement("label"); orderLabel.className = "flex"; orderLabel.style.alignItems = 'center'; orderLabel.style.gap = '6px'; orderLabel.append(order, document.createTextNode("Order")); order.checked = false; order.disabled = true;
             const sortSel = document.createElement("select");[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
-            controls.append("Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel);
+            const recencySel = document.createElement("select");[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); });
+            recencySel.value = 'desc';
+            controls.append("Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -4583,10 +4609,16 @@
             let cacheKey = null;
             let isComputing = false;
 
+            // If recency selection changes, clear caches and recompute groups
+            if (recencySel) recencySel.addEventListener('change', () => {
+                try { cacheKey = null; groupCache = null; } catch (e) { }
+                try { group(); } catch (e) { }
+            });
+
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}`;
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${recencySel ? recencySel.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -4704,14 +4736,17 @@
                     const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
                     // if already mounted and the mounted page matches desired page, skip
                     if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
-                    const cacheKey = `${idx}|${page}`;
+                    const cacheKey = `${idx}|${page}|${recencySel ? recencySel.value : ''}`;
 
                     let inner = htmlCache.get(cacheKey);
                     if (!inner) {
                         const setValues = new Set(key.split('-').map(Number));
                         const x = parseInt(xSel.value, 10);
+                        // build a display list that respects recency selection; default is 'asc' (old->new)
+                        let displayList = (list && list.slice) ? list.slice() : [];
+                        try { if (recencySel && recencySel.value === 'desc') displayList.reverse(); } catch (e) { }
                         const start = page * pageSizeRows;
-                        const slice = list.slice(start, start + pageSizeRows);
+                        const slice = displayList.slice(start, start + pageSizeRows);
                         inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -5274,6 +5309,8 @@
             const containersToAdd = cell9ModeState === "label" ? [...containers].reverse() : containers;
             containersToAdd.forEach(c => controls.appendChild(c));
             controls.append(consecLabel);
+            const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
+            recencySel.addEventListener('change', () => { try { run(); } catch (e) { } });
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -5283,6 +5320,7 @@
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
             controls.appendChild(hint);
+            try { controls.appendChild(recencySel); } catch (e) { }
 
             function run() {
                 const mode = cell9ModeState;
@@ -5303,11 +5341,13 @@
                         return true;
                     });
                     if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
+                    let display = records.slice();
+                    if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                     let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
-                    for (let i = 0; i < records.length; i += chunk) {
+                    for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
-                        records.slice(i, i + chunk).forEach(r => {
+                        display.slice(i, i + chunk).forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, setVals.size, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
                             // compute euclidean distances between adjacent numbers (5 values) and total
@@ -5391,11 +5431,13 @@
                         return true;
                     });
                     if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
+                    let display = records.slice();
+                    if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                     let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
-                    for (let i = 0; i < records.length; i += chunk) {
+                    for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th></tr></thead><tbody>";
-                        records.slice(i, i + chunk).forEach(r => {
+                        display.slice(i, i + chunk).forEach(r => {
                             const labelStr = r.label;
                             let highlightPos = [];
                             if (consec.checked) {
@@ -6198,6 +6240,8 @@
             const labelText = document.createElement("span"); labelText.textContent = "Pattern:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
             controls.appendChild(labelText);
             containers.forEach(c => controls.appendChild(c));
+            const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
+            recencySel.addEventListener('change', () => { try { run(); } catch (e) { } });
             body.appendChild(controls);
 
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
@@ -6208,6 +6252,8 @@
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
             controls.appendChild(hint);
+            // place recency select at end of controls
+            controls.appendChild(recencySel);
 
             function run(changeIdx) {
                 const pattern = inputs.map(inp => {
@@ -6221,11 +6267,13 @@
                 const results = rows.filter(r => pattern.every((p, i) => p === "_" || r.nums[i] === Number(p)));
                 if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
                 const patternStr = pattern.join(',');
+                let display = results.slice();
+                if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                 let html = `<div class='muted'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
                 const chunk = 15;
-                for (let i = 0; i < results.length; i += chunk) {
+                for (let i = 0; i < display.length; i += chunk) {
                     html += "<div class='card'><table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
-                    results.slice(i, i + chunk).forEach(r => {
+                    display.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                         const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
                         const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
