@@ -459,7 +459,7 @@
             font-size: 18px;
             font-weight: 700;
             background: rgba(56, 239, 125, 0.1);
-            color: var(--accent);
+            color: #ffffff !important;
             cursor: grab;
             transition: all 0.2s;
             position: relative;
@@ -1396,7 +1396,7 @@
             font-size: 18px;
             font-weight: 700;
             background: rgba(56, 239, 125, 0.1);
-            color: var(--accent);
+            color: #ffffff !important;
             cursor: grab;
             transition: all 0.2s;
             position: relative;
@@ -2291,6 +2291,7 @@
 
                 let html = `<div style="font-weight:700;margin-bottom:6px;">Thống kê xuất hiện (Năm: ${yearSel.value || 'Tất cả'} · Tháng: ${monthSel.value || 'Tất cả'})</div>`;
                 html += `<div style="margin-bottom:8px;"><select id="infoSortSel" style="padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);"><option value="default">Mặc định</option><option value="desc">Giảm dần (số lần)</option><option value="asc">Tăng dần (số lần)</option></select></div>`;
+                html += `<div style="margin-top:8px;color:var(--muted);font-size:11px;">Tổng kỳ: ${filtered.length}</div>`;
                 html += '<table class="no-sticky" style="width:100%;font-size:12px;border-collapse:collapse;">';
                 html += '<thead><tr><th style="width:28px;text-align:left;padding:6px;border-bottom:1px solid var(--border);">Hạng</th><th class="num-header" style="width:36px;text-align:center;padding:6px;border-bottom:1px solid var(--border);">Số</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border);">Số lần</th></tr></thead>';
                 html += '<tbody>';
