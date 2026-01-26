@@ -947,13 +947,36 @@
             color: var(--highlight-text);
         }
 
+        /* Highlight class applied to number cells in the popup when hovering a group row.
+           Use an outline + stronger box-shadow and z-index so the orange accent isn't
+           visually obscured by darker 'selected/disabled' backgrounds or competing rules. */
+        #numberPickerPopup #numberPickerTable td.popup-number-highlight {
+            /* Thicker visible outline with inward emphasis (inner glow)
+               Keep properties conservative to avoid linter noise. */
+            outline: 4px solid #ff8c00;
+            outline-offset: 2px;
+            /* Outer soft glow + subtle ring to increase perceived thickness */
+            box-shadow:
+                0 10px 24px rgba(255, 140, 0, 0.10),
+                /* outer soft shadow */
+                0 0 0 6px rgba(255, 140, 0, 0.06),
+                /* mid ring */
+                inset 0 0 0 4px rgba(255, 140, 0, 0.18);
+            /* inner thickening */
+            position: relative;
+            z-index: 1100;
+        }
+
         [data-theme="dark"] .pill {
             background: rgba(56, 239, 125, 0.15);
             color: #38ef7d;
         }
 
-        /* Prevent pill containers from wrapping */
-        td:has(.pill) {
+        /* Prevent pill containers from wrapping.
+           The selector `:has()` isn't supported in some editors/linters —
+           provide a compatible class-based fallback and a tiny JS shim
+           that marks `td` elements containing `.pill` with `.td-has-pill`. */
+        td.td-has-pill {
             white-space: nowrap;
         }
 
@@ -1695,6 +1718,25 @@
         const fmtPctCustom = (v, decimals) => `${(v * 100).toFixed(decimals)}%`;
         const MATCH_STYLE = "background:#2e7d32;color:#fff;"; // dark green with white text for matched values
 
+        // Helpers to highlight numbers inside the number-picker popup
+        function clearPopupHighlights() {
+            const tbl = document.getElementById('numberPickerTable');
+            if (!tbl) return;
+            tbl.querySelectorAll('td.popup-number-highlight').forEach(td => td.classList.remove('popup-number-highlight'));
+        }
+
+        function applyPopupHighlights(nums) {
+            const tbl = document.getElementById('numberPickerTable');
+            if (!tbl) return;
+            clearPopupHighlights();
+            nums.forEach(n => {
+                try {
+                    const td = tbl.querySelector(`td[data-number="${n}"]`);
+                    if (td) td.classList.add('popup-number-highlight');
+                } catch (e) { /* ignore */ }
+            });
+        }
+
         // Debounce helper to prevent excessive function calls
         const createDebounce = (fn, delay = 100) => {
             let timeout;
@@ -1752,6 +1794,39 @@
 
         // Global listener to catch all dynamic tables
         document.addEventListener('dblclick', handleRowCopyDblClick, true);
+
+        // Global mouseover: apply popup highlights when hovering any record row
+        // and clear when moving to a different card. This centralizes the
+        // hover->popup behavior so all cells (cell6, cell6.5, cell6.6, etc.)
+        // behave consistently.
+        document.addEventListener('mouseover', (ev) => {
+            try {
+                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                const cardEl = tr ? tr.closest('.card') : null;
+
+                // If hovering a result row, try to find the header <strong>{...}</strong>
+                // in the same card and use it to compute popup highlights.
+                if (tr && cardEl) {
+                    const s = cardEl.querySelector('strong');
+                    if (s && s.textContent) {
+                        const nums = String(s.textContent || '').replace(/[{}]/g, '')
+                            .split(/[^0-9]+/).map(s => parseInt(s, 10)).filter(n => Number.isFinite(n));
+                        if (nums.length) {
+                            try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { }
+                            applyPopupHighlights(nums);
+                            return;
+                        }
+                    }
+                }
+
+                // Otherwise, if moving to a different card, clear existing highlights
+                const src = window.__popupHighlightSource || null;
+                if (src && cardEl && cardEl !== src) {
+                    clearPopupHighlights();
+                    try { window.__popupHighlights = null; window.__popupHighlightSource = null; } catch (e) { }
+                }
+            } catch (e) { /* ignore */ }
+        }, true);
 
         const anchorNav = [
             { id: "cell4", label: "Cell4 · Tỷ lệ theo vị trí" },
@@ -2403,6 +2478,46 @@
                         htmlCache.set(idx, inner);
                     }
                     body.innerHTML = inner;
+                    // attach hover handler to tbody so hovering a row will
+                    // read the card header <strong> (e.g. {18,29}) and
+                    // highlight corresponding numbers in the popup table (same as Cell6.5)
+                    (function attachRowHoverToPopup() {
+                        try {
+                            const _tbody = body.querySelector('tbody');
+                            if (!_tbody) return;
+
+                            function parseStrongNumbers(text) {
+                                if (!text) return [];
+                                return text.replace(/[{}]/g, '')
+                                    .split(/[^0-9]+/)
+                                    .map(s => parseInt(s, 10))
+                                    .filter(n => Number.isFinite(n));
+                            }
+
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = parseStrongNumbers(s.textContent.trim());
+                                if (nums.length) {
+                                    try {
+                                        window.__popupHighlights = nums.slice();
+                                        window.__popupHighlightSource = cardEl;
+                                    } catch (e) { }
+                                    applyPopupHighlights(nums);
+                                }
+                            });
+
+                            _tbody.addEventListener('mouseout', (ev) => {
+                                // Persist highlights until another record hover updates them.
+                                return;
+                            });
+                        } catch (err) { /* ignore */ }
+                    })();
+
                     card.dataset.mounted = '1';
                     card.dataset.currentPage = String(idx);
                     mountedSet.add(idx);
@@ -4084,6 +4199,55 @@
                     }
                     body.style.minHeight = '';
                     body.innerHTML = inner;
+                    // attach hover handler to tbody so hovering a row will
+                    // read the card header <strong> (e.g. {18,29}) and
+                    // highlight corresponding numbers in the popup table
+                    (function attachRowHoverToPopup() {
+                        try {
+                            const _tbody = body.querySelector('tbody');
+                            if (!_tbody) return;
+
+                            function parseStrongNumbers(text) {
+                                if (!text) return [];
+                                // remove braces and split on non-digits
+                                return text.replace(/[{}]/g, '')
+                                    .split(/[^0-9]+/)
+                                    .map(s => parseInt(s, 10))
+                                    .filter(n => Number.isFinite(n));
+                            }
+
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = parseStrongNumbers(s.textContent.trim());
+                                if (nums.length) {
+                                    // remember current highlights so regenerating the popup can reapply
+                                    try {
+                                        window.__popupHighlights = nums.slice();
+                                        // store the card element that produced these highlights so
+                                        // we can clear them when the user hovers a different record
+                                        window.__popupHighlightSource = cardEl;
+                                    } catch (e) { }
+                                    applyPopupHighlights(nums);
+                                }
+                            });
+
+                            _tbody.addEventListener('mouseout', (ev) => {
+                                // Persist highlights even when the mouse leaves the tbody.
+                                // Previously we cleared highlights here which made the orange
+                                // outline disappear as soon as the cursor left the popup.
+                                // Now we keep `window.__popupHighlights` set so highlights
+                                // remain until another record hover updates them.
+                                // No-op.
+                                return;
+                            });
+                        } catch (err) { /* ignore */ }
+                    })();
+
                     try { updateHeaderCount(); } catch (e) { }
                     const prevBtns = body.querySelectorAll('.prev');
                     const nextBtns = body.querySelectorAll('.next');
@@ -4817,6 +4981,46 @@
                     }
                     body.style.minHeight = '';
                     body.innerHTML = inner;
+                    // attach hover handler to tbody so hovering a row will
+                    // read the card header <strong> (e.g. {18,29}) and
+                    // highlight corresponding numbers in the popup table
+                    (function attachRowHoverToPopup() {
+                        try {
+                            const _tbody = body.querySelector('tbody');
+                            if (!_tbody) return;
+
+                            function parseStrongNumbers(text) {
+                                if (!text) return [];
+                                return text.replace(/[{}]/g, '')
+                                    .split(/[^0-9]+/)
+                                    .map(s => parseInt(s, 10))
+                                    .filter(n => Number.isFinite(n));
+                            }
+
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = parseStrongNumbers(s.textContent.trim());
+                                if (nums.length) {
+                                    try {
+                                        window.__popupHighlights = nums.slice();
+                                        window.__popupHighlightSource = cardEl;
+                                    } catch (e) { }
+                                    applyPopupHighlights(nums);
+                                }
+                            });
+
+                            _tbody.addEventListener('mouseout', (ev) => {
+                                // Persist highlights until another record hover updates them.
+                                return;
+                            });
+                        } catch (err) { /* ignore */ }
+                    })();
+
                     // attach pagination handlers (attach to both top and bottom controls)
                     const prevBtns = body.querySelectorAll('.prev');
                     const nextBtns = body.querySelectorAll('.next');
@@ -6595,6 +6799,12 @@
                 html += '</tr></tfoot>';
 
                 numberPickerTable.innerHTML = html;
+                // If there is an active hover-driven highlight set, reapply after regeneration
+                try {
+                    if (window.__popupHighlights && Array.isArray(window.__popupHighlights) && window.__popupHighlights.length) {
+                        applyPopupHighlights(window.__popupHighlights);
+                    }
+                } catch (e) { /* ignore */ }
 
                 // Draw connections after table is rendered
                 requestAnimationFrame(() => drawConnections());
@@ -7849,6 +8059,26 @@
                 });
             })();
         });
+    </script>
+    <script>
+        // JS shim: add a compatibility class for `td:has(.pill)` so older editors/linters
+        // won't complain and dynamic tables get the same behavior.
+        (function markTdHasPill() {
+            function markAll() {
+                document.querySelectorAll('td').forEach(td => {
+                    try {
+                        if (td.querySelector && td.querySelector('.pill')) td.classList.add('td-has-pill');
+                        else td.classList.remove('td-has-pill');
+                    } catch (e) { /* ignore */ }
+                });
+            }
+            // Initial pass
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markAll);
+            else markAll();
+            // Watch for DOM changes (tables regenerated dynamically)
+            const mo = new MutationObserver(() => { markAll(); });
+            mo.observe(document.body, { childList: true, subtree: true });
+        })();
     </script>
 </body>
 
