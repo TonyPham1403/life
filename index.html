@@ -1549,6 +1549,12 @@
         </div>
         <div class="mode-selector" id="modeSelectorContainer">
             <div class="mode-rows reversed" id="modeRows">
+                <div class="mode-row" id="modeRowRank"
+                    style="font-size:14px;gap:8px;align-items:center;display:flex;justify-content:center;width:100%;order:999;">
+                    <div id="rankSummary"
+                        style="font-size:14px;font-weight:700;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 auto;">
+                    </div>
+                </div>
                 <div class="mode-row" id="modeRowTop">
                     <label style="font-size: 12px;">Mode:</label>
                     <button id="modeSelector"
@@ -1752,6 +1758,11 @@
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
             clearPopupHighlights();
+            // Only apply the orange popup highlight when quick-place mode is 'hover'
+            try {
+                const inHover = (window.getQuickPlaceMode && window.getQuickPlaceMode() === 'hover');
+                if (!inHover) return;
+            } catch (e) { return; }
             nums.forEach(n => {
                 try {
                     const td = tbl.querySelector(`td[data-number="${n}"]`);
@@ -6749,6 +6760,10 @@
                         : "Hover: hovering a record fills the place boxes (dblclick-copy disabled)";
                 }
                 localStorage.setItem('quickPlaceMode', quickPlaceMode);
+                // When switching back to normal mode, remove any popup highlights
+                try {
+                    if (quickPlaceMode !== 'hover' && typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                } catch (e) { /* ignore */ }
             };
             window.getQuickPlaceMode = () => quickPlaceMode;
             // initialize
@@ -7376,6 +7391,7 @@
                     if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights();
                 } catch (e) { /* ignore */ }
                 try { drawConnections(); } catch (e) { /* ignore */ }
+                try { if (typeof updateRankSummary === 'function') updateRankSummary(); } catch (e) { /* ignore */ }
             }
 
             function setupPlaceContainerListeners() {
@@ -7557,6 +7573,54 @@
                     const cell = numberPickerTable.querySelector(`td[data-number="${num}"]`);
                     if (cell) cell.classList.add('selected-number');
                 });
+            }
+
+            // Render a compact summary of place values by rank color/type
+            function updateRankSummary() {
+                const el = document.getElementById('rankSummary');
+                if (!el) return;
+                const mapping = {
+                    Green: '#08eb56',
+                    Cyan: '#00E5FF',
+                    Blue: '#1a62ea',
+                    Pink: '#ea3ade',
+                    Red: '#ea0313'
+                };
+                const counts = { Green: 0, Cyan: 0, Blue: 0, Pink: 0, Red: 0 };
+                const order = ['Green', 'Cyan', 'Blue', 'Pink', 'Red'];
+
+                for (let i = 0; i < placeValues.length; i++) {
+                    const v = placeValues[i];
+                    if (!v || v === '' || isNaN(v)) continue;
+                    const num = parseInt(v, 10);
+                    const rankMap = window.rankByTotal || {};
+                    const rankNum = rankMap[num] || null;
+                    let name = null;
+                    if (rankNum !== null && rankNum !== undefined) {
+                        if (rankNum >= 1 && rankNum <= 9) name = 'Green';
+                        else if (rankNum >= 10 && rankNum <= 18) name = 'Cyan';
+                        else if (rankNum >= 19 && rankNum <= 27) name = 'Blue';
+                        else if (rankNum >= 28 && rankNum <= 36) name = 'Pink';
+                        else if (rankNum >= 37 && rankNum <= 45) name = 'Red';
+                    }
+                    if (name) counts[name] = (counts[name] || 0) + 1;
+                }
+
+                // Build display
+                const parts = [];
+                order.forEach((nm) => {
+                    const c = counts[nm];
+                    if (c && c > 0) {
+                        const color = mapping[nm] || 'var(--muted)';
+                        parts.push(`<span style="color:${color};font-weight:900">${c}${nm}</span>`);
+                    }
+                });
+                if (parts.length === 0) {
+                    el.innerHTML = '<span style="color:var(--muted)">—</span>';
+                } else {
+                    // join with muted separator
+                    el.innerHTML = parts.join('<span style="color:var(--muted);margin:0 6px"> - </span>');
+                }
             }
 
             const modeSelector = document.getElementById('modeSelector');
@@ -7992,7 +8056,10 @@
                 ranked.forEach((r, idx) => { rankByTotal[r.v] = idx + 1; });
                 window.rankByTotal = rankByTotal;
                 // Regenerate the number picker table now that ranks are available
-                try { if (typeof generateNumberPickerTable === 'function') generateNumberPickerTable(); } catch (e) { console.warn('regen number picker after rank compute', e); }
+                try {
+                    if (typeof generateNumberPickerTable === 'function') generateNumberPickerTable();
+                    if (typeof updateRankSummary === 'function') updateRankSummary();
+                } catch (e) { console.warn('regen number picker after rank compute', e); }
             } catch (e) { window.rankByTotal = {}; }
 
             const showSection = createSectionSwitcher();
