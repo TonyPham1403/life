@@ -3521,91 +3521,192 @@
                 const grid = wrap.querySelector('#groupGrid');
 
                 // caches and mount management
+                const htmlCache = new Map(); // key -> innerHTML (key: `${idx}|${page}|${recency}`)
                 const heightCache = new Map();
+                const lruQueue = [];
+                const MAX_CACHE = 160;
                 const mountedSet = new Set();
                 const cardRefs = new Map();
                 const MAX_MOUNTED = 40;
 
+                const setCache = (cacheKey, html, idxForCache) => {
+                    htmlCache.set(cacheKey, html);
+                    lruQueue.push(cacheKey);
+                    if (lruQueue.length > MAX_CACHE) {
+                        const rm = lruQueue.shift();
+                        if (!mountedSet.has(idxForCache)) htmlCache.delete(rm);
+                    }
+                };
+
                 const mount = (card, idx) => {
-                    if (card.dataset.mounted === '1') return;
                     const [key, list] = arrGroups[idx] || [];
                     if (!key) return;
                     const body = card.querySelector('.card-body');
-                    const maxRows = 200;
-                    // respect recency selector when choosing which rows to display
-                    let displayList = list.slice();
+
+                    const pageSizeRows = 15;
+                    let displayList = (list && list.slice) ? list.slice() : [];
                     try { if (recencySel && recencySel.value === 'desc') displayList.reverse(); } catch (e) { }
-                    const slice = displayList.slice(0, maxRows);
-                    const baselineTotal = baselineArrAll.length || arrGroups.length;
-                    const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
-                    let rankDisplay = `${idx + 1}/${arrGroups.length}`;
-                    let occDisplay = `${list.length} kỳ`;
-                    if (idxInBaseline >= 0) {
-                        rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
-                        occDisplay = `${globalCounts[key] || list.length} kỳ`;
-                    }
+                    const totalPages = Math.max(1, Math.ceil(displayList.length / pageSizeRows));
+                    const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
+                    if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
+                    const cacheKey = `${idx}|${page}|${recencySel ? recencySel.value : ''}`;
 
-                    let inner = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
-                        `<strong>{${key.replace(/-/g, ',')}}</strong>` +
-                        `<div style='display:flex;align-items:center;gap:8px'>` +
-                        `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
-                        `<span class='badge'>${occDisplay}</span>` +
-                        `</div>` +
-                        `</div>`;
-                    inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
-                    const setValues = new Set(key.split('-').map(Number));
-                    if (slice.length === 0) {
-                        inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
-                    } else {
-                        slice.forEach(r => {
-                            const orderedSeqForHighlight = (consecChecked && orderChecked) ? key.split('-').map(Number) : Array.from(setValues);
-                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, m, consecChecked, orderedSeqForHighlight, orderChecked);
-                            const labelHtml = renderHighlightedLabel(r.label, positions);
-                            let euclidPartsHtml = [];
-                            let euclidTotal = 0;
-                            try {
-                                const npTable = document.getElementById('numberPickerTable');
-                                const tbody = npTable ? npTable.querySelector('tbody') : null;
-                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
-                                for (let j = 0; j < 5; j++) {
-                                    const n1 = r.nums[j];
-                                    const n2 = r.nums[j + 1];
-                                    let part = '';
-                                    if (npTable && tbodyRows.length > 0) {
-                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
-                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
-                                        if (cell1 && cell2) {
-                                            const rowElem1 = cell1.parentElement;
-                                            const rowElem2 = cell2.parentElement;
-                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
-                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
-                                            const logicalRow1 = 7 - rowIdx1;
-                                            const logicalRow2 = 7 - rowIdx2;
-                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
-                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
-                                            const dx = colIdx2 - colIdx1;
-                                            const dy = logicalRow2 - logicalRow1;
-                                            const d = Math.sqrt(dx * dx + dy * dy);
-                                            part = isFinite(d) ? d.toFixed(2) : '';
-                                            euclidTotal += isFinite(d) ? d : 0;
+                    let inner = htmlCache.get(cacheKey);
+                    if (!inner) {
+                        const setValues = new Set(key.split('-').map(Number));
+                        const start = page * pageSizeRows;
+                        const slice = displayList.slice(start, start + pageSizeRows);
+                        const baselineTotal = baselineArrAll && baselineArrAll.length ? baselineArrAll.length : arrGroups.length;
+                        const idxInBaseline = baselineArrAll ? baselineArrAll.findIndex(([k]) => k === key) : -1;
+                        let rankDisplay = `${idx + 1}/${arrGroups.length}`;
+                        let occDisplay = `${list.length} kỳ`;
+                        if (idxInBaseline >= 0) {
+                            rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
+                            occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
+                        }
+
+                        inner = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
+                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                            `<span class='badge'>${occDisplay}</span>` +
+                            `</div>` +
+                            `</div>`;
+
+                        inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+
+                        inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
+                        if (slice.length === 0) {
+                            inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
+                        } else {
+                            slice.forEach(r => {
+                                const orderedSeqForHighlight = (consecChecked && orderChecked) ? key.split('-').map(Number) : Array.from(setValues);
+                                const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, m, consecChecked, orderedSeqForHighlight, orderChecked);
+                                const labelHtml = renderHighlightedLabel(r.label, positions);
+                                let euclidPartsHtml = [];
+                                let euclidTotal = 0;
+                                try {
+                                    const npTable = document.getElementById('numberPickerTable');
+                                    const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                    const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                    for (let j = 0; j < 5; j++) {
+                                        const n1 = r.nums[j];
+                                        const n2 = r.nums[j + 1];
+                                        let part = '';
+                                        if (npTable && tbodyRows.length > 0) {
+                                            const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                            const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                            if (cell1 && cell2) {
+                                                const rowElem1 = cell1.parentElement;
+                                                const rowElem2 = cell2.parentElement;
+                                                const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                                const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                                const logicalRow1 = 7 - rowIdx1;
+                                                const logicalRow2 = 7 - rowIdx2;
+                                                const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                                const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                                const dx = colIdx2 - colIdx1;
+                                                const dy = logicalRow2 - logicalRow1;
+                                                const d = Math.sqrt(dx * dx + dy * dy);
+                                                part = isFinite(d) ? d.toFixed(2) : '';
+                                                euclidTotal += isFinite(d) ? d : 0;
+                                            }
                                         }
+                                        if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                        else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
                                     }
-                                    if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
-                                    else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                } catch (e) {
+                                    for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
                                 }
-                            } catch (e) {
-                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
-                            }
-                            const totalStr = euclidTotal.toFixed(2);
-                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
-                        });
+                                const totalStr = euclidTotal.toFixed(2);
+                                const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+                                inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            });
+                        }
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        inner += `</tbody></table>`;
+                        inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
+                            `<button class='nav-btn prev'>◀</button>` +
+                            `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
+                            `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
+                            `<button class='nav-btn next'>▶</button>` +
+                            `</div>`;
+                        setCache(cacheKey, inner, idx);
                     }
-                    if (list.length > maxRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - maxRows} dòng nữa</td></tr>`;
-                    inner += `</tbody></table>`;
 
+                    body.style.minHeight = '';
                     body.innerHTML = inner;
+
+                    (function attachRowHoverToPopup() {
+                        try {
+                            const _tbody = body.querySelector('tbody');
+                            if (!_tbody) return;
+                            function parseStrongNumbers(text) {
+                                if (!text) return [];
+                                return text.replace(/[{}]/g, '')
+                                    .split(/[^0-9]+/)
+                                    .map(s => parseInt(s, 10))
+                                    .filter(n => Number.isFinite(n));
+                            }
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = parseStrongNumbers(s.textContent.trim());
+                                if (nums.length) {
+                                    try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { }
+                                    applyPopupHighlights(nums);
+                                }
+                            });
+                            _tbody.addEventListener('mouseout', () => { return; });
+                        } catch (err) { }
+                    })();
+
+                    try { if (typeof updateHeaderCount === 'function') updateHeaderCount(); } catch (e) { }
+                    const prevBtns = body.querySelectorAll('.prev');
+                    const nextBtns = body.querySelectorAll('.next');
+                    prevBtns.forEach(prevBtn => prevBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur - 1 + totalPages) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+                    nextBtns.forEach(nextBtn => nextBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        const cur = Number(card.dataset.page || 0);
+                        const newPage = (cur + 1) % totalPages;
+                        card.dataset.page = String(newPage);
+                        mount(card, idx);
+                    }));
+
+                    const pageInputs = body.querySelectorAll('.page-input');
+                    pageInputs.forEach(inp => {
+                        inp.addEventListener('change', (ev) => {
+                            ev.stopPropagation();
+                            const v = Number(inp.value);
+                            if (!Number.isFinite(v)) { inp.value = String(page + 1); return; }
+                            const newPage = v - 1;
+                            if (newPage >= 0 && newPage < totalPages) {
+                                card.dataset.page = String(newPage);
+                                mount(card, idx);
+                            } else {
+                                inp.value = String(page + 1);
+                            }
+                        });
+                        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.dispatchEvent(new Event('change')); });
+                    });
+
                     card.dataset.mounted = '1';
+                    card.dataset.currentPage = String(page);
                     mountedSet.add(idx);
                     if (!heightCache.has(idx)) heightCache.set(idx, body.offsetHeight || 120);
                     enforceMountedBudget(idx);
