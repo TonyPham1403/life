@@ -4062,8 +4062,10 @@
 
             let groupCache = null;
             let cacheKey = null;
-            // baseline (unfiltered) groups for current comb/settings
+            // baseline (unfiltered) groups for current comb/settings (after main x filter)
             let baselineArrAll = null;
+            // global baseline (before applying main x filter) used to show overall rank
+            let baselineArrGlobal = null;
             let isComputing = false;
 
             function group() {
@@ -4119,6 +4121,14 @@
                         .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
                         .filter(([, list]) => list.length >= 2);
 
+                    // capture global baseline (before applying main x filter) and sort it
+                    baselineArrGlobal = arr.slice();
+                    const baselineSort = sortSel.value;
+                    if (baselineSort === "value_asc") baselineArrGlobal.sort((a, b) => compareKey(a[0], b[0]));
+                    else if (baselineSort === "value_desc") baselineArrGlobal.sort((a, b) => compareKey(b[0], a[0]));
+                    else if (baselineSort === "count_asc") baselineArrGlobal.sort((a, b) => a[1].length - b[1].length);
+                    else baselineArrGlobal.sort((a, b) => b[1].length - a[1].length);
+
                     // apply main x filter first (if provided) so baseline is the set of combos containing x
                     const mainX = parseInt(xFilter.value, 10);
                     if (!Number.isNaN(mainX)) {
@@ -4130,8 +4140,7 @@
 
                     // capture baseline (after main x filter, before dynamic extras)
                     baselineArrAll = arr.slice();
-                    // sort baseline according to current sortSel so rank/sum are stable
-                    const baselineSort = sortSel.value;
+                    // sort baselineArrAll the same way so rank/sum are stable for filtered view
                     if (baselineSort === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
                     else if (baselineSort === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
                     else if (baselineSort === "count_asc") baselineArrAll.sort((a, b) => a[1].length - b[1].length);
@@ -4168,7 +4177,15 @@
 
                     worker.onmessage = (e) => {
                         let arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
-                        // apply main x filter first so baseline reflects combos that include x
+                        // capture global baseline (before applying main x filter) and sort it
+                        baselineArrGlobal = arr.slice();
+                        const baselineSortW = sortSel.value;
+                        if (baselineSortW === "value_asc") baselineArrGlobal.sort((a, b) => compareKey(a[0], b[0]));
+                        else if (baselineSortW === "value_desc") baselineArrGlobal.sort((a, b) => compareKey(b[0], a[0]));
+                        else if (baselineSortW === "count_asc") baselineArrGlobal.sort((a, b) => a[1].length - b[1].length);
+                        else baselineArrGlobal.sort((a, b) => b[1].length - a[1].length);
+
+                        // apply main x filter so baseline reflects combos that include x
                         const mainXw = parseInt(xFilter.value, 10);
                         if (!Number.isNaN(mainXw)) {
                             arr = arr.filter(([key]) => {
@@ -4177,9 +4194,8 @@
                             });
                         }
 
-                        // capture baseline before applying dynamic extras and sort it the same way
+                        // capture baseline before applying dynamic extras (filtered by mainX)
                         baselineArrAll = arr.slice();
-                        const baselineSortW = sortSel.value;
                         if (baselineSortW === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
                         else if (baselineSortW === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
                         else if (baselineSortW === "count_asc") baselineArrAll.sort((a, b) => a[1].length - b[1].length);
@@ -4513,11 +4529,33 @@
                             }
                         }
 
-                        // Add rank indicator (baselineRank/baselineTotal) next to the count badge
+                        // Compute global rank (before main-x filter) if available
+                        let globalRankDisplay = '';
+                        try {
+                            if (baselineArrGlobal && Array.isArray(baselineArrGlobal)) {
+                                const gTotal = baselineArrGlobal.length;
+                                const idxInGlobal = baselineArrGlobal.findIndex(([k]) => k === key);
+                                if (idxInGlobal >= 0) globalRankDisplay = `${idxInGlobal + 1}/${gTotal}`;
+                            }
+                        } catch (e) { }
+
+                        // Decide what to show: if global differs from filtered, show both (filtered then global).
+                        // Otherwise show just the global (or filtered fallback).
+                        let leftRankHtml = '';
+                        if (globalRankDisplay && baselineArrAll && baselineArrGlobal && baselineArrGlobal.length !== baselineArrAll.length) {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                                `<span class='muted' title='Toàn bộ' style='font-weight:800;margin-left:6px'>${globalRankDisplay}</span>`;
+                        } else if (globalRankDisplay) {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${globalRankDisplay}</span>`;
+                        } else {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>`;
+                        }
+
+                        // Add rank indicator(s) next to the count badge
                         card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
                             `<strong>{${key.replace(/-/g, ',')}}</strong>` +
                             `<div style='display:flex;align-items:center;gap:8px'>` +
-                            `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                            `${leftRankHtml}` +
                             `<span class='badge'>${occDisplay}</span>` +
                             `</div>` +
                             `</div><div class='card-body' style='min-height:120px'></div>`;
