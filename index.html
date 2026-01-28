@@ -3794,6 +3794,48 @@
         // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
         function renderCell6_5() {
             const body = sectionShell("cell6_5", "Cell6.5 · Truy x", "Chọn số x (1-45) và kích thước bộ để liệt kê chỉ những bộ liên quan tới x.");
+            // Mode selector placed next to the H2 header
+            try {
+                const sec = document.getElementById('cell6_5');
+                const h2 = sec ? sec.querySelector('h2') : null;
+                if (h2) {
+                    const modeSel = document.createElement('select');
+                    modeSel.title = 'Chế độ hiển thị';
+                    modeSel.style.marginLeft = '12px';
+                    ['truy', 'lienket'].forEach(k => {
+                        const o = document.createElement('option');
+                        if (k === 'truy') { o.value = 'truy'; o.textContent = 'Truy x (mặc định)'; }
+                        else { o.value = 'lienket'; o.textContent = 'Liên kết x'; }
+                        modeSel.appendChild(o);
+                    });
+                    // insert inside the H2 so the dropdown stays compact on the same line
+                    h2.appendChild(modeSel);
+                    modeSel.style.cssText = 'margin-left:12px;font-size:12px;padding:4px 6px;height:28px;vertical-align:middle;';
+                    // build a separate controls container for Liên kết x
+                    const lkControls = document.createElement('div'); lkControls.className = 'controls';
+                    lkControls.style.display = 'none';
+                    // top input
+                    const topLabel = document.createElement('input'); topLabel.type = 'number'; topLabel.min = 1; topLabel.placeholder = 'Top (dương)'; topLabel.style.width = '120px';
+                    // bộ dropdown (1..6)
+                    const lkSetSel = document.createElement('select');[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement('option'); o.value = String(v); o.textContent = `Bộ ${v}`; lkSetSel.appendChild(o); }); lkSetSel.value = '2';
+                    // append inputs (no explicit button — auto-update on change)
+                    lkControls.appendChild(document.createTextNode('Top:'));
+                    lkControls.appendChild(topLabel);
+                    lkControls.appendChild(document.createTextNode('Bộ:'));
+                    lkControls.appendChild(lkSetSel);
+                    // place the lkControls below the header by inserting into the DOM
+                    // (insert before the original next sibling of h2)
+                    h2.parentElement.insertBefore(lkControls, h2.nextSibling);
+
+                    // switching logic will be attached later after main controls created
+                    // expose references on body so switch handler can access them
+                    body.__modeSel = modeSel;
+                    body.__lkControls = lkControls;
+                    body.__lkTopInput = topLabel;
+                    body.__lkSetSel = lkSetSel;
+                }
+            } catch (e) { /* ignore if DOM ops fail */ }
+
             const controls = document.createElement("div"); controls.className = "controls";
             const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
             // remember previous comb so we only clear extras when shrinking the set
@@ -4174,6 +4216,116 @@
             // global baseline (before applying main x filter) used to show overall rank
             let baselineArrGlobal = null;
             let isComputing = false;
+
+            // Mode switching: if the header-inserted selector exists, wire it to show/hide
+            try {
+                const modeSel = body && body.__modeSel ? body.__modeSel : null;
+                const lkControls = body && body.__lkControls ? body.__lkControls : null;
+                const lkTopInput = body && body.__lkTopInput ? body.__lkTopInput : null;
+                const lkSetSel = body && body.__lkSetSel ? body.__lkSetSel : null;
+                if (modeSel) {
+                    const switchToTruy = () => {
+                        controls.style.display = '';
+                        if (lkControls) lkControls.style.display = 'none';
+                        // clear any lienket output
+                        try { wrap.innerHTML = ''; } catch (e) { }
+                        groupCache = null; cacheKey = null; baselineArrAll = null; baselineArrGlobal = null;
+                        // re-run group to show Truy x UI
+                        try { group(); } catch (e) { }
+                    };
+                    const switchToLienKet = () => {
+                        controls.style.display = 'none';
+                        if (lkControls) lkControls.style.display = 'flex';
+                        // clear existing Truy x tables and caches
+                        try { wrap.innerHTML = ''; } catch (e) { }
+                        groupCache = null; cacheKey = null; baselineArrAll = null; baselineArrGlobal = null;
+                        // immediately compute lien ket using retained input values
+                        try { if (typeof computeLienKet === 'function') computeLienKet(); } catch (e) { /* ignore */ }
+                    };
+                    modeSel.addEventListener('change', (ev) => {
+                        const v = String(modeSel.value || 'truy');
+                        if (v === 'lienket') switchToLienKet(); else switchToTruy();
+                    });
+
+                    // compute function for Liên kết x: take top-N combos of chosen bộ, aggregate number frequencies
+                    function computeLienKet() {
+                        if (!rows || !rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                        const topN = Math.max(1, parseInt(String(lkTopInput.value || '').trim(), 10) || 30);
+                        const comb = Math.max(1, parseInt(String(lkSetSel.value || '2'), 10) || 2);
+                        const groups = new Map();
+                        rows.forEach((r, rowIndex) => {
+                            const nums = r.nums;
+                            // generate combos of size `comb` (order-insensitive)
+                            const indexed = nums.map((v, i) => [i, v]);
+                            const combos = kCombinations(indexed, comb);
+                            combos.forEach(combo => {
+                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                const key = values.join("-");
+                                if (!groups.has(key)) groups.set(key, new Set());
+                                groups.get(key).add(rowIndex);
+                            });
+                        });
+                        let arr = [...groups.entries()].map(([key, set]) => [key, [...set]]);
+                        // attach recency (most recent rowIndex) to stabilize ties
+                        const arrWithRecency = arr.map(([key, idxs]) => [key, idxs, Math.max(...idxs)]);
+                        // sort by occurrence count desc, then lexical key (stable)
+                        arrWithRecency.sort((A, B) => {
+                            const cntDiff = B[1].length - A[1].length;
+                            if (cntDiff !== 0) return cntDiff;
+                            return compareKey(A[0], B[0]);
+                        });
+                        const topEntries = arrWithRecency.slice(0, Math.max(0, Math.min(arrWithRecency.length, topN))).map(a => [a[0], a[1]]);
+                        // aggregate number frequencies across the selected top entries
+                        const freq = Object.create(null);
+                        topEntries.forEach(([key]) => {
+                            key.split('-').map(Number).forEach(n => { freq[n] = (freq[n] || 0) + 1; });
+                        });
+                        // Also prepare a human-readable compact listing of chosen top combos (no rows)
+                        const topList = topEntries.map(([key, idxs]) => ({ key, count: idxs.length }));
+                        // invert: count -> [numbers]
+                        const inv = Object.create(null);
+                        Object.keys(freq).forEach(k => {
+                            const c = freq[k];
+                            if (!inv[c]) inv[c] = [];
+                            inv[c].push(Number(k));
+                        });
+                        const counts = Object.keys(inv).map(Number).sort((a, b) => b - a);
+                        // build output grouped by occurrence count
+                        let out = `<div style='margin-top:8px;'><div class='card'><div class='card-body'>`;
+                        if (topEntries.length === 0) out += `<div class='muted'>Không tìm thấy bộ nào</div>`;
+                        // show selected top combos compactly (key (count)), arranged N-per-line to reduce vertical space
+                        out += `<div style='margin-bottom:8px;font-weight:700'>Top ${topN} bộ (key · số kỳ) — danh sách đã chọn:</div>`;
+                        const perLine = 5;
+                        for (let i = 0; i < topList.length; i += perLine) {
+                            const slice = topList.slice(i, i + perLine).map(t => `<div class="lk-item">{<strong>${t.key.replace(/-/g, ', ')}</strong>} (${t.count})</div>`);
+                            out += `<div class="lk-row" style="display:grid;grid-template-columns:repeat(${perLine},1fr);gap:8px;font-family:monospace;margin-left:6px;text-align:left">${slice.join('')}</div>`;
+                        }
+                        // compute numbers 1..45 that did not appear in the selected top combos
+                        const allNums = Array.from({ length: 45 }, (_, i) => i + 1);
+                        const present = new Set(Object.keys(freq).map(Number));
+                        const missing = allNums.filter(n => !present.has(n));
+                        if (missing.length > 0) {
+                            const missingHtml = missing.map(n => `<strong style="color:#ff1744">${n}</strong>`).join(', ');
+                            out += `<div style='margin-bottom:8px;font-weight:700'>Không xuất hiện: ${missingHtml}</div>`;
+                        } else {
+                            out += `<div style='margin-bottom:8px;font-weight:700' class='muted'>Tất cả số đều xuất hiện</div>`;
+                        }
+                        out += `<hr style='margin:8px 0'/>`;
+                        counts.forEach(c => {
+                            const nums = (inv[c] || []).sort((a, b) => a - b);
+                            const numsHtml = nums.map(n => `<strong style="color:var(--accent)">${n}</strong>`).join(', ');
+                            out += `<div>${numsHtml}: Xuất hiện ${c} lần.</div>`;
+                        });
+                        out += `</div></div></div>`;
+                        wrap.innerHTML = out;
+                    }
+
+                    // Auto-run compute on input/change with light debounce
+                    const debouncedCompute = (typeof createDebounce === 'function') ? createDebounce(computeLienKet, 200) : computeLienKet;
+                    if (lkTopInput) lkTopInput.addEventListener('input', debouncedCompute);
+                    if (lkSetSel) lkSetSel.addEventListener('change', debouncedCompute);
+                }
+            } catch (e) { /* ignore */ }
 
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
