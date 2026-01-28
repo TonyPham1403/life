@@ -4046,8 +4046,14 @@
                     // dispatch input for preserved values to trigger any UI updates
                     comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach(inp => { if ((inp.value ?? '').trim() !== '') inp.dispatchEvent(new Event('input')); });
                 } else {
-                    // shrinking: rebuild and clear extras
-                    rebuildComboExtras([]);
+                    // shrinking: preserve leading values up to newCount
+                    const existing = Array.from(comboExtras.querySelectorAll('input[type="number"].combo-extra')).map(i => i.value ?? '');
+                    const prefill = existing.slice(0, newCount);
+                    rebuildComboExtras(prefill);
+                    // dispatch input for preserved values to trigger any UI updates
+                    comboExtras.querySelectorAll('input[type="number"].combo-extra').forEach((inp, idx) => {
+                        if ((prefill[idx] ?? '').trim() !== '') inp.dispatchEvent(new Event('input'));
+                    });
                 }
                 prevComb = newComb;
                 if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
