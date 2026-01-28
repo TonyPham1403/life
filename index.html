@@ -7828,6 +7828,13 @@
                 for (let i = 0; i < placeValues.length; i++) {
                     placeValues[i] = '';
                 }
+                // Also clear any popup highlights (orange outline) and popup state
+                try {
+                    clearPopupHighlights();
+                    window.__popupHighlights = null;
+                    window.__popupHighlightSource = null;
+                } catch (e) { /* ignore */ }
+
                 generateNumberPickerTable();
                 generatePlaceBoxes();
                 setupNumberCellDragDrop();
@@ -7890,6 +7897,13 @@
             closeNumberPickerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
+                // Clear any orange popup highlights and related state
+                try {
+                    clearPopupHighlights();
+                    window.__popupHighlights = null;
+                    window.__popupHighlightSource = null;
+                } catch (err) { /* ignore */ }
+
                 isPopupVisible = false;
                 numberPickerPopup.style.opacity = '0';
                 setTimeout(() => {
