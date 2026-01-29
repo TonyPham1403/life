@@ -9382,34 +9382,107 @@
         })();
     </script>
     <script>
-        // Scroll-to-bottom button behavior
+        // More robust auto-scroll: MutationObserver + polling to handle slow loads.
         (function () {
             try {
                 const toTop = document.getElementById('scrollToTop');
                 const toBottom = document.getElementById('scrollToBottom');
                 if (!toTop || !toBottom) return;
 
-                function updateButtons() {
+                let autoScrollActive = false;
+                let mo = null;
+                let pollIntervalId = null;
+                let lastDocumentHeight = document.documentElement.scrollHeight;
+                let lastScrollY = window.scrollY || window.pageYOffset || 0;
+
+                function showHideButtons() {
                     const sc = window.scrollY || window.pageYOffset || 0;
                     const max = document.documentElement.scrollHeight - window.innerHeight;
-                    // show top if scrolled down a bit
                     toTop.style.display = (sc > 200) ? 'block' : 'none';
-                    // show bottom if not near bottom
                     toBottom.style.display = (sc < max - 200) ? 'block' : 'none';
                 }
 
-                window.addEventListener('scroll', updateButtons, { passive: true });
-                window.addEventListener('resize', updateButtons);
-                // initial
-                setTimeout(updateButtons, 120);
+                function scrollToBottomImmediate() {
+                    const top = document.documentElement.scrollHeight - window.innerHeight;
+                    window.scrollTo({ top: top, behavior: 'auto' });
+                }
 
-                toTop.addEventListener('click', function () {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                });
+                function startPolling() {
+                    if (pollIntervalId) return;
+                    pollIntervalId = setInterval(() => {
+                        const h = document.documentElement.scrollHeight;
+                        if (h !== lastDocumentHeight) {
+                            lastDocumentHeight = h;
+                            // keep the viewport at the bottom when content grows
+                            scrollToBottomImmediate();
+                            // refresh button visibility after layout change
+                            setTimeout(showHideButtons, 40);
+                        }
+                    }, 400); // check ~2.5 times/sec
+                }
+
+                function stopPolling() {
+                    if (pollIntervalId) { clearInterval(pollIntervalId); pollIntervalId = null; }
+                }
+
+                function startAutoScroll() {
+                    if (autoScrollActive) return;
+                    autoScrollActive = true;
+                    // initial jump to bottom
+                    scrollToBottomImmediate();
+                    lastDocumentHeight = document.documentElement.scrollHeight;
+
+                    // MutationObserver for immediate updates
+                    const targetNode = document.querySelector('main') || document.documentElement;
+                    mo = new MutationObserver((mutations) => {
+                        if (!autoScrollActive) return;
+                        const h = document.documentElement.scrollHeight;
+                        if (h !== lastDocumentHeight) {
+                            lastDocumentHeight = h;
+                            scrollToBottomImmediate();
+                            setTimeout(showHideButtons, 40);
+                        }
+                    });
+                    try {
+                        mo.observe(targetNode, { childList: true, subtree: true, attributes: true, characterData: false });
+                    } catch (e) {
+                        try { mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true }); } catch (e) { }
+                    }
+
+                    // polling fallback to handle slow layout/async image loads
+                    startPolling();
+                    setTimeout(showHideButtons, 40);
+                }
+
+                function stopAutoScroll(reason) {
+                    autoScrollActive = false;
+                    if (mo) { try { mo.disconnect(); } catch (e) { } mo = null; }
+                    stopPolling();
+                    setTimeout(showHideButtons, 40);
+                }
+
+                // stop on user upward scroll or explicit interactions
+                window.addEventListener('scroll', function () {
+                    const sc = window.scrollY || window.pageYOffset || 0;
+                    const delta = sc - lastScrollY;
+                    if (autoScrollActive && delta < -2) stopAutoScroll('user-scrolled-up');
+                    lastScrollY = sc;
+                    showHideButtons();
+                }, { passive: true });
+
+                // wheel/touch/keyboard interruptions
+                window.addEventListener('wheel', (e) => { if (autoScrollActive && e.deltaY < 0) stopAutoScroll('user-wheel-up'); }, { passive: true });
+                window.addEventListener('touchstart', () => { if (autoScrollActive) stopAutoScroll('user-touch'); }, { passive: true });
+                window.addEventListener('keydown', (e) => { if (!autoScrollActive) return; const upKeys = ['ArrowUp', 'PageUp', 'Home']; if (upKeys.includes(e.key)) stopAutoScroll('user-key-up'); }, true);
+
+                window.addEventListener('resize', showHideButtons);
+                setTimeout(showHideButtons, 120);
+
+                toTop.addEventListener('click', function () { stopAutoScroll('user-request-top'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 
                 toBottom.addEventListener('click', function () {
-                    const top = document.documentElement.scrollHeight - window.innerHeight;
-                    window.scrollTo({ top: top, behavior: 'smooth' });
+                    if (autoScrollActive) { stopAutoScroll('toggled-off'); return; }
+                    startAutoScroll();
                 });
             } catch (e) { /* ignore */ }
         })();
