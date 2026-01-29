@@ -632,6 +632,25 @@
             white-space: nowrap;
         }
 
+        .lienket-next-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 30px;
+            padding: 0 8px;
+            font-size: 14px;
+            line-height: 1;
+            border-radius: 6px;
+            border: 2px solid var(--accent);
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .lienket-next-btn:focus { outline: none; box-shadow: 0 0 0 4px rgba(56,239,125,0.08); }
+
         .nav-btn:hover {
             border-color: var(--accent);
             color: var(--accent);
@@ -4593,10 +4612,67 @@
                         counts.forEach(c => {
                             const nums = (inv[c] || []).sort((a, b) => a - b);
                             const numsHtml = nums.map(n => `<strong style="color:var(--accent)">${n}</strong>`).join(', ');
-                            out += `<div>${numsHtml}: Xuất hiện ${c} lần.</div>`;
+                            // add a per-row ⏭ button (data-nums contains comma-separated numbers)
+                            out += `<div class='lk-count-row' data-nums='${nums.join(',')}' style='margin-bottom:6px;'>` +
+                                `<span class='lk-count-text'>${numsHtml}: Xuất hiện ${c} lần.</span>` +
+                                `<button type='button' class='lienket-next-btn' data-nums='${nums.join(',')}'>⏭</button>` +
+                                `</div>`;
                         });
                         out += `</div></div></div>`;
                         wrap.innerHTML = out;
+                        // Post-render: wire up per-row buttons to cycle-highlight numbers inside the Top list
+                        try {
+                            const strongs = Array.from(wrap.querySelectorAll('.lk-item strong'));
+                            // store original text so we can restore later
+                            strongs.forEach(s => { try { s.dataset.orig = s.textContent; } catch (e) { s.dataset.orig = s.innerText || ''; } });
+
+                            const buttons = Array.from(wrap.querySelectorAll('.lienket-next-btn'));
+                            buttons.forEach(btn => {
+                                btn._idx = -1;
+                                btn.addEventListener('click', (e) => {
+                                    // prevent focus + default button behavior that can change scroll
+                                    try { e.preventDefault(); } catch (er) { }
+                                    e.stopPropagation();
+                                    const numsArr = String(btn.dataset.nums || '').split(',').map(s => s.trim()).filter(s => s !== '');
+                                    if (!numsArr.length) return;
+                                    // save current scroll position and active element
+                                    const scrollTop = window.scrollY || document.documentElement.scrollTop || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
+                                    const scrollLeft = window.scrollX || document.documentElement.scrollLeft || (document.scrollingElement && document.scrollingElement.scrollLeft) || 0;
+                                    const prevActive = document.activeElement;
+
+                                    btn._idx = (btn._idx + 1) % numsArr.length;
+                                    const curr = numsArr[btn._idx];
+                                    // restore all strongs to original text
+                                    strongs.forEach(s => { s.innerHTML = s.dataset.orig; });
+                                    // highlight occurrences of `curr` inside each strong
+                                    let firstEl = null;
+                                    strongs.forEach(s => {
+                                        const arr = String(s.dataset.orig || '').split(/\s*,\s*/);
+                                        if (arr.includes(String(curr))) {
+                                            s.innerHTML = arr.map(p => p === String(curr)
+                                                ? `<span class='lienket-highlight' style='background:yellow;color:#000;padding:0 2px;border-radius:3px'>${p}</span>`
+                                                : p
+                                            ).join(', ');
+                                            if (!firstEl) firstEl = s.closest('.lk-item');
+                                        }
+                                    });
+
+                                    // restore scroll position immediately after DOM changes to avoid visual jump
+                                    try {
+                                        // small timeout to let layout settle
+                                        setTimeout(() => {
+                                            try {
+                                                window.scrollTo({ top: scrollTop, left: scrollLeft, behavior: 'auto' });
+                                            } catch (er) {
+                                                try { if (document.scrollingElement) document.scrollingElement.scrollTop = scrollTop; } catch (e) { }
+                                            }
+                                            // restore focus to previous element to avoid browser auto-scroll on focus
+                                            try { if (prevActive && typeof prevActive.focus === 'function') prevActive.focus(); } catch (e) { }
+                                        }, 8);
+                                    } catch (err) { /* ignore */ }
+                                });
+                            });
+                        } catch (err) { /* ignore wiring errors */ }
                     }
 
                     // Auto-run compute on input/change with light debounce
