@@ -21,6 +21,7 @@
             /* Canvas connection line color for dark mode */
             --connection-line-color: #ff5722;
             /* deep orange - contrasts with dark bg and yellow cells */
+            /* Scroll button sizing/offsets will be defined on body for symmetry */
         }
 
         [data-theme="light"] {
@@ -51,6 +52,12 @@
             color: var(--text);
             min-height: 100vh;
             transition: background 0.3s, color 0.3s;
+            /* Scroll button vars placed on body so positions are body-relative/mirrored */
+            --scroll-btn-size: 50px;
+            --scroll-btn-offset: 30px;
+            --scroll-btn-right: 30px;
+            /* height of the sticky header to exclude from the remaining area */
+            --header-height: 64px;
         }
 
         [data-theme="dark"] body {
@@ -1270,18 +1277,18 @@
             background-clip: padding-box;
         }
 
-        /* Floating scroll-to-top button */
+        /* Floating scroll-to-top button (uses variables so mirror can be computed on body) */
         #scrollToTop {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 50px;
-            height: 50px;
+            bottom: var(--scroll-btn-offset);
+            right: var(--scroll-btn-right);
+            width: var(--scroll-btn-size);
+            height: var(--scroll-btn-size);
             border-radius: 50%;
             background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
             border: none;
             color: white;
-            font-size: 24px;
+            font-size: calc(var(--scroll-btn-size) * 0.48);
             cursor: pointer;
             display: none;
             z-index: 99;
@@ -1299,12 +1306,50 @@
         }
 
         @media (max-width: 768px) {
+            body {
+                --scroll-btn-offset: 20px;
+                --scroll-btn-size: 45px;
+                --scroll-btn-right: 20px;
+            }
+
             #scrollToTop {
-                bottom: 20px;
-                right: 20px;
-                width: 45px;
-                height: 45px;
-                font-size: 20px;
+                font-size: calc(var(--scroll-btn-size) * 0.44);
+            }
+        }
+
+        /* Scroll to bottom button: vertically mirrored relative to scrollToTop (uses same vars) */
+        #scrollToBottom {
+            position: fixed;
+            /* place below header so it's the mirror across the midpoint of the remaining body
+               remaining midpoint derivation simplifies to top = header + offset */
+            top: calc(var(--header-height) + var(--scroll-btn-offset));
+            right: var(--scroll-btn-right);
+            width: var(--scroll-btn-size);
+            height: var(--scroll-btn-size);
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%);
+            border: none;
+            color: white;
+            font-size: calc(var(--scroll-btn-size) * 0.48);
+            cursor: pointer;
+            display: none;
+            z-index: 99;
+            box-shadow: 0 4px 12px rgba(56, 239, 125, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        #scrollToBottom:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 20px rgba(56, 239, 125, 0.4);
+        }
+
+        #scrollToBottom:active {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            #scrollToBottom {
+                font-size: calc(var(--scroll-btn-size) * 0.44);
             }
         }
 
@@ -1642,6 +1687,7 @@
         </div>
     </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
+    <button id="scrollToBottom" title="Xuống cuối trang">↓</button>
     <main>
         <div id="status" class="card" style="margin-bottom:18px;">Đang tải dữ liệu...</div>
         <!-- Sections injected by JS -->
@@ -9333,6 +9379,39 @@
                 const first = document.querySelector('main section[id]');
                 if (first && first.id) recordSectionClick(first.id);
             })();
+        })();
+    </script>
+    <script>
+        // Scroll-to-bottom button behavior
+        (function () {
+            try {
+                const toTop = document.getElementById('scrollToTop');
+                const toBottom = document.getElementById('scrollToBottom');
+                if (!toTop || !toBottom) return;
+
+                function updateButtons() {
+                    const sc = window.scrollY || window.pageYOffset || 0;
+                    const max = document.documentElement.scrollHeight - window.innerHeight;
+                    // show top if scrolled down a bit
+                    toTop.style.display = (sc > 200) ? 'block' : 'none';
+                    // show bottom if not near bottom
+                    toBottom.style.display = (sc < max - 200) ? 'block' : 'none';
+                }
+
+                window.addEventListener('scroll', updateButtons, { passive: true });
+                window.addEventListener('resize', updateButtons);
+                // initial
+                setTimeout(updateButtons, 120);
+
+                toTop.addEventListener('click', function () {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+
+                toBottom.addEventListener('click', function () {
+                    const top = document.documentElement.scrollHeight - window.innerHeight;
+                    window.scrollTo({ top: top, behavior: 'smooth' });
+                });
+            } catch (e) { /* ignore */ }
         })();
     </script>
 </body>
