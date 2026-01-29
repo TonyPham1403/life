@@ -4306,7 +4306,7 @@
                         const missing = allNums.filter(n => !present.has(n));
                         if (missing.length > 0) {
                             const missingHtml = missing.map(n => `<strong style="color:#ff1744">${n}</strong>`).join(', ');
-                            out += `<div style='margin-bottom:8px;font-weight:700'>Không xuất hiện: ${missingHtml}</div>`;
+                            out += `<div style='margin-bottom:8px;font-weight:700'>không có ${missing.length} số: ${missingHtml}</div>`;
                         } else {
                             out += `<div style='margin-bottom:8px;font-weight:700' class='muted'>Tất cả số đều xuất hiện</div>`;
                         }
