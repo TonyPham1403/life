@@ -3810,6 +3810,8 @@
                     });
                     // insert inside the H2 so the dropdown stays compact on the same line
                     h2.appendChild(modeSel);
+                    // ensure default mode is 'truy'
+                    try { modeSel.value = 'truy'; } catch (e) { }
                     modeSel.style.cssText = 'margin-left:12px;font-size:12px;padding:4px 6px;height:28px;vertical-align:middle;';
                     // build a separate controls container for Liên kết x
                     const lkControls = document.createElement('div'); lkControls.className = 'controls';
@@ -4158,23 +4160,42 @@
                     updateDraggable();
                 }
 
-                // attach left/right arrow navigation matching Cell9
-                const containersList = Array.from(comboExtras.querySelectorAll('.combo-extra-container'));
-                const navOrder = containersList.map(c => parseInt(c.dataset.index, 10));
-                const inputsList = Array.from(comboExtras.querySelectorAll('input.combo-extra'));
-                inputsList.forEach((inp, logicalIdx) => {
-                    inp.onkeydown = (e) => {
-                        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-                        e.preventDefault();
-                        const pos = navOrder.indexOf(logicalIdx);
-                        if (pos === -1) return;
-                        const nextPos = e.key === 'ArrowLeft'
-                            ? (pos > 0 ? pos - 1 : navOrder.length - 1)
-                            : (pos < navOrder.length - 1 ? pos + 1 : 0);
-                        const targetIdx = navOrder[nextPos];
-                        inputsList[targetIdx]?.focus();
-                    };
-                });
+                // Unified left/right navigation across the main x input and dynamic extras
+                function setupFocusNavigation() {
+                    const extrasInputs = Array.from(comboExtras.querySelectorAll('input.combo-extra'));
+                    const navElems = [xFilter, ...extrasInputs];
+                    navElems.forEach((el, idx) => {
+                        el.onkeydown = (e) => {
+                            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                            e.preventDefault();
+                            const nextIdx = e.key === 'ArrowLeft'
+                                ? (idx - 1 + navElems.length) % navElems.length
+                                : (idx + 1) % navElems.length;
+                            try { navElems[nextIdx].focus(); } catch (err) { }
+                        };
+                    });
+                }
+
+                // Create focus navigation buttons (will be added to controls later)
+                try {
+                    if (typeof focusPrevBtn === 'undefined') {
+                        var focusPrevBtn = document.createElement('button'); focusPrevBtn.type = 'button'; focusPrevBtn.className = 'nav-btn'; focusPrevBtn.title = 'Chuyển ô trái'; focusPrevBtn.textContent = '◀';
+                        var focusNextBtn = document.createElement('button'); focusNextBtn.type = 'button'; focusNextBtn.className = 'nav-btn'; focusNextBtn.title = 'Chuyển ô phải'; focusNextBtn.textContent = '▶';
+                        focusPrevBtn.style.marginRight = '6px'; focusNextBtn.style.marginLeft = '6px';
+                        focusPrevBtn.addEventListener('click', () => {
+                            const elems = [xFilter, ...Array.from(comboExtras.querySelectorAll('input.combo-extra'))];
+                            const active = document.activeElement; let idx = elems.indexOf(active); if (idx === -1) idx = 0;
+                            const prev = (idx - 1 + elems.length) % elems.length; try { elems[prev].focus(); } catch (e) { }
+                        });
+                        focusNextBtn.addEventListener('click', () => {
+                            const elems = [xFilter, ...Array.from(comboExtras.querySelectorAll('input.combo-extra'))];
+                            const active = document.activeElement; let idx = elems.indexOf(active); if (idx === -1) idx = 0;
+                            const nxt = (idx + 1) % elems.length; try { elems[nxt].focus(); } catch (e) { }
+                        });
+                    }
+                } catch (e) { }
+                // ensure nav wiring after rebuild
+                try { setupFocusNavigation(); } catch (e) { }
             }
 
             // rebuild extras when comb selection changes
@@ -4204,7 +4225,7 @@
             // initial build
             rebuildComboExtras();
 
-            controls.append("Số x:", xContainer, comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel);
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
