@@ -4653,7 +4653,9 @@
                             const prevButtons = Array.from(wrap.querySelectorAll('.lienket-prev-btn'));
 
                             nextButtons.forEach(btn => {
-                                btn._idx = -1;
+                                // use a shared index on the parent row so prev/next stay in sync
+                                const row = btn.closest('.lk-count-row');
+                                if (row && typeof row._idx === 'undefined') row._idx = -1;
                                 btn.addEventListener('click', (e) => {
                                     try { e.preventDefault(); } catch (er) { }
                                     e.stopPropagation();
@@ -4663,8 +4665,9 @@
                                     const scrollLeft = window.scrollX || document.documentElement.scrollLeft || (document.scrollingElement && document.scrollingElement.scrollLeft) || 0;
                                     const prevActive = document.activeElement;
 
-                                    btn._idx = (btn._idx + 1) % numsArr.length;
-                                    const curr = numsArr[btn._idx];
+                                    // advance the shared row index
+                                    if (row) row._idx = (Number(row._idx) + 1) % numsArr.length;
+                                    const curr = row ? numsArr[row._idx] : numsArr[(0 + 1) % numsArr.length];
 
                                     strongs.forEach(s => { s.innerHTML = s.dataset.orig; });
                                     strongs.forEach(s => {
@@ -4687,7 +4690,9 @@
                             });
 
                             prevButtons.forEach(btn => {
-                                btn._idx = 0;
+                                // use the same shared row index used by nextButtons
+                                const row = btn.closest('.lk-count-row');
+                                if (row && typeof row._idx === 'undefined') row._idx = 0;
                                 btn.addEventListener('click', (e) => {
                                     try { e.preventDefault(); } catch (er) { }
                                     e.stopPropagation();
@@ -4697,8 +4702,9 @@
                                     const scrollLeft = window.scrollX || document.documentElement.scrollLeft || (document.scrollingElement && document.scrollingElement.scrollLeft) || 0;
                                     const prevActive = document.activeElement;
 
-                                    btn._idx = (btn._idx - 1 + numsArr.length) % numsArr.length;
-                                    const curr = numsArr[btn._idx];
+                                    // move the shared row index backward
+                                    if (row) row._idx = (Number(row._idx) - 1 + numsArr.length) % numsArr.length;
+                                    const curr = row ? numsArr[row._idx] : numsArr[(0 - 1 + numsArr.length) % numsArr.length];
 
                                     strongs.forEach(s => { s.innerHTML = s.dataset.orig; });
                                     strongs.forEach(s => {
