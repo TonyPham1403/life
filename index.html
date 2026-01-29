@@ -1217,6 +1217,19 @@
             outline-offset: -2px;
         }
 
+        /* Persistent highlight when a record is Ctrl+clicked in Cell5.5 */
+        tr.ctrl-selected {
+            outline: 3px solid #FFD500;
+            /* yellow */
+            outline-offset: -3px;
+        }
+
+        /* Fallback highlight using inset box-shadow on cells so clipping doesn't hide the outline */
+        tr.ctrl-selected td {
+            box-shadow: inset 0 0 0 3px #FFD500;
+            background-clip: padding-box;
+        }
+
         /* Floating scroll-to-top button */
         #scrollToTop {
             position: fixed;
@@ -1896,6 +1909,28 @@
         }
 
         // ===== Renderers =====
+        // Fallback: capture Ctrl+clicks on rows inside section#cell11 (use capture so it runs before other handlers)
+        document.addEventListener('click', (ev) => {
+            try {
+                if (!ev || !ev.ctrlKey) return;
+                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                if (!tr) return;
+                const section = tr.closest('section');
+                if (!section || section.id !== 'cell11') return;
+                ev.preventDefault();
+                const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                if (!result) return;
+                const nums = parseSixNumbersFromString(result);
+                if (!nums) return;
+                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                tr.classList.add('ctrl-selected');
+                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+            } catch (e) { /* ignore */ }
+        }, true);
         function sectionShell(id, title, lead = "") {
             const sec = document.createElement("section");
             sec.id = id;
@@ -2022,6 +2057,100 @@
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
+                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell11
+                try {
+                    const persisted = (function () { try { return localStorage.getItem('cell11_ctrl_selected'); } catch (e) { return null; } })();
+                    if (persisted) {
+                        const _tbody_reapply = wrap.querySelector('tbody');
+                        if (_tbody_reapply) {
+                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                            if (m) m.classList.add('ctrl-selected');
+                        }
+                    }
+                } catch (e) { /* ignore reapply errors */ }
+
+                // Attach delegated hover + Ctrl+click handlers on wrap so all generated inner cards/tables receive behavior
+                (function attachRowHoverAndCtrlClick_cell11_delegated() {
+                    try {
+                        wrap.addEventListener('mouseover', (ev) => {
+                            const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                            if (!tr) return;
+                            const cardEl = tr.closest('.card');
+                            if (!cardEl) return;
+                            const s = cardEl.querySelector('strong');
+                            if (!s) return;
+                            const nums = (s.textContent || '').replace(/[{}]/g, '').split(/[^0-9]+/).map(p => parseInt(p, 10)).filter(Number.isFinite);
+                            if (nums.length) { try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { } applyPopupHighlights(nums); }
+                        });
+
+                        wrap.addEventListener('click', (ev) => {
+                            try {
+                                if (!ev || !ev.ctrlKey) return;
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                ev.preventDefault();
+                                const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                if (!result) return;
+                                const nums = parseSixNumbersFromString(result);
+                                if (!nums) return;
+                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                tr.classList.add('ctrl-selected');
+                                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                                try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                                else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+                            } catch (e) { }
+                        });
+                    } catch (err) { }
+                })();
+                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell11
+                try {
+                    const persisted = (function () { try { return localStorage.getItem('cell11_ctrl_selected'); } catch (e) { return null; } })();
+                    if (persisted) {
+                        const _tbody_reapply = wrap.querySelector('tbody');
+                        if (_tbody_reapply) {
+                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                            if (m) m.classList.add('ctrl-selected');
+                        }
+                    }
+                } catch (e) { /* ignore reapply errors */ }
+
+                // Attach Ctrl+click handler for cell11 (use delegation on wrap so all inner cards/tables are covered)
+                (function attachRowHoverAndCtrlClick_cell11() {
+                    try {
+                        wrap.addEventListener('mouseover', (ev) => {
+                            const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                            if (!tr) return;
+                            const cardEl = tr.closest('.card');
+                            if (!cardEl) return;
+                            const s = cardEl.querySelector('strong');
+                            if (!s) return;
+                            const nums = (s.textContent || '').replace(/[{}]/g, '').split(/[^0-9]+/).map(p => parseInt(p, 10)).filter(Number.isFinite);
+                            if (nums.length) { try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { } applyPopupHighlights(nums); }
+                        });
+
+                        wrap.addEventListener('click', (ev) => {
+                            try {
+                                if (!ev || !ev.ctrlKey) return;
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                ev.preventDefault();
+                                const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                if (!result) return;
+                                const nums = parseSixNumbersFromString(result);
+                                if (!nums) return;
+                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                tr.classList.add('ctrl-selected');
+                                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                                try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                                else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+                            } catch (e) { }
+                        });
+                    } catch (err) { }
+                })();
                 // ensure viewport shows controls + results consistently
                 setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
             }
@@ -2636,6 +2765,17 @@
                         htmlCache.set(idx, inner);
                     }
                     body.innerHTML = inner;
+                    // Reapply persisted Ctrl-selected highlight (persist across renders)
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell5_5_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = body.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
                     // attach hover handler to tbody so hovering a row will
                     // read the card header <strong> (e.g. {18,29}) and
                     // highlight corresponding numbers in the popup table (same as Cell6.5)
@@ -2672,6 +2812,45 @@
                             _tbody.addEventListener('mouseout', (ev) => {
                                 // Persist highlights until another record hover updates them.
                                 return;
+                            });
+
+                            // Ctrl+click a row: switch to cell6_6, paste its 6 numbers, and mark row with yellow border
+                            _tbody.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    // parse numbers (use existing helper)
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+
+                                    // clear any previous ctrl-selected rows globally and mark this one
+                                    try {
+                                        document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected'));
+                                    } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    // persist selection so it survives remounts/navigation
+                                    try { localStorage.setItem('cell5_5_ctrl_selected', result); } catch (e) { }
+
+                                    // Ensure target section is rendered then navigate to it after a short delay
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) {
+                                        setTimeout(() => {
+                                            try { navBtn.click(); } catch (e) { }
+                                            // apply numbers after nav; give a small delay to allow render
+                                            setTimeout(() => {
+                                                try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { }
+                                            }, 220);
+                                        }, 200);
+                                    } else {
+                                        // fallback: apply even if nav button missing
+                                        setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                    }
+                                } catch (e) { /* ignore */ }
                             });
                         } catch (err) { /* ignore */ }
                     })();
@@ -2966,6 +3145,74 @@
                     }
                     body.style.minHeight = "";
                     body.innerHTML = inner;
+                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell7
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell7_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = body.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
+
+                    // attach hover + Ctrl+click handler to tbody so Ctrl+click will mark + apply to Cell6.6
+                    (function attachRowHoverAndCtrlClick() {
+                        try {
+                            const _tbody = body.querySelector('tbody');
+                            if (!_tbody) return;
+                            function parseStrongNumbers(text) {
+                                if (!text) return [];
+                                return text.replace(/[{}]/g, '')
+                                    .split(/[^0-9]+/)
+                                    .map(s => parseInt(s, 10))
+                                    .filter(n => Number.isFinite(n));
+                            }
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = parseStrongNumbers(s.textContent.trim());
+                                if (nums.length) {
+                                    try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { }
+                                    applyPopupHighlights(nums);
+                                }
+                            });
+                            _tbody.addEventListener('mouseout', () => { return; });
+
+                            _tbody.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+
+                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    try { localStorage.setItem('cell7_ctrl_selected', result); } catch (e) { }
+
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) {
+                                        setTimeout(() => {
+                                            try { navBtn.click(); } catch (e) { }
+                                            setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220);
+                                        }, 200);
+                                    } else {
+                                        setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                    }
+                                } catch (e) { }
+                            });
+                        } catch (err) { }
+                    })();
                     // attach pagination handlers
                     const prevBtns = body.querySelectorAll('.prev');
                     const nextBtns = body.querySelectorAll('.next');
@@ -3641,6 +3888,17 @@
 
                     body.style.minHeight = '';
                     body.innerHTML = inner;
+                    // Reapply persisted Ctrl-selected highlight (persist across renders)
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = body.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
 
                     (function attachRowHoverToPopup() {
                         try {
@@ -4653,6 +4911,18 @@
                     }
                     body.style.minHeight = '';
                     body.innerHTML = inner;
+                    // Reapply persisted Ctrl-selected highlight (persist across renders)
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell6_5_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = body.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
+
                     // attach hover handler to tbody so hovering a row will
                     // read the card header <strong> (e.g. {18,29}) and
                     // highlight corresponding numbers in the popup table
@@ -4692,12 +4962,45 @@
 
                             _tbody.addEventListener('mouseout', (ev) => {
                                 // Persist highlights even when the mouse leaves the tbody.
-                                // Previously we cleared highlights here which made the orange
-                                // outline disappear as soon as the cursor left the popup.
-                                // Now we keep `window.__popupHighlights` set so highlights
-                                // remain until another record hover updates them.
                                 // No-op.
                                 return;
+                            });
+
+                            // Ctrl+click a row: switch to cell6_6, paste its 6 numbers, and mark row with yellow border
+                            _tbody.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    // parse numbers (use existing helper)
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+
+                                    // clear any previous ctrl-selected rows globally and mark this one
+                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    // persist selection so it survives remounts/navigation
+                                    try { localStorage.setItem('cell6_5_ctrl_selected', result); } catch (e) { }
+
+                                    // Ensure target section is rendered then navigate to it after a short delay
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) {
+                                        setTimeout(() => {
+                                            try { navBtn.click(); } catch (e) { }
+                                            // apply numbers after nav; give a small delay to allow render
+                                            setTimeout(() => {
+                                                try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { }
+                                            }, 220);
+                                        }, 200);
+                                    } else {
+                                        // fallback: apply even if nav button missing
+                                        setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                    }
+                                } catch (e) { /* ignore */ }
                             });
                         } catch (err) { /* ignore */ }
                     })();
@@ -5216,6 +5519,60 @@
                 }
                 html += "</div>";
                 wrap.innerHTML = html;
+                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell8
+                try {
+                    const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
+                    if (persisted) {
+                        const _tbody_reapply = wrap.querySelector('tbody');
+                        if (_tbody_reapply) {
+                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                            if (m) m.classList.add('ctrl-selected');
+                        }
+                    }
+                } catch (e) { /* ignore reapply errors */ }
+
+                // Attach delegated hover + Ctrl+click handlers so rows can be highlighted and Ctrl-clicked
+                (function attachRowHoverAndCtrlClick_cell8_labelMode() {
+                    try {
+                        wrap.addEventListener('mouseover', (ev) => {
+                            const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                            if (!tr) return;
+                            const res = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                            if (!res) return;
+                            const nums = res.split(/[^0-9]+/).map(s => parseInt(s, 10)).filter(Number.isFinite);
+                            if (nums.length) { try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = tr.closest('.card') || wrap; } catch (e) { } applyPopupHighlights(nums); }
+                        });
+
+                        wrap.addEventListener('click', (ev) => {
+                            try {
+                                if (!ev || !ev.ctrlKey) return;
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                ev.preventDefault();
+                                const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                if (!result) return;
+                                const nums = parseSixNumbersFromString(result);
+                                if (!nums) return;
+
+                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                tr.classList.add('ctrl-selected');
+                                try { localStorage.setItem('cell8_ctrl_selected', result); } catch (e) { }
+
+                                try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                if (navBtn) {
+                                    setTimeout(() => {
+                                        try { navBtn.click(); } catch (e) { }
+                                        setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220);
+                                    }, 200);
+                                } else {
+                                    setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                }
+                            } catch (e) { /* ignore */ }
+                        });
+                    } catch (err) { /* ignore */ }
+                })();
+
                 // scroll to 240px so the controls sit under header consistently
                 setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
             }
@@ -5493,6 +5850,37 @@
                             _tbody.addEventListener('mouseout', (ev) => {
                                 // Persist highlights until another record hover updates them.
                                 return;
+                            });
+
+                            // Ctrl+click a row: switch to cell6_6, paste its 6 numbers, and mark row with yellow border
+                            _tbody.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+
+                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    try { localStorage.setItem('cell8_ctrl_selected', result); } catch (e) { }
+
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) {
+                                        setTimeout(() => {
+                                            try { navBtn.click(); } catch (e) { }
+                                            setTimeout(() => {
+                                                try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { }
+                                            }, 220);
+                                        }, 200);
+                                    } else {
+                                        setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                    }
+                                } catch (e) { /* ignore */ }
                             });
                         } catch (err) { /* ignore */ }
                     })();
@@ -6077,6 +6465,101 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
+                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell9
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell9_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = wrap.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
+
+                    // Attach Ctrl+click handler for cell9 (use delegation on wrap so all inner cards/tables are covered)
+                    (function attachRowHoverAndCtrlClick_cell9() {
+                        try {
+                            wrap.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = (s.textContent || '').replace(/[{}]/g, '').split(/[^0-9]+/).map(p => parseInt(p, 10)).filter(Number.isFinite);
+                                if (nums.length) { try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { } applyPopupHighlights(nums); }
+                            });
+
+                            wrap.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    try { localStorage.setItem('cell9_ctrl_selected', result); } catch (e) { }
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                                    else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+                                } catch (e) { }
+                            });
+                        } catch (err) { }
+                    })();
+                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell8
+                    try {
+                        const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
+                        if (persisted) {
+                            const _tbody_reapply = wrap.querySelector('tbody');
+                            if (_tbody_reapply) {
+                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
+                                if (m) m.classList.add('ctrl-selected');
+                            }
+                        }
+                    } catch (e) { /* ignore reapply errors */ }
+
+                    // Attach Ctrl+click handler for cell8
+                    (function attachRowHoverAndCtrlClick_cell8() {
+                        try {
+                            const _tbody = wrap.querySelector('tbody');
+                            if (!_tbody) return;
+                            _tbody.addEventListener('mouseover', (ev) => {
+                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                if (!tr) return;
+                                const cardEl = tr.closest('.card');
+                                if (!cardEl) return;
+                                const s = cardEl.querySelector('strong');
+                                if (!s) return;
+                                const nums = (s.textContent || '').replace(/[{}]/g, '').split(/[^0-9]+/).map(p => parseInt(p, 10)).filter(Number.isFinite);
+                                if (nums.length) { try { window.__popupHighlights = nums.slice(); window.__popupHighlightSource = cardEl; } catch (e) { } applyPopupHighlights(nums); }
+                            });
+                            _tbody.addEventListener('click', (ev) => {
+                                try {
+                                    if (!ev || !ev.ctrlKey) return;
+                                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
+                                    if (!tr) return;
+                                    ev.preventDefault();
+                                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                                    if (!result) return;
+                                    const nums = parseSixNumbersFromString(result);
+                                    if (!nums) return;
+                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    tr.classList.add('ctrl-selected');
+                                    try { localStorage.setItem('cell8_ctrl_selected', result); } catch (e) { }
+                                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                    if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                                    else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+                                } catch (e) { }
+                            });
+                        } catch (err) { }
+                    })();
                     // ensure viewport shows controls + results consistently
                     setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
                 } else {
@@ -8240,16 +8723,30 @@
             // Toggle popup with Ctrl
             let ctrlPressed = false;
             let ctrlWithOtherKey = false;
+            // New: detect mouse interaction (click/mousedown) while Ctrl is held so
+            // Ctrl+mouse actions (e.g., Ctrl+click to select a row) don't also toggle popup
+            let ctrlHadMouseInteraction = false;
+
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Control' && !e.repeat) {
                     ctrlPressed = true;
                     ctrlWithOtherKey = false;
+                    ctrlHadMouseInteraction = false;
                 } else if (ctrlPressed && e.key !== 'Control') {
                     ctrlWithOtherKey = true;
                 }
             });
+
+            // mark any mouse interaction while ctrl is pressed
+            document.addEventListener('mousedown', (e) => {
+                try { if (ctrlPressed) ctrlHadMouseInteraction = true; } catch (err) { }
+            }, true);
+            document.addEventListener('touchstart', (e) => {
+                try { if (ctrlPressed) ctrlHadMouseInteraction = true; } catch (err) { }
+            }, true);
+
             document.addEventListener('keyup', (e) => {
-                if (e.key === 'Control' && ctrlPressed && !ctrlWithOtherKey) {
+                if (e.key === 'Control' && ctrlPressed && !ctrlWithOtherKey && !ctrlHadMouseInteraction) {
                     isPopupVisible = !isPopupVisible;
                     if (isPopupVisible) {
                         // Apply scale BEFORE showing
@@ -8289,6 +8786,7 @@
                 if (e.key === 'Control') {
                     ctrlPressed = false;
                     ctrlWithOtherKey = false;
+                    ctrlHadMouseInteraction = false;
                 }
             });
 
