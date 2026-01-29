@@ -9124,6 +9124,88 @@
             mo.observe(document.body, { childList: true, subtree: true });
         })();
     </script>
+    <script>
+        // Ctrl+Shift toggle between two most-recently-clicked sections (cells)
+        (function () {
+            const lastTwo = []; // keep up to 2 most recent section ids
+            let lastClicked = null; // the most recently clicked section id
+            let toggleLocked = false; // avoid repeat triggers while keys held
+
+            function recordSectionClick(secId) {
+                if (!secId) return;
+                const idx = lastTwo.indexOf(secId);
+                if (idx !== -1) lastTwo.splice(idx, 1);
+                lastTwo.push(secId);
+                if (lastTwo.length > 2) lastTwo.shift();
+                lastClicked = secId;
+            }
+
+            // Delegate clicks: any click inside a section with an id counts
+            document.addEventListener('click', function (ev) {
+                try {
+                    const sec = ev.target.closest('section[id]');
+                    if (sec && sec.id) recordSectionClick(sec.id);
+                    // Also treat clicks on nav buttons as selecting their target section
+                    const navBtn = ev.target.closest('.nav-btn');
+                    if (navBtn && navBtn.dataset && navBtn.dataset.target) recordSectionClick(navBtn.dataset.target);
+                } catch (e) { /* ignore */ }
+            }, true);
+
+            function gotoSection(secId) {
+                if (!secId) return;
+                const sec = document.getElementById(secId);
+                if (!sec) return;
+                // Try to activate nav button if present (non-invasive)
+                const selectors = [
+                    '.nav-btn[data-target="' + secId + '"]',
+                    '.nav-btn[data-section="' + secId + '"]',
+                    '.nav-btn[href="#' + secId + '"]'
+                ];
+                let clicked = false;
+                for (const s of selectors) {
+                    const btn = document.querySelector(s);
+                    if (btn) { btn.click(); clicked = true; break; }
+                }
+                // Fallback: scroll into view and focus safely
+                if (!clicked) {
+                    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    try { if (typeof safeFocus === 'function') safeFocus(sec); else sec.focus(); } catch (e) { }
+                }
+                lastClicked = secId;
+            }
+
+            function toggleLastTwo() {
+                if (lastTwo.length < 2) return;
+                const older = lastTwo[0], newer = lastTwo[1];
+                const target = (lastClicked === newer) ? older : newer;
+                gotoSection(target);
+            }
+
+            // Trigger when Ctrl is held and Shift is tapped (allow repeated taps while Ctrl held)
+            document.addEventListener('keydown', function (e) {
+                try {
+                    // only respond to physical Shift key down to avoid repeats from holding
+                    if (e.key === 'Shift' && e.ctrlKey && !toggleLocked) {
+                        toggleLocked = true; // lock until Shift is released
+                        toggleLastTwo();
+                        e.preventDefault();
+                    }
+                } catch (err) { }
+            }, true);
+            document.addEventListener('keyup', function (e) {
+                try {
+                    // release the lock when Shift is released so another tap can trigger
+                    if (e.key === 'Shift') toggleLocked = false;
+                } catch (err) { }
+            }, true);
+
+            // Initialize by recording the first section in document (if any)
+            (function init() {
+                const first = document.querySelector('main section[id]');
+                if (first && first.id) recordSectionClick(first.id);
+            })();
+        })();
+    </script>
 </body>
 
 </html>
