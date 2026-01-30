@@ -2231,6 +2231,8 @@
             topSel.value = "45";
             const sortSel = document.createElement("select");
             [["default", "Mặc định (1→45)"], ["total_desc", "Theo tổng % giảm dần"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
+            // Mặc định chọn sắp xếp theo tổng % giảm dần
+            sortSel.value = "total_desc";
             const decimalSel = document.createElement("select");
             [[0, "0 chữ số"], [1, "1 chữ số"], [2, "2 chữ số"], [3, "3 chữ số"], [4, "4 chữ số"], [5, "5 chữ số"], [6, "6 chữ số"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; decimalSel.appendChild(o); });
             decimalSel.value = "2";
