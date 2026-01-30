@@ -315,18 +315,20 @@
         }
 
         .number-picker-table td:hover {
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-            color: var(--highlight-text);
-            transform: scale(1.08);
-            box-shadow: 0 4px 12px rgba(56, 239, 125, 0.3);
-        }
-
-        /* Highlighted numbers (when placed or hovered via quick-place)
-           Use the same (day.html) "placed" visual: a solid/soft green fill
-           rather than the gradient. This matches the place-box.filled style. */
-        #numberPickerPopup #numberPickerTable td.number-cell.selected-number {
-            /* Use dark placed-background from day.html */
-            background: #1a2a3a !important;
+            background: var(--cell-bg-color, #fffbea);
+            color: #000000;
+            transition: all 0.2s;
+            border: 2px solid var(--connection-line-color);
+            box-shadow: 0 2px 8px rgba(255, 251, 234, 0.4);
+            font-weight: 700;
+            padding: 8px;
+            text-align: center;
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            z-index: 1;
+            box-sizing: border-box;
+            /* Added box-sizing */
             /* Do not set a global text color on the cell so rank badges keep their own color.
                Color for the main number is applied to the number span below. */
             transform: none !important;
@@ -1746,6 +1748,467 @@
             margin-left: 0 !important;
             margin-right: 0 !important;
         }
+
+        /* Trash popup styles */
+        #trashPopup {
+            position: absolute;
+            z-index: 10001;
+            left: calc(-1 * (var(--trash-width, 420px) + 12px));
+            top: 8px;
+            display: none;
+            background: var(--card);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            overflow-y: auto;
+            overflow-x: hidden;
+            /* prevent horizontal scrollbar */
+            transform: none !important;
+            will-change: width, height, left, top;
+        }
+
+        #trashPopup table {
+            width: 100%;
+            max-width: var(--trash-width);
+            border-collapse: collapse;
+            table-layout: fixed;
+            transform: none !important;
+            table-layout: fixed;
+        }
+
+        #trashPopup td {
+            padding: 6px;
+            text-align: center;
+            vertical-align: middle;
+            cursor: grab;
+            box-sizing: border-box;
+        }
+
+        /* Each trash cell: 3 columns, responsive and keep aspect ratio */
+        #trashPopup td {
+            width: calc(100% / 3);
+            max-width: calc(100% / 3);
+            aspect-ratio: 1 / 1.732;
+            /* height = width / 1.732 */
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            padding: 6px;
+            /* ensure consistent padding inside cells */
+            box-sizing: border-box;
+        }
+
+        #trashPopup td.trash-number {
+            background: var(--cell-bg-color, #fffbea);
+            color: #000000;
+            font-weight: 700;
+            border: 2px solid var(--connection-line-color);
+            /* keep td as a table-cell so the table layout enforces 3 columns
+               use an inner wrapper for flex layout instead of changing td display */
+        }
+
+        /* inner flex wrapper inside each trash cell to position rank and number */
+        #trashPopup td.trash-number>.trash-inner {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            min-width: 0;
+            /* allow flex children to shrink to prevent overflow */
+            overflow: hidden;
+        }
+
+        #trashPopup td.trash-number:active {
+            cursor: grabbing;
+        }
+
+        /* rank/pill should appear left of the main number */
+        #trashPopup td.trash-number .rank-in-cell,
+        #trashPopup td.trash-number .pill {
+            margin-right: 6px;
+            order: 0;
+        }
+
+        #trashPopup td.trash-number .number-main,
+        #trashPopup td.trash-number span:not(.pill):not(.rank-in-cell) {
+            order: 1;
+        }
+
+        /* Hidden state for numbers removed into trash
+           keep the table cell as a placeholder so other cells don't shift */
+        #numberPickerTable td.in-trash {
+            visibility: hidden !important;
+            pointer-events: none !important;
+            background: transparent !important;
+        }
+
+        /* Show a red flagged style for trashed numbers when shown inside the
+           number-picker popup. This overrides the global hidden state so the
+           popup can visually indicate items that were moved to trash. */
+        #numberPickerPopup #numberPickerTable td.in-trash {
+            visibility: visible !important;
+            pointer-events: none !important;
+            /* Bright red background and high-contrast white text */
+            background: #ff1744 !important;
+            color: #ffffff !important;
+            border-color: #e51b3b !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
+        }
+
+        /* Hide all visible content (rank badges and main number) inside
+           trashed cells when rendered in the popup. This keeps the cell
+           visually flagged red but removes readable text/rank. */
+        #numberPickerPopup #numberPickerTable td.in-trash .rank-in-cell,
+        #numberPickerPopup #numberPickerTable td.in-trash .pill,
+        #numberPickerPopup #numberPickerTable td.in-trash .number-main,
+        #numberPickerPopup #numberPickerTable td.in-trash>span:not(.rank-in-cell):not(.pill) {
+            display: none !important;
+            visibility: hidden !important;
+        }
+
+        /* Keep trashed cells visibly red for direct hover/selection/inline-style.
+           Exclude `.popup-number-highlight` here so the split-gradient
+           pseudo-element can render the left-dark/right-red highlight. */
+        #numberPickerPopup #numberPickerTable td.in-trash:hover,
+        #numberPickerPopup #numberPickerTable td.in-trash.selected-number,
+        #numberPickerPopup #numberPickerTable td.in-trash[style] {
+            background: #ff1744 !important;
+            color: #ffffff !important;
+            border-color: #e51b3b !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
+            outline: none !important;
+        }
+
+        /* Additional hard override: ensure no descendant text or inline styles
+           inside popup trashed cells can show green/black text. This forces
+           children to be hidden and text to be transparent even under hover,
+           highlight, selection, or inline-style overrides applied by JS. */
+        #numberPickerPopup #numberPickerTable td.in-trash *,
+        #numberPickerPopup.number-picker-popup.show #numberPickerTable td.in-trash *,
+        .number-picker-popup #numberPickerTable td.in-trash * {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            color: transparent !important;
+            pointer-events: none !important;
+        }
+
+        /* Extra overlay: create an absolutely positioned red layer that fully
+           covers the trashed cell. This prevents other styling (outline,
+           box-shadow, or pseudo-elements) from visually overriding the red
+           background during transient hover/selection updates. */
+        #numberPickerPopup #numberPickerTable td.in-trash {
+            position: relative !important;
+            z-index: 2000 !important;
+            transition: none !important;
+            -webkit-transition: none !important;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash::before {
+            content: '' !important;
+            position: absolute !important;
+            inset: 0 !important;
+            background: #ff1744 !important;
+            border-radius: inherit !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
+            z-index: 2001 !important;
+            pointer-events: none !important;
+        }
+
+        /* Dimmed overlay for trashed numbers that are also present in place boxes.
+           This shows a 50% red overlay but keeps the cell contents visible. It
+           overrides the heavier in-trash rules above when the additional
+           `in-trash-dim` class is present. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim {
+            visibility: visible !important;
+            pointer-events: none !important;
+            background: rgba(255, 23, 68, 0.5) !important;
+            color: #ffffff !important;
+            border-color: #e51b3b !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.08) !important;
+            position: relative !important;
+            z-index: 2000 !important;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim::before {
+            background: rgba(255, 23, 68, 0.5) !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.08) !important;
+            z-index: 2001 !important;
+            pointer-events: none !important;
+        }
+
+        /* Ensure children of dimmed trashed cells remain visible (undo the
+           global hide rules for plain trashed items). Keep pointer-events off
+           so interaction remains disabled while the visual remains readable. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim * {
+            display: revert !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            pointer-events: none !important;
+        }
+
+        /* Ensure dim overlay persists when JS toggles highlight/selection/inline styles
+           which previously forced a full-red overlay via higher-specificity selectors. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight::before,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number::before,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style]::before,
+        #numberPickerPopup.number-picker-popup.show #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight::before,
+        .number-picker-popup#numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight::before {
+            background: rgba(255, 23, 68, 0.5) !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.08) !important;
+            z-index: 3000 !important;
+            pointer-events: none !important;
+        }
+
+        /* Ensure the orange outline remains visible for dimmed trashed cells
+           that are highlighted by group hover. Lower the overlay z-index so
+           the outline (drawn on the cell) appears above the pseudo-element. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight {
+            outline: 4px solid #ff8c00 !important;
+            outline-offset: 2px !important;
+            position: relative !important;
+            z-index: 4000 !important;
+        }
+
+        /* Push the dim ::before overlay beneath the cell's outline when highlighted */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight::before {
+            z-index: 2000 !important;
+        }
+
+        /* Also ensure children remain visible under these transient states */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight *,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number *,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style] * {
+            display: revert !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            pointer-events: none !important;
+        }
+
+        /* Also ensure highlighted/selected variants keep the overlay intact.
+           When a trashed number is highlighted (hovering a record that maps
+           to this number), show a left-dark / right-red split so the UI
+           clearly indicates both 'flagged' and 'highlighted' states. */
+        /* Highlight-on-hover (record hover -> popup-number-highlight): split background */
+        #numberPickerPopup #numberPickerTable td.in-trash.popup-number-highlight::before {
+            background: linear-gradient(to right, #1a2a3a 0 50%, #fe1744 50% 100%) !important;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        /* Keep fully-red overlay for selected/explicitly-styled trashed cells */
+        #numberPickerPopup #numberPickerTable td.in-trash.selected-number::before,
+        .number-picker-popup #numberPickerTable td.in-trash[style]::before {
+            background: #ff1744 !important;
+            box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
+        }
+
+        /* Stronger rule: when a trashed cell is also highlighted via
+           `popup-number-highlight`, prefer the split appearance even if
+           `selected-number` or inline styles are present. This wins by
+           being more specific and placed after the full-red rule. */
+        #numberPickerPopup #numberPickerTable td.in-trash.popup-number-highlight.selected-number::before,
+        #numberPickerPopup #numberPickerTable td.in-trash.popup-number-highlight[style]::before,
+        .number-picker-popup #numberPickerTable td.in-trash.popup-number-highlight::before {
+            background: linear-gradient(to right, #1a2a3a 0 50%, #fe1744 50% 100%) !important;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        /* Small visual for the trash button when active */
+        #trashBtn {
+            background: transparent;
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #trashBtn.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        #trashToggle {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        /* Stronger enforcement: ensure the split (50% dark / 50% red)
+           gradient appears for trashed popup cells when they are highlighted.
+           This rule is very specific and placed at the end of the stylesheet
+           so it wins over earlier full-red overrides (including inline-style
+           based selectors). */
+        #numberPickerPopup.number-picker-popup.show #numberPickerTable td.in-trash.popup-number-highlight::before,
+        .number-picker-popup#numberPickerPopup #numberPickerTable td.in-trash.popup-number-highlight::before,
+        #numberPickerPopup #numberPickerTable td.in-trash.popup-number-highlight[style]::before,
+        .number-picker-popup #numberPickerTable td.in-trash.popup-number-highlight[style]::before {
+            background: linear-gradient(to right, #1a2a3a 0 50%, #fe1744 50% 100%) !important;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        /* Additional overrides: ensure trashed-but-present cells show the
+       split overlay while keeping number and rank text visible and in
+       their intended colors. Inserted to win over earlier hiding rules. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim {
+            position: relative;
+            isolation: isolate;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg,
+                    rgba(56, 239, 125, 0.5) 0% 50%,
+                    rgba(255, 23, 68, 0.5) 50% 100%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim>* {
+            position: relative;
+            z-index: 1;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            -webkit-text-stroke: 0px !important;
+            text-shadow: none !important;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight>*,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number>*,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style]>* {
+            position: relative;
+            z-index: 1;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+        }
+
+        /* Explicit rules to ensure number text and rank/pill remain visible
+           for trashed items that are also present in place boxes (in-trash-dim).
+           These selectors override earlier hiding rules and make text render
+           above the split overlay. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim {
+            position: relative;
+            isolation: isolate;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg,
+                    rgba(56, 239, 125, 0.5) 0% 50%,
+                    rgba(255, 23, 68, 0.5) 50% 100%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim>* {
+            position: relative;
+            z-index: 1;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            -webkit-text-stroke: 0px !important;
+            text-shadow: none !important;
+        }
+
+        /* Unhide the specific spans that were previously hidden for trashed cells */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim .rank-in-cell,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim .pill,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim .number-main,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim>span:not(.rank-in-cell):not(.pill) {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            font-weight: 700 !important;
+            -webkit-text-stroke: 0px !important;
+            text-shadow: none !important;
+        }
+
+        /* Ensure the above also applies during transient highlight/selection or when inline styles are present */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight .rank-in-cell,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight .pill,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight .number-main,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight>span:not(.rank-in-cell):not(.pill),
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number .rank-in-cell,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number .pill,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number .number-main,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number>span:not(.rank-in-cell):not(.pill),
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style] .rank-in-cell,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style] .pill,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style] .number-main,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style]>span:not(.rank-in-cell):not(.pill) {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            font-weight: 700 !important;
+            -webkit-text-stroke: 0px !important;
+            text-shadow: none !important;
+        }
+
+        /* Neutralize underlying cell color and render a crisp split overlay
+           using exact colors requested: left #1a2a3a, right #ff1744. Keep
+           text above overlays so number and rank remain readable. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim {
+            background: transparent !important;
+            box-shadow: none !important;
+            position: relative;
+            isolation: isolate;
+        }
+
+        /* Remove earlier ::before full-red overlays (if present) */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim::before {
+            display: none !important;
+            content: none !important;
+        }
+
+        /* Split overlay: left half #1a2a3a, right half #ff1744 at 50% opacity
+           so underlying theme doesn't change perceived color too much. */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg,
+                    rgba(26, 42, 58, 0.5) 0% 50%,
+                    rgba(255, 23, 68, 0.5) 50% 100%);
+            pointer-events: none;
+            z-index: 1;
+            mix-blend-mode: normal;
+        }
+
+        /* Ensure content renders above overlays */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim>* {
+            position: relative;
+            z-index: 2;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+        }
+
+        /* Also enforce during transient highlight/selection or when inline styles
+           are applied by JS so overlay remains visible and text keeps color */
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.popup-number-highlight>*,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim.selected-number>*,
+        #numberPickerPopup #numberPickerTable td.in-trash.in-trash-dim[style]>* {
+            position: relative;
+            z-index: 2;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+        }
     </style>
 </head>
 
@@ -1776,7 +2239,11 @@
         <div class="mode-selector" id="modeSelectorContainer">
             <div class="mode-rows reversed" id="modeRows">
                 <div class="mode-row" id="modeRowRank"
-                    style="font-size:14px;gap:8px;align-items:center;display:flex;justify-content:center;width:100%;order:999;">
+                    style="font-size:14px;gap:8px;align-items:center;display:flex;justify-content:space-between;width:100%;order:999;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button id="trashBtn" title="Thùng rác">🗑️</button>
+                        <button id="trashToggle" title="Bật thùng rác">Off</button>
+                    </div>
                     <div id="rankSummary"
                         style="font-size:14px;font-weight:700;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 auto;">
                     </div>
@@ -1993,7 +2460,13 @@
             nums.forEach(n => {
                 try {
                     const td = tbl.querySelector(`td[data-number="${n}"]`);
-                    if (td) td.classList.add('popup-number-highlight');
+                    // Allow highlighting for trashed numbers too so the popup can
+                    // render a split overlay (left dark / right red).
+                    // Also allow highlighting disabled cells so group-hover
+                    // highlights remain visible even when numbers are disabled.
+                    if (td) {
+                        td.classList.add('popup-number-highlight');
+                    }
                 } catch (e) { /* ignore */ }
             });
         }
@@ -7985,6 +8458,8 @@
                     const newScale = Math.max(0.5, Math.min(2, startScale + diff * 0.0025));
                     popupScaleState.scale = parseFloat(newScale.toFixed(3));
                     applyPopupScale();
+                    // update trash popup while scaling so its size/position follows immediately
+                    try { if (typeof adjustTrashPosition === 'function') adjustTrashPosition(); } catch (err) { }
                 });
 
                 document.addEventListener('mouseup', () => {
@@ -8004,6 +8479,18 @@
                 const numbersInPlace = currentMode === 'number'
                     ? new Set(placeValues.filter(v => v && v.trim() && !isNaN(v)))
                     : new Set();
+
+                // Preserve trashed numbers by reading existing DOM state before we overwrite it.
+                // This avoids relying on `trashItems` being in scope here.
+                const existingTrash = new Set();
+                try {
+                    if (numberPickerTable) {
+                        Array.from(numberPickerTable.querySelectorAll('td.in-trash')).forEach(td => {
+                            const v = td.dataset && td.dataset.number ? Number(td.dataset.number) : NaN;
+                            if (!isNaN(v)) existingTrash.add(v);
+                        });
+                    }
+                } catch (e) { /* ignore */ }
 
                 const numbersByCol = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
                 for (let i = 1; i <= 45; i++) {
@@ -8025,7 +8512,13 @@
                         } else {
                             const isDisabled = numbersInPlace.has(String(num));
                             const disabledClass = isDisabled ? ' disabled' : '';
-                            const draggable = (isDisabled || currentMode === 'label') ? 'false' : 'true';
+                            const inTrashFlag = existingTrash.has(Number(num));
+                            // If a number is both in trash and present in the place boxes,
+                            // mark it with an additional class so we can render a 50% dimmed
+                            // overlay instead of the full solid red used for trashed-only items.
+                            const inTrashDim = inTrashFlag && numbersInPlace.has(String(num));
+                            const inTrashClass = inTrashDim ? ' in-trash in-trash-dim' : (inTrashFlag ? ' in-trash' : '');
+                            let draggable = (isDisabled || currentMode === 'label' || inTrashFlag) ? 'false' : 'true';
                             // Check rank toggle; when enabled, show [#x] inside the same cell, left-aligned,
                             // while keeping the number centered.
                             const rankToggleEl = document.getElementById('rankToggle');
@@ -8047,12 +8540,12 @@
                                     }
                                     badgeHtml = `<span class="rank-in-cell" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:0.92em;font-weight:900;color:${color};background:transparent;opacity:1;z-index:2;-webkit-text-stroke:0.4px rgba(0,0,0,0.6);text-shadow:0 0 1px rgba(0,0,0,0.22);letter-spacing:0.6px;">#${rankNum}</span>`;
                                 }
-                                html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
+                                html += `<td class="number-cell${disabledClass}${inTrashClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
                                     `${badgeHtml}` +
                                     `<span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span>` +
                                     `</td>`;
                             } else {
-                                html += `<td class="number-cell${disabledClass}" draggable="${draggable}" data-number="${num}"><span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span></td>`;
+                                html += `<td class="number-cell${disabledClass}${inTrashClass}" draggable="${draggable}" data-number="${num}"><span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span></td>`;
                             }
                         }
                     }
@@ -8977,6 +9470,8 @@
                 setTimeout(() => {
                     numberPickerPopup.style.display = 'none';
                 }, 300);
+                // also hide trash popup when picker closes
+                try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
                 // Hide scale handle
                 const handle = document.querySelector('.popup-scale-handle');
                 if (handle) {
@@ -9016,6 +9511,8 @@
                     setTimeout(() => {
                         numberPickerPopup.style.display = 'none';
                     }, 300);
+                    // hide trash popup when picker is programmatically hidden via toggle
+                    try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
                 }
 
                 // Show/hide scale handle
@@ -9080,6 +9577,8 @@
                         setTimeout(() => {
                             numberPickerPopup.style.display = 'none';
                         }, 300);
+                        // hide trash popup when picker is programmatically hidden via Ctrl toggle
+                        try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
                     }
 
                     // Show/hide scale handle
@@ -9097,6 +9596,8 @@
 
             // Make popup draggable by background
             let popupOffsetX = 0, popupOffsetY = 0, isDraggingPopup = false;
+            // track last mouse positions during popup drag so trash can follow the same movement
+            let lastDragClientX = 0, lastDragClientY = 0;
             numberPickerPopup.addEventListener('mousedown', (e) => {
                 // Don't drag if clicking on close button
                 if (e.target.closest('.number-picker-close-btn')) {
@@ -9107,6 +9608,9 @@
                     const rect = numberPickerPopup.getBoundingClientRect();
                     popupOffsetX = e.clientX - rect.left;
                     popupOffsetY = e.clientY - rect.top;
+                    // initialize last drag mouse pos
+                    lastDragClientX = e.clientX;
+                    lastDragClientY = e.clientY;
                     e.preventDefault();
                 }
             });
@@ -9117,6 +9621,32 @@
                     numberPickerPopup.style.left = newLeft + 'px';
                     numberPickerPopup.style.top = newTop + 'px';
                     localStorage.setItem('popupPosition', JSON.stringify({ top: newTop, left: newLeft }));
+                    // Move trash popup by the same pointer delta when trash is attached to body
+                    try {
+                        const t = document.getElementById('trashPopup');
+                        if (t && t.style.display === 'block' && t.parentElement === document.body) {
+                            // compute pointer delta
+                            const dx = e.clientX - lastDragClientX;
+                            const dy = e.clientY - lastDragClientY;
+                            // ensure numeric left/top values
+                            let curLeft = parseFloat(t.style.left);
+                            let curTop = parseFloat(t.style.top);
+                            if (isNaN(curLeft) || isNaN(curTop)) {
+                                // initialize via adjustTrashPosition then read values
+                                if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
+                                curLeft = parseFloat(t.style.left) || 0;
+                                curTop = parseFloat(t.style.top) || 0;
+                            }
+                            t.style.left = (curLeft + dx) + 'px';
+                            t.style.top = (curTop + dy) + 'px';
+                        } else {
+                            // fallback: if trash is child of popup or not visible, keep regular adjust behavior
+                            if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
+                        }
+                    } catch (err) { /* ignore */ }
+                    // update last drag mouse pos for next delta
+                    lastDragClientX = e.clientX;
+                    lastDragClientY = e.clientY;
                 }
             });
             document.addEventListener('mouseup', () => { isDraggingPopup = false; });
@@ -9496,6 +10026,7 @@
                         e.preventDefault();
                     }
                 } catch (err) { }
+                try { draggingNumber = null; } catch (e) { }
             }, true);
             document.addEventListener('keyup', function (e) {
                 try {
@@ -9615,6 +10146,271 @@
                     startAutoScroll();
                 });
             } catch (e) { /* ignore */ }
+        })();
+    </script>
+    <script>
+        // Trash / drag-drop helper for the number-picker popup
+        (function () {
+            const trashBtn = document.getElementById('trashBtn');
+            const trashToggle = document.getElementById('trashToggle');
+            const numberPickerPopup = document.getElementById('numberPickerPopup');
+            const numberPickerTable = document.getElementById('numberPickerTable');
+
+            if (!numberPickerPopup || !numberPickerTable || !trashBtn || !trashToggle) return;
+
+            // create trash popup element and attach to document.body so it's not clipped
+            const trashPopup = document.createElement('div');
+            trashPopup.id = 'trashPopup';
+            trashPopup.style.position = 'fixed';
+            trashPopup.style.zIndex = '10001';
+            trashPopup.innerHTML = '<table><tbody></tbody></table>';
+            document.body.appendChild(trashPopup);
+
+            // drag state for trash -> fallback restore when dragend occurs without drop
+            let draggingFromTrash = null;
+            let draggingNumber = null; // current number being dragged (from popup or trash)
+            let lastDragClientX = 0;
+            let lastDragClientY = 0;
+
+            let trashEnabled = true;
+            let trashItems = [];
+
+            function setTrashButtonState() {
+                trashBtn.classList.toggle('disabled', !trashEnabled);
+                trashToggle.textContent = trashEnabled ? 'On' : 'Off';
+            }
+
+            trashToggle.addEventListener('click', (ev) => {
+                trashEnabled = !trashEnabled;
+                setTrashButtonState();
+                // When trash is turned off, hide the trash popup and clear all trashed numbers.
+                try {
+                    if (!trashEnabled) {
+                        // hide popup
+                        trashPopup.style.display = 'none';
+                        // clear tracked trash items
+                        trashItems.length = 0;
+                        // remove in-trash class from any table cells
+                        try {
+                            const inTrashCells = numberPickerTable.querySelectorAll('td.in-trash');
+                            inTrashCells.forEach(c => c.classList.remove('in-trash'));
+                        } catch (innerErr) { /* ignore */ }
+                        // re-render the (now-empty) trash popup
+                        renderTrash();
+                    }
+                } catch (e) { /* ignore */ }
+            });
+
+            trashBtn.addEventListener('click', (ev) => {
+                if (!trashEnabled) return; // only clickable when enabled
+                trashPopup.style.display = (trashPopup.style.display === 'block') ? 'none' : 'block';
+                adjustTrashPosition();
+            });
+
+            function adjustTrashPosition() {
+                const sample = numberPickerTable.querySelector('tbody tr td');
+                const cellW = sample ? Math.max(28, Math.round(sample.getBoundingClientRect().width)) : 80;
+                const trashW = 3 * cellW + 80; // add extra width to avoid horizontal scrollbar
+                const trashH = Math.round(trashW / 1.732);
+                trashPopup.style.setProperty('--trash-width', trashW + 'px');
+                trashPopup.style.width = trashW + 'px';
+                trashPopup.style.height = trashH + 'px';
+
+                // position relative to the picker popup but in viewport coords
+                const pickerRect = numberPickerPopup.getBoundingClientRect();
+                const gap = 12;
+                // prefer left side if there's space, otherwise place on the right
+                let left = pickerRect.left - trashW - gap;
+                if (left < 4) left = pickerRect.right + gap; // place to right if not enough left space
+                // ensure popup stays within viewport horizontally
+                left = Math.max(4, Math.min(left, window.innerWidth - trashW - 4));
+                // vertical: align near top of picker, but keep within viewport
+                let top = pickerRect.top + 8;
+                if (top + trashH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - trashH - 8);
+                trashPopup.style.left = left + 'px';
+                trashPopup.style.top = top + 'px';
+            }
+
+            function renderTrash() {
+                const tbody = trashPopup.querySelector('tbody');
+                tbody.innerHTML = '';
+                for (let i = 0; i < trashItems.length; i += 3) {
+                    const tr = document.createElement('tr');
+                    for (let j = 0; j < 3; j++) {
+                        const idx = i + j;
+                        const td = document.createElement('td');
+                        if (idx < trashItems.length) {
+                            const n = trashItems[idx];
+                            td.className = 'trash-number';
+                            td.dataset.number = String(n);
+                            // try to clone inside markup if available, otherwise plain text
+                            const src = numberPickerTable.querySelector('td[data-number="' + n + '"]');
+                            if (src) {
+                                // preserve the exact inner markup (numbers, rank pills, spans)
+                                const inner = document.createElement('div');
+                                inner.className = 'trash-inner';
+                                // copy innerHTML so the nested spans and pills keep their classes
+                                inner.innerHTML = src.innerHTML;
+                                // copy relevant attributes from source td to trash td (except id)
+                                try {
+                                    for (const cls of Array.from(src.classList || [])) {
+                                        if (!td.classList.contains(cls)) td.classList.add(cls);
+                                    }
+                                    // ensure trash-number class remains present
+                                    if (!td.classList.contains('trash-number')) td.classList.add('trash-number');
+                                    // copy inline style if present, but strip visual properties
+                                    // (background/color/box-shadow/outline) so highlights
+                                    // from the source don't override the trash popup visuals.
+                                    const s = src.getAttribute('style');
+                                    if (s) {
+                                        try {
+                                            let sanitized = String(s)
+                                                .replace(/background[^;]*;?/gi, '')
+                                                .replace(/color[^;]*;?/gi, '')
+                                                .replace(/box-shadow[^;]*;?/gi, '')
+                                                .replace(/outline[^;]*;?/gi, '')
+                                                .replace(/border-color[^;]*;?/gi, '');
+                                            if (sanitized.trim()) {
+                                                td.setAttribute('style', (td.getAttribute('style') || '') + ';' + sanitized);
+                                            }
+                                        } catch (err) { /* ignore sanitize errors */ }
+                                    }
+                                } catch (err) { /* ignore */ }
+                                td.appendChild(inner);
+                            } else {
+                                const inner = document.createElement('div');
+                                inner.className = 'trash-inner';
+                                inner.textContent = String(n);
+                                td.appendChild(inner);
+                            }
+                            td.draggable = true;
+                            td.addEventListener('dragstart', (e) => {
+                                e.dataTransfer.setData('text/plain', String(n));
+                                e.dataTransfer.setData('source', 'trash');
+                                e.dataTransfer.effectAllowed = 'move';
+                            });
+                            td.addEventListener('dblclick', () => { restoreFromTrash(n); });
+                        } else {
+                            td.innerHTML = '';
+                        }
+                        tr.appendChild(td);
+                    }
+                    tbody.appendChild(tr);
+                }
+                adjustTrashPosition();
+            }
+
+            function moveToTrash(n) {
+                n = Number(n);
+                if (!n || trashItems.includes(n)) return;
+                const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
+                if (cell) cell.classList.add('in-trash');
+                trashItems.push(n);
+                renderTrash();
+            }
+
+            function restoreFromTrash(n) {
+                n = Number(n);
+                const idx = trashItems.indexOf(n);
+                if (idx === -1) return;
+                trashItems.splice(idx, 1);
+                const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
+                if (cell) cell.classList.remove('in-trash');
+                renderTrash();
+            }
+
+            // delegated dragstart to mark source for popup cells and track trash-origin
+            document.addEventListener('dragstart', (e) => {
+                try {
+                    const td = e.target.closest('td');
+                    if (!td) return;
+                    const num = td.dataset && td.dataset.number ? td.dataset.number : (td.textContent || '').trim();
+                    const parsed = parseInt(num);
+                    if (!parsed) return;
+                    const source = td.closest('#trashPopup') ? 'trash' : (td.closest('#numberPickerTable') ? 'popup' : 'other');
+                    e.dataTransfer.setData('text/plain', String(parsed));
+                    e.dataTransfer.setData('source', source);
+                    e.dataTransfer.effectAllowed = 'move';
+                    // track dragged number and whether it originated in the trash
+                    draggingNumber = parsed;
+                    if (source === 'trash') draggingFromTrash = parsed;
+                    else draggingFromTrash = null;
+                } catch (err) { }
+            }, true);
+
+            // allow drops everywhere so we can detect drops outside popup and record pointer position
+            document.addEventListener('dragover', (e) => {
+                try {
+                    lastDragClientX = e.clientX || lastDragClientX;
+                    lastDragClientY = e.clientY || lastDragClientY;
+                } catch (err) { }
+                e.preventDefault();
+            }, true);
+
+            document.addEventListener('drop', (e) => {
+                try {
+                    e.preventDefault();
+                    const data = e.dataTransfer.getData('text/plain');
+                    const source = e.dataTransfer.getData('source');
+                    const num = parseInt(data);
+                    if (!num) return;
+                    const dropOnTrash = !!e.target.closest('#trashPopup');
+                    const dropOnNumberTable = !!e.target.closest('#numberPickerTable');
+                    const dropInsidePopup = !!e.target.closest('#numberPickerPopup');
+
+                    if (dropOnTrash) {
+                        if (source === 'popup') moveToTrash(num);
+                        return;
+                    }
+
+                    if (dropOnNumberTable) {
+                        if (source === 'trash') restoreFromTrash(num);
+                        return;
+                    }
+
+                    // drop outside popup area:
+                    // - if dragged FROM trash and dropped anywhere outside the trash, restore it back to the popup
+                    // - if dragged FROM popup and dropped outside the popup, treat as move-to-trash (existing behavior)
+                    if (!dropInsidePopup) {
+                        if (source === 'trash') {
+                            restoreFromTrash(num);
+                            return;
+                        }
+                        if (trashEnabled && source === 'popup') {
+                            moveToTrash(num);
+                            return;
+                        }
+                    }
+                } catch (err) { }
+            }, true);
+
+            // dragend fallback: if user dragged from trash but didn't drop over a restore target,
+            // restore the item when drag ends outside the trash popup (fixes intermittent "stuck" behavior)
+            document.addEventListener('dragend', (e) => {
+                try {
+                    if (!draggingFromTrash) return;
+                    // prefer last known dragover coords, fallback to dragend client coords
+                    const x = lastDragClientX || e.clientX || 0;
+                    const y = lastDragClientY || e.clientY || 0;
+                    const el = document.elementFromPoint(x, y);
+                    const endedOverTrash = el && el.closest && el.closest('#trashPopup');
+                    if (!endedOverTrash) {
+                        // restore the item if drag ended outside the trash popup
+                        restoreFromTrash(draggingFromTrash);
+                    }
+                } catch (err) { }
+                draggingFromTrash = null;
+            }, true);
+
+            // When popup content regenerates, ensure positioning updates
+            const mo = new MutationObserver(() => { adjustTrashPosition(); });
+            mo.observe(numberPickerTable, { childList: true, subtree: true });
+            window.addEventListener('resize', adjustTrashPosition);
+            window.addEventListener('scroll', adjustTrashPosition, true);
+
+            // initial state
+            setTrashButtonState();
+            renderTrash();
         })();
     </script>
 </body>
