@@ -1185,6 +1185,32 @@
             margin-right: auto !important;
         }
 
+        /* Override for Cell5.5: when a row contains exactly one table,
+           do not center it — render normally left-to-right. */
+        #cell5_5 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell5_5 .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            /* keep natural width and flow left-to-right */
+            flex: 0 1 auto !important;
+            width: auto !important;
+            max-width: none !important;
+        }
+
+        /* Also ensure the table itself isn't centered by inherited rules */
+        #cell5_5 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
         /* Prefer intrinsic table width inside a centered single child; allow
            the table to grow up to the wrapper width but not force 100% width. */
         .card.card-inner.single-child .card-inner-child table {
@@ -1198,6 +1224,77 @@
         .card.card-inner>.card-inner-child:only-child {
             margin-left: auto;
             margin-right: auto;
+        }
+
+        /* Ensure the grid container used by Cell5.5 aligns children left-to-right
+           instead of centering them (this container holds the paged tables). */
+        #cell5_5 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+
+        /* Same behavior for Cell6.5: don't center its grid/cards when only one child/table */
+        #cell6_5 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+
+        #cell6_5 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell6_5 .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+            flex: 0 1 auto !important;
+        }
+
+        #cell6_5 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
+        /* Clear any :only-child centering inside cell6_5 */
+        #cell6_5 .card.card-inner>.card-inner-child:only-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        /* Same behavior for Cell6.6: don't center its grid/cards when only one child/table */
+        #cell6_6 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+
+        #cell6_6 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell6_6 .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+            flex: 0 1 auto !important;
+        }
+
+        #cell6_6 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
+        /* Clear any :only-child centering inside cell6_6 */
+        #cell6_6 .card.card-inner>.card-inner-child:only-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
         }
 
         /* Small screens: stack to single column */
@@ -1618,6 +1715,37 @@
         }
 
         /* === End copied styles === */
+
+        /* FINAL OVERRIDE: ensure Cell5.5 single-table outputs are left-aligned.
+           This rule is placed last and uses high specificity + !important so
+           it wins over earlier centering rules. */
+        #cell5_5.card .card.card-inner.single-child,
+        #cell5_5 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell5_5 .card.card-inner.single-child .card-inner-child,
+        #cell5_5.card .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+        }
+
+        /* Override the generic rule that centers tables inside single-child wrappers */
+        #cell5_5 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
+        /* If any :only-child centering rule remains, specifically clear it inside #cell5_5 */
+        #cell5_5 .card.card-inner>.card-inner-child:only-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
     </style>
 </head>
 
