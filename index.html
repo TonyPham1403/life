@@ -1818,6 +1818,13 @@
             will-change: width, height, left, top;
         }
 
+        /* Cell5.5 count highlight */
+        .cell5-count-x {
+            font-weight: 800;
+            color: var(--text-strong);
+            display: inline-block;
+        }
+
         #trashPopup table {
             width: 100%;
             max-width: var(--trash-width);
@@ -3470,6 +3477,9 @@
                 const pages = [];
                 for (let i = 0; i < data.length; i += pageSize) pages.push(data.slice(i, i + pageSize));
 
+                // DEBUG: log counts to help diagnose mismatched page count reported by user
+                try { console.debug('renderCell5_5 debug:', { filteredCount: data.length, pages: pages.length, totalRows: rows.length }); } catch (e) { }
+
                 if (!pages.length) {
                     wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>";
                     return;
@@ -3480,8 +3490,7 @@
                 const infoBar = document.createElement('div');
                 infoBar.style.cssText = 'text-align:center;margin-bottom:10px;color:var(--muted);font-weight:700;';
                 const totalItems = rows.length || 0;
-                const totalPagesAll = Math.ceil(totalItems / pageSize) || 0;
-                infoBar.textContent = `Hiển thị ${data.length}/${totalItems} mục · ${totalPagesAll} bảng (tối đa ${pageSize}/bảng)`;
+                infoBar.innerHTML = `Hiển thị <span class="cell5-count-x">${data.length}</span>/${totalItems} mục · ${pages.length} bảng (tối đa ${pageSize}/bảng)`;
                 wrap.appendChild(infoBar);
 
                 const container = document.createElement('div');
@@ -10982,8 +10991,188 @@
             // initial state
             setTrashButtonState();
             renderTrash();
+            // double-click on trash popup: read clipboard and append valid numbers (tolerant parser)
+            trashPopup.addEventListener('dblclick', async (ev) => {
+                try {
+                    if (!trashEnabled) return;
+
+                    const processText = (text) => {
+                        if (!text) return;
+                        const parts = String(text).split(/[^0-9]+/).filter(Boolean);
+                        if (parts.length === 0) return;
+                        const nums = parts.map(s => parseInt(s, 10)).filter(n => Number.isInteger(n) && n >= 1 && n <= 45);
+                        if (nums.length === 0) return;
+                        const unique = Array.from(new Set(nums));
+                        for (const n of unique) {
+                            try { moveToTrash(n); } catch (e) { }
+                        }
+                    };
+
+                    // try modern clipboard API first
+                    let text = '';
+                    let clipboardTried = false;
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.readText) {
+                            clipboardTried = true;
+                            text = await navigator.clipboard.readText();
+                        }
+                    } catch (err) { clipboardTried = true; text = ''; }
+
+                    if (text) {
+                        processText(text);
+                        return;
+                    }
+
+                    // If clipboard read failed or empty, show a visible paste UI so user can paste (or retry clipboard)
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'fixed';
+                    overlay.style.zIndex = 10002;
+                    overlay.style.left = '50%';
+                    overlay.style.top = '50%';
+                    overlay.style.transform = 'translate(-50%,-50%)';
+                    overlay.style.background = 'white';
+                    overlay.style.border = '2px solid #888';
+                    overlay.style.padding = '10px';
+                    overlay.style.borderRadius = '8px';
+                    overlay.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+                    overlay.setAttribute('role', 'dialog');
+
+                    const msg = document.createElement('div');
+                    msg.style.marginBottom = '8px';
+                    msg.style.color = '#111';
+                    msg.textContent = 'Paste numbers here (e.g. 1,2,3) or click "Use clipboard"';
+                    const ta = document.createElement('textarea');
+                    ta.style.width = '320px';
+                    ta.style.height = '80px';
+                    ta.style.fontSize = '14px';
+                    ta.style.padding = '6px';
+                    ta.placeholder = 'Paste (Ctrl+V) or type numbers then press Ctrl+Enter';
+
+                    const row = document.createElement('div');
+                    row.style.display = 'flex';
+                    row.style.gap = '8px';
+                    row.style.marginTop = '8px';
+
+                    const useBtn = document.createElement('button');
+                    useBtn.textContent = 'Use clipboard';
+                    useBtn.className = 'ghost';
+                    const submitBtn = document.createElement('button');
+                    submitBtn.textContent = 'Submit';
+                    submitBtn.className = 'primary';
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.className = 'clear-btn';
+
+                    row.appendChild(useBtn);
+                    row.appendChild(submitBtn);
+                    row.appendChild(cancelBtn);
+
+                    overlay.appendChild(msg);
+                    overlay.appendChild(ta);
+                    overlay.appendChild(row);
+                    document.body.appendChild(overlay);
+                    ta.focus();
+
+                    let resolved = false;
+                    const clean = (v) => {
+                        if (resolved) return; resolved = true;
+                        try { overlay.remove(); } catch (e) { }
+                        if (v) processText(v);
+                    };
+
+                    useBtn.addEventListener('click', async () => {
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.readText) {
+                                const t = await navigator.clipboard.readText();
+                                if (t) { clean(t); return; }
+                                alert('Clipboard is empty or not available. Please paste manually.');
+                            } else {
+                                alert('Clipboard API not available. Please paste manually.');
+                            }
+                        } catch (e) { alert('Cannot read clipboard. Please paste manually.'); }
+                    });
+
+                    submitBtn.addEventListener('click', () => { clean(ta.value || ''); });
+                    cancelBtn.addEventListener('click', () => { clean(''); });
+
+                    ta.addEventListener('paste', (e) => {
+                        try {
+                            e.preventDefault();
+                            const d = (e.clipboardData && e.clipboardData.getData) ? e.clipboardData.getData('text') : null;
+                            if (d) clean(String(d));
+                            else setTimeout(() => clean(ta.value || ''), 50);
+                        } catch (err) { clean(''); }
+                    }, { once: true });
+
+                    ta.addEventListener('keydown', (e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            e.preventDefault();
+                            clean(ta.value || '');
+                        }
+                    });
+
+                    // auto-remove after 12s if user doesn't act
+                    setTimeout(() => { clean(''); }, 12000);
+                } catch (err) { /* ignore overall */ }
+            });
             // expose current trash items via a safe global getter for other sections (Cell5.5 uses this)
             try { window.getTrashItems = function () { return trashItems.slice(); }; window.__trashItems = trashItems; } catch (e) { /* ignore */ }
+
+            // Shift-key toggle: when the main number picker popup is open, pressing
+            // and releasing the Shift key will toggle the visibility of the trash popup.
+            // Only active when trash is enabled and when the picker popup is visible.
+            function isPickerOpen() {
+                try {
+                    if (!numberPickerPopup) return false;
+                    if (numberPickerPopup.classList && numberPickerPopup.classList.contains('show')) return true;
+                    if (numberPickerPopup.style && numberPickerPopup.style.display === 'block') return true;
+                    return getComputedStyle(numberPickerPopup).display !== 'none';
+                } catch (e) { return false; }
+            }
+
+            function onShiftKeyUp(e) {
+                try {
+                    if (e.key !== 'Shift') return;
+                    if (!isPickerOpen()) return; // only when main popup is open
+                    if (!trashEnabled) return; // respect trash enabled state
+                    // toggle
+                    const wasVisible = trashPopup.style.display === 'block';
+                    const nowVisible = wasVisible ? 'none' : 'block';
+                    trashPopup.style.display = nowVisible;
+                    if (nowVisible === 'block') adjustTrashPosition();
+
+                    // Copy numbers in the trash popup to clipboard in form a,b,c,...
+                    // Only copy when Shift action closed the trash popup (nowVisible === 'none')
+                    try {
+                        if (nowVisible === 'none') {
+                            // Use the tracked trashItems (keeps original order)
+                            const nums = Array.isArray(trashItems) ? trashItems.slice() : [];
+                            const csv = nums.join(',');
+                            if (csv.length > 0) {
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(csv).catch(() => {
+                                        // fallback to execCommand
+                                        const ta = document.createElement('textarea');
+                                        ta.value = csv;
+                                        document.body.appendChild(ta);
+                                        ta.select();
+                                        try { document.execCommand('copy'); } catch (e) { }
+                                        ta.remove();
+                                    });
+                                } else {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = csv;
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    try { document.execCommand('copy'); } catch (e) { }
+                                    ta.remove();
+                                }
+                            }
+                        }
+                    } catch (copyErr) { /* ignore clipboard errors */ }
+                } catch (err) { /* ignore */ }
+            }
+            window.addEventListener('keyup', onShiftKeyUp, true);
         })();
     </script>
 </body>
