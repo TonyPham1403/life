@@ -4647,19 +4647,20 @@
                         const slice = displayList.slice(start, start + pageSizeRows);
                         const baselineTotal = baselineArrAll && baselineArrAll.length ? baselineArrAll.length : arrGroups.length;
                         const idxInBaseline = baselineArrAll ? baselineArrAll.findIndex(([k]) => k === key) : -1;
+                        // By default show baseline ranking (position within all combos)
+                        // baseline arrays were computed from `globalCounts` which already
+                        // respect trashMode (include/exclude). Use those values so that
+                        // when trash mode is 'exclude' the sample space and ranks shrink
+                        // accordingly.
                         let rankDisplay = `${idx + 1}/${arrGroups.length}`;
-                        let occDisplay = `${list.length} kỳ`;
+                        let occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
                         try {
-                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
-                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
-                            if (idxInBaseline >= 0 && String(tMode) !== 'exclude') {
+                            if (idxInBaseline >= 0) {
                                 rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
                             }
-                            if (String(tMode) === 'exclude') {
-                                occDisplay = `${list.length} kỳ`;
-                            } else {
-                                occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
-                            }
+                            // Prefer showing the globalCounts-based occurrence which
+                            // already accounts for any excluded trashed rows.
+                            occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
                         } catch (e) {
                             if (idxInBaseline >= 0) {
                                 rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
