@@ -451,21 +451,22 @@
 
         .places-grid {
             display: flex;
-            gap: 8px;
+            gap: 1px;
             justify-content: center;
             flex-wrap: wrap;
             position: relative;
         }
 
         .place-box {
-            width: 60px;
-            height: 60px;
+            width: 44px;
+            height: 44px;
             border: 2px dashed var(--accent);
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            padding: 0;
+            font-size: 15px;
             font-weight: 700;
             background: rgba(56, 239, 125, 0.1);
             color: #ffffff !important;
@@ -474,7 +475,13 @@
             position: relative;
             user-select: none;
             flex-direction: column;
-            gap: 4px;
+            gap: 1px;
+        }
+
+        /* Ensure child elements inside the place-box don't add extra padding */
+        .place-box>* {
+            padding: 0 !important;
+            margin: 0 !important;
         }
 
         /* Overlay distance label between adjacent place boxes */
@@ -546,7 +553,7 @@
             border-radius: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 4px;
             flex-wrap: wrap;
             /* allow items to wrap to next line */
         }
@@ -559,6 +566,32 @@
             color: var(--text);
             font-size: 13px;
             cursor: pointer;
+        }
+
+        /* Compact style for trash mode dropdowns to save horizontal space */
+        .trash-mode,
+        select.trash-mode,
+        .mode-selector select.trash-mode {
+            width: auto !important;
+            min-width: 90px;
+            max-width: 140px;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+
+        /* Ensure specific trash selector in Cell6.6 matches height of other inputs */
+        #cell6_6_trashSel {
+            padding: 10px 12px !important;
+            font-size: 13px !important;
+            line-height: 1 !important;
+            box-sizing: border-box !important;
+            height: auto !important;
+        }
+
+        /* Stable IDs used for the two trash selectors (Cell5.5 / Cell6.5) */
+        #cell6_5_trashSel,
+        #cell5_5_trashSel {
+            width: 100px;
         }
 
         .clear-btn {
@@ -724,8 +757,25 @@
         .controls {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 4px;
             margin-bottom: 14px;
+        }
+
+        /* Remove right margin caused by inner child of the 6th control in Cell6.6 */
+        #cell6_6>div>div.controls>div:nth-child(6)>* {
+            margin-right: 0 !important;
+        }
+
+        /* More general: remove right margin from any child inside controls of #cell6_6
+           This addresses nth-child(1) and similar cases where inner elements add extra spacing. */
+        #cell6_6>div>div.controls>div>* {
+            margin-right: 0 !important;
+        }
+
+        /* Specifically override inline margin set on JS-created drag input containers */
+        #cell6_6 .controls .drag-input-container {
+            margin-right: 0 !important;
+            margin-left: 0 !important;
         }
 
         select,
@@ -1545,12 +1595,12 @@
         .mode-rows {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
         }
 
         .mode-row {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
             /* Keep controls on a single row; allow horizontal scroll when space is tight */
             flex-wrap: nowrap;
@@ -1591,15 +1641,15 @@
 
         .places-grid {
             display: flex;
-            gap: 8px;
+            gap: 4px;
             justify-content: center;
             flex-wrap: wrap;
             position: relative;
         }
 
         .place-box {
-            width: 60px;
-            height: 60px;
+            width: 54px;
+            height: 54px;
             border: 2px dashed var(--accent);
             border-radius: 8px;
             display: flex;
@@ -1614,7 +1664,7 @@
             position: relative;
             user-select: none;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
         }
 
         /* Overlay distance label between adjacent place boxes */
@@ -2969,6 +3019,27 @@
             controls.append("Sắp xếp:", sortSel, "Năm:", yearSel, "Tháng:", monthSel, infoBtn);
             body.appendChild(controls);
 
+            // Trash filter selector (compact): include | exclude
+            const trashSel = document.createElement('select');
+            [["include", "include"], ["exclude", "exclude"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; trashSel.appendChild(o); });
+            trashSel.value = 'include';
+            // append trash selector to controls for Cell5.5
+            controls.append("Trash:", trashSel);
+
+            // Ensure Cell5.5 redraws when the popup trash changes (only add listener once)
+            try {
+                if (!window.__cell5_5_trash_listener_added) {
+                    document.addEventListener('trashchange', function () {
+                        try {
+                            if (trashSel && trashSel.value === 'exclude') {
+                                draw();
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell5_5_trash_listener_added = true;
+                }
+            } catch (e) { /* ignore */ }
+
             const wrap = document.createElement("div");
             wrap.className = "card";
             body.appendChild(wrap);
@@ -3336,6 +3407,26 @@
                         return m === monthSel.value;
                     });
                 }
+
+                // Apply trash-exclude filter when requested: if trashSel is set to 'exclude',
+                // remove any record that contains at least one number currently in the popup trash.
+                try {
+                    if (typeof trashSel !== 'undefined' && trashSel.value === 'exclude') {
+                        let trashed = [];
+                        try {
+                            if (window.getTrashItems && typeof window.getTrashItems === 'function') trashed = window.getTrashItems();
+                            else if (Array.isArray(window.__trashItems)) trashed = window.__trashItems.slice();
+                        } catch (e) { trashed = []; }
+                        if (trashed && trashed.length) {
+                            const tset = new Set(trashed.map(n => Number(n)));
+                            data = data.filter(d => {
+                                const nums = d.nums || [];
+                                for (const n of nums) if (tset.has(Number(n))) return false;
+                                return true;
+                            });
+                        }
+                    }
+                } catch (e) { /* ignore trash filter errors */ }
                 // Helper: parse common dd/mm/yyyy or dd/mm/yy or digit-only forms into timestamp
                 function parseDateSortable(s) {
                     if (!s) return 0;
@@ -3388,7 +3479,9 @@
                 wrap.innerHTML = '';
                 const infoBar = document.createElement('div');
                 infoBar.style.cssText = 'text-align:center;margin-bottom:10px;color:var(--muted);font-weight:700;';
-                infoBar.textContent = `Hiển thị ${data.length} mục · ${pages.length} bảng (tối đa ${pageSize}/bảng)`;
+                const totalItems = rows.length || 0;
+                const totalPagesAll = Math.ceil(totalItems / pageSize) || 0;
+                infoBar.textContent = `Hiển thị ${data.length}/${totalItems} mục · ${totalPagesAll} bảng (tối đa ${pageSize}/bảng)`;
                 wrap.appendChild(infoBar);
 
                 const container = document.createElement('div');
@@ -3624,7 +3717,7 @@
                 }, 160);
             }
 
-            sortSel.onchange = yearSel.onchange = monthSel.onchange = draw;
+            sortSel.onchange = yearSel.onchange = monthSel.onchange = trashSel.onchange = draw;
             // If rows are already loaded, populate and draw; otherwise draw will handle once data present
             draw();
         }
@@ -4348,7 +4441,33 @@
                 controls.append(container);
             });
 
-            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Sắp xếp:', sortSel, recencySel);
+            // trash selector for Cell6.6 — kept in sync with Cell6.5
+            const trashSel = document.createElement('select');
+            ['include', 'exclude'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; trashSel.appendChild(o); });
+            trashSel.value = 'include';
+            try { trashSel.id = 'cell6_6_trashSel'; trashSel.className = 'trash-mode'; trashSel.style.cssText = 'width:100px;margin-left:4px;height:28px;vertical-align:middle;'; } catch (e) { }
+            trashSel.title = 'Trash mode (include/exclude)';
+            trashSel.addEventListener('change', () => {
+                try {
+                    const other = document.getElementById('cell6_5_trashSel');
+                    if (other) other.value = trashSel.value;
+                } catch (e) { }
+                try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                try { draw(); } catch (e) { }
+            });
+
+            // keep this selector in sync when popup or Cell6.5 updates trash
+            try {
+                document.addEventListener('trashchange', () => {
+                    try {
+                        const other = document.getElementById('cell6_5_trashSel');
+                        if (other && trashSel && trashSel.value !== other.value) trashSel.value = other.value;
+                    } catch (e) { }
+                    try { draw(); } catch (e) { }
+                });
+            } catch (e) { }
+
+            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Sắp xếp:', sortSel, recencySel, 'Trash:', trashSel);
             body.appendChild(controls);
 
             const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
@@ -4370,8 +4489,22 @@
                 const globalCounts = Object.create(null);
                 const consecChecked = !!consec.checked;
                 const orderChecked = !!order.checked;
+                // read trash mode from Cell6.5 (if present) so Cell6.6 mirrors its behavior
+                // If Cell6.5 selector is missing (e.g., not rendered), fall back to this cell's own selector
+                let trashModeEl = null;
+                try { trashModeEl = document.getElementById('cell6_5_trashSel'); } catch (e) { trashModeEl = null; }
+                if (!trashModeEl) trashModeEl = trashSel;
+                const trashMode = (trashModeEl && (trashModeEl.value || trashSel && trashSel.value)) ? (trashModeEl.value || trashSel.value) : 'include';
+                const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
                 rows.forEach(r => {
                     if (!r.nums || !Array.isArray(r.nums)) return;
+                    if (trashMode === 'exclude') {
+                        // skip any row containing a trashed number
+                        let skip = false;
+                        for (const nn of r.nums) { if (trashedSet.has(Number(nn))) { skip = true; break; } }
+                        if (skip) return;
+                    }
                     if (consecChecked) {
                         for (let i = 0; i <= r.nums.length - m; i++) {
                             const slice = r.nums.slice(i, i + m).slice();
@@ -4429,6 +4562,17 @@
                         });
                     }
                 });
+                // If trashMode is 'exclude', filter the groups' rows to remove trashed-number rows
+                if (trashMode === 'exclude' && trashedSet && trashedSet.size) {
+                    for (const [k, list] of groups.entries()) {
+                        const filtered = (list || []).filter(r => {
+                            if (!r.nums || !Array.isArray(r.nums)) return false;
+                            for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                            return true;
+                        });
+                        groups.set(k, filtered);
+                    }
+                }
 
                 // build array of [key, list] for user's combos
                 // include combos with no records (empty list) so every user combo is shown
@@ -4496,9 +4640,22 @@
                         const idxInBaseline = baselineArrAll ? baselineArrAll.findIndex(([k]) => k === key) : -1;
                         let rankDisplay = `${idx + 1}/${arrGroups.length}`;
                         let occDisplay = `${list.length} kỳ`;
-                        if (idxInBaseline >= 0) {
-                            rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
-                            occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
+                        try {
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (idxInBaseline >= 0 && String(tMode) !== 'exclude') {
+                                rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
+                            }
+                            if (String(tMode) === 'exclude') {
+                                occDisplay = `${list.length} kỳ`;
+                            } else {
+                                occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
+                            }
+                        } catch (e) {
+                            if (idxInBaseline >= 0) {
+                                rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
+                                occDisplay = `${globalCounts && globalCounts[key] ? globalCounts[key] : list.length} kỳ`;
+                            }
                         }
 
                         inner = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
@@ -4737,6 +4894,15 @@
             consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; draw(); };
             order.addEventListener('change', draw);
             draw();
+
+            // Listen to trash changes (dispatched by popup) so Cell6.6 mirrors Cell6.5 behavior
+            try {
+                const secEl = document.getElementById('cell6_6');
+                if (secEl && !secEl.__trashListenerAdded) {
+                    secEl.__trashListenerAdded = true;
+                    document.addEventListener('trashchange', () => { try { draw(); } catch (e) { } });
+                }
+            } catch (e) { /* ignore */ }
         }
         // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
         function renderCell6_5() {
@@ -5172,17 +5338,56 @@
             // initial build
             rebuildComboExtras();
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel);
+            // Trash selector (copied from Cell5.5): compact include/exclude toggle
+            const trashSel = document.createElement('select');
+            ['include', 'exclude'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; trashSel.appendChild(o); });
+            trashSel.value = 'include';
+            trashSel.title = 'Trash mode (include/exclude)';
+            trashSel.style.cssText = 'width:120px;';
+            // stable id so external listeners can find current selector after re-renders
+            try { trashSel.id = 'cell6_5_trashSel'; trashSel.className = 'trash-mode'; } catch (e) { }
+
+            // Mirror Cell6.6's selector syncing: when this selector changes,
+            // propagate value to Cell6.6's selector, dispatch a global trashchange
+            // and trigger a local recompute. Also listen for external trashchange
+            // events to keep this selector in sync when Cell6.6 or popup updates.
+            try {
+                trashSel.addEventListener('change', () => {
+                    try {
+                        const other = document.getElementById('cell6_6_trashSel');
+                        if (other) other.value = trashSel.value;
+                    } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                });
+            } catch (e) { }
+
+            try {
+                document.addEventListener('trashchange', () => {
+                    try {
+                        const other = document.getElementById('cell6_6_trashSel');
+                        if (other && trashSel && trashSel.value !== other.value) trashSel.value = other.value;
+                    } catch (e) { }
+                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                });
+            } catch (e) { }
+
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel, "Trash:", trashSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
 
             let groupCache = null;
             let cacheKey = null;
-            // baseline (unfiltered) groups for current comb/settings (after main x filter)
+            // baseline (after main-x filter but before trash exclude) — keys preserved for stable rank
             let baselineArrAll = null;
             // global baseline (before applying main x filter) used to show overall rank
             let baselineArrGlobal = null;
+            // map of original occurrence counts per key (computed before trash/exclude)
+            let baselineCountsMap = null;
+            // helper arrays of keys for quick rank lookups
+            let baselineAllKeys = null;
+            let baselineGlobalKeys = null;
             let isComputing = false;
 
             // Mode switching: if the header-inserted selector exists, wire it to show/hide
@@ -5392,7 +5597,11 @@
                     const inputs = comboExtras.querySelectorAll('input[type="number"].combo-extra');
                     return Array.from(inputs).map(i => (i.value ?? '').trim()).join(',');
                 })();
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${recencySel ? recencySel.value : ''}`;
+                // Prefer Cell6.6's trash selector when present so the two cells stay in sync.
+                let externalTrashEl = null;
+                try { externalTrashEl = document.getElementById('cell6_6_trashSel'); } catch (e) { externalTrashEl = null; }
+                const trashValue = (externalTrashEl && externalTrashEl.value) ? externalTrashEl.value : (trashSel && trashSel.value ? String(trashSel.value) : 'include');
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${recencySel ? recencySel.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -5437,6 +5646,13 @@
                         .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
                         .filter(([, list]) => list.length >= 2);
 
+                    // record original occurrence counts per key (before any UI-level excludes)
+                    try {
+                        const m = new Map();
+                        arr.forEach(([k, list]) => { m.set(k, list.length); });
+                        baselineCountsMap = m;
+                    } catch (e) { baselineCountsMap = null; }
+
                     // capture global baseline (before applying main x filter) and sort it
                     baselineArrGlobal = arr.slice();
                     const baselineSort = sortSel.value;
@@ -5444,6 +5660,8 @@
                     else if (baselineSort === "value_desc") baselineArrGlobal.sort((a, b) => compareKey(b[0], a[0]));
                     else if (baselineSort === "count_asc") baselineArrGlobal.sort((a, b) => a[1].length - b[1].length);
                     else baselineArrGlobal.sort((a, b) => b[1].length - a[1].length);
+
+                    try { baselineGlobalKeys = baselineArrGlobal.map(([k]) => k); } catch (e) { baselineGlobalKeys = null; }
 
                     // apply main x filter first (if provided) so baseline is the set of combos containing x
                     const mainX = parseInt(xFilter.value, 10);
@@ -5456,6 +5674,7 @@
 
                     // capture baseline (after main x filter, before dynamic extras)
                     baselineArrAll = arr.slice();
+                    try { baselineAllKeys = baselineArrAll.map(([k]) => k); } catch (e) { baselineAllKeys = null; }
                     // sort baselineArrAll the same way so rank/sum are stable for filtered view
                     if (baselineSort === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
                     else if (baselineSort === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
@@ -5476,6 +5695,28 @@
                         });
                     }
 
+                    // If trash exclude mode is active, filter rows inside each group
+                    // but keep the group entry (so ordering can be based on visible counts)
+                    try {
+                        let trashedSet = null;
+                        if (String(trashValue) === 'exclude') {
+                            const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems ? window.__trashItems.slice() : []);
+                            trashedSet = new Set((trashed || []).map(n => Number(n)));
+                        }
+                        if (trashedSet && trashedSet.size) {
+                            arr = arr.map(([key, list]) => {
+                                const filtered = (list || []).filter(r => {
+                                    try {
+                                        if (!r || !r.nums || !Array.isArray(r.nums)) return false;
+                                        for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                                        return true;
+                                    } catch (err) { return true; }
+                                });
+                                return [key, filtered];
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+
                     const sort = sortSel.value;
                     if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
                     else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
@@ -5493,6 +5734,13 @@
 
                     worker.onmessage = (e) => {
                         let arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
+                        // record original counts (before UI-level excludes)
+                        try {
+                            const m = new Map();
+                            arr.forEach(([k, list]) => { m.set(k, (list && list.length) ? list.length : 0); });
+                            baselineCountsMap = m;
+                        } catch (e) { baselineCountsMap = null; }
+
                         // capture global baseline (before applying main x filter) and sort it
                         baselineArrGlobal = arr.slice();
                         const baselineSortW = sortSel.value;
@@ -5500,6 +5748,8 @@
                         else if (baselineSortW === "value_desc") baselineArrGlobal.sort((a, b) => compareKey(b[0], a[0]));
                         else if (baselineSortW === "count_asc") baselineArrGlobal.sort((a, b) => a[1].length - b[1].length);
                         else baselineArrGlobal.sort((a, b) => b[1].length - a[1].length);
+
+                        try { baselineGlobalKeys = baselineArrGlobal.map(([k]) => k); } catch (e) { baselineGlobalKeys = null; }
 
                         // apply main x filter so baseline reflects combos that include x
                         const mainXw = parseInt(xFilter.value, 10);
@@ -5512,6 +5762,7 @@
 
                         // capture baseline before applying dynamic extras (filtered by mainX)
                         baselineArrAll = arr.slice();
+                        try { baselineAllKeys = baselineArrAll.map(([k]) => k); } catch (e) { baselineAllKeys = null; }
                         if (baselineSortW === "value_asc") baselineArrAll.sort((a, b) => compareKey(a[0], b[0]));
                         else if (baselineSortW === "value_desc") baselineArrAll.sort((a, b) => compareKey(b[0], a[0]));
                         else if (baselineSortW === "count_asc") baselineArrAll.sort((a, b) => a[1].length - b[1].length);
@@ -5530,6 +5781,27 @@
                                 return true;
                             });
                         }
+
+                        // Apply trash exclude if active (mirror Cell5.5 behavior)
+                        try {
+                            let trashedSetW = null;
+                            if (String(trashValue) === 'exclude') {
+                                const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems ? window.__trashItems.slice() : []);
+                                trashedSetW = new Set((trashed || []).map(n => Number(n)));
+                            }
+                            if (trashedSetW && trashedSetW.size) {
+                                arr = arr.map(([key, list]) => {
+                                    const filtered = (list || []).filter(r => {
+                                        try {
+                                            if (!r || !r.nums || !Array.isArray(r.nums)) return false;
+                                            for (const nn of r.nums) if (trashedSetW.has(Number(nn))) return false;
+                                            return true;
+                                        } catch (err) { return true; }
+                                    });
+                                    return [key, filtered];
+                                });
+                            }
+                        } catch (e) { /* ignore */ }
 
                         groupCache = arr;
                         cacheKey = newCacheKey;
@@ -5573,6 +5845,44 @@
                     }
                 }
 
+                // BEFORE rendering, ensure groups are ordered by visible counts
+                try {
+                    // Determine effective trash mode and trashed set
+                    let trashModeEl = null;
+                    try { trashModeEl = document.getElementById('cell6_6_trashSel'); } catch (e) { trashModeEl = null; }
+                    if (!trashModeEl) { try { trashModeEl = document.getElementById('cell6_5_trashSel'); } catch (e) { trashModeEl = null; } }
+                    const trashMode = (trashModeEl && trashModeEl.value) ? trashModeEl.value : 'include';
+                    let trashedSet = null;
+                    if (String(trashMode) === 'exclude') {
+                        const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems ? window.__trashItems.slice() : []);
+                        trashedSet = new Set((trashed || []).map(n => Number(n)));
+                    }
+
+                    if (trashedSet && trashedSet.size && Array.isArray(arr)) {
+                        // build a temporary array of { key, origList, visibleList }
+                        const tmp = arr.map(([key, list]) => {
+                            const visible = (list || []).filter(r => {
+                                try {
+                                    if (!r || !r.nums || !Array.isArray(r.nums)) return false;
+                                    for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                                    return true;
+                                } catch (err) { return true; }
+                            });
+                            return { key, orig: list, visible };
+                        });
+                        // sort tmp according to current sortSel but using visible.length for count sorts
+                        const currentSort = (typeof sortSel !== 'undefined' && sortSel && sortSel.value) ? sortSel.value : 'count_desc';
+                        tmp.sort((A, B) => {
+                            if (currentSort === 'value_asc') return compareKey(A.key, B.key);
+                            if (currentSort === 'value_desc') return compareKey(B.key, A.key);
+                            if (currentSort === 'count_asc') return (A.visible ? A.visible.length : 0) - (B.visible ? B.visible.length : 0);
+                            return (B.visible ? B.visible.length : 0) - (A.visible ? A.visible.length : 0);
+                        });
+                        // replace arr with visible lists in sorted order
+                        arr = tmp.map(t => [t.key, t.visible]);
+                    }
+                } catch (e) { /* ignore ordering errors */ }
+
                 wrap.innerHTML = `<div class='muted header-summary' style='flex-basis:100%;margin-bottom:8px'>${baselineTotal} nhóm (>=2 kỳ)${filterText}${rankText}</div>` +
                     `<div class='grid-centered' id='groupGrid'></div>`;
                 const grid = wrap.querySelector('#groupGrid');
@@ -5584,7 +5894,8 @@
                         // Count one table per group (even if a group's table would paginate)
                         const totalTables = Array.isArray(arr) ? arr.length : 0;
                         // Simplified display: only show group count, filter and total tables
-                        headerEl.innerHTML = `${baselineTotal} nhóm (>=2 kỳ)${filterText} — Số bảng (toàn bộ): <span class="euclid-total-pill">${totalTables}</span>`;
+                        // Show current displayed table count and also indicate full baseline total
+                        headerEl.innerHTML = `${baselineTotal} nhóm (>=2 kỳ)${filterText} — Số bảng (hiện tại): <span class="euclid-total-pill">${totalTables}</span>`;
                     } catch (e) { /* ignore */ }
                 };
 
@@ -5615,6 +5926,31 @@
                     // build a display list that respects recency selection; default is 'asc' (old->new)
                     let displayList = (list && list.slice) ? list.slice() : [];
                     try { if (recencySel && recencySel.value === 'desc') displayList.reverse(); } catch (e) { }
+
+                    // SAFETY FILTER: remove any rows that contain trashed numbers when trash mode is 'exclude'
+                    try {
+                        // Determine effective trash mode (prefer cell6_6 selector when present)
+                        let trashModeEl = null;
+                        try { trashModeEl = document.getElementById('cell6_6_trashSel'); } catch (e) { trashModeEl = null; }
+                        if (!trashModeEl) {
+                            try { trashModeEl = document.getElementById('cell6_5_trashSel'); } catch (e) { trashModeEl = null; }
+                        }
+                        const trashMode = (trashModeEl && trashModeEl.value) ? trashModeEl.value : 'include';
+                        if (String(trashMode) === 'exclude') {
+                            const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                            if (trashedSet.size) {
+                                displayList = displayList.filter(r => {
+                                    try {
+                                        if (!r || !r.nums || !Array.isArray(r.nums)) return false;
+                                        for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                                        return true;
+                                    } catch (err) { return true; }
+                                });
+                            }
+                        }
+                    } catch (e) { /* ignore safety-filter errors */ }
+
                     const totalPages = Math.max(1, Math.ceil(displayList.length / pageSizeRows));
                     const page = Math.max(0, Math.min(totalPages - 1, Number(card.dataset.page || 0)));
                     if (card.dataset.mounted === '1' && card.dataset.currentPage === String(page)) return;
@@ -5626,12 +5962,109 @@
                         const x = parseInt(xSel.value, 10);
                         const start = page * pageSizeRows;
                         const slice = displayList.slice(start, start + pageSizeRows);
-                        inner = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
+                        // Build per-card header (rendered inside mounted body) to mirror Cell6.6
+                        const visibleCount = (displayList && Array.isArray(displayList)) ? displayList.length : 0;
+                        let baselineCount = visibleCount;
+                        try {
+                            if (baselineCountsMap && typeof baselineCountsMap.get === 'function') {
+                                const c = baselineCountsMap.get(key);
+                                if (Number.isFinite(c)) baselineCount = c;
+                            }
+                        } catch (e) { baselineCount = visibleCount; }
+                        // If trash 'exclude' is active, show only visible count (user requested)
+                        let occDisplay;
+                        try {
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (String(tMode) === 'exclude') occDisplay = `${visibleCount} kỳ`;
+                            else occDisplay = baselineCount !== visibleCount ? `${visibleCount}/${baselineCount} kỳ` : `${baselineCount} kỳ`;
+                        } catch (e) { occDisplay = baselineCount !== visibleCount ? `${visibleCount}/${baselineCount} kỳ` : `${baselineCount} kỳ`; }
+                        // compute within-x and global ranks when available
+                        let rankDisplay = `${idx + 1}/${arr.length}`;
+                        try {
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (String(tMode) !== 'exclude') {
+                                if (baselineAllKeys && Array.isArray(baselineAllKeys)) {
+                                    const idxInBaseline = baselineAllKeys.indexOf(key);
+                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineAllKeys.length}`;
+                                }
+                            }
+                        } catch (e) { }
+                        let globalRankDisplay = '';
+                        try {
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (baselineGlobalKeys && Array.isArray(baselineGlobalKeys)) {
+                                let keysArr = baselineGlobalKeys.slice();
+                                if (String(tMode) === 'exclude') {
+                                    const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                                    if (trashed && trashed.length && Array.isArray(trashed)) {
+                                        const trashedSet = new Set((trashed || []).map(v => Number(v)));
+                                        keysArr = keysArr.filter(k => {
+                                            const parts = String(k).split('-').map(p => Number(p));
+                                            for (const p of parts) if (trashedSet.has(p)) return false;
+                                            return true;
+                                        });
+
+                                        // compute visible counts safely from baselineArrGlobal
+                                        const visibleMap = new Map();
+                                        try {
+                                            if (Array.isArray(baselineArrGlobal)) {
+                                                baselineArrGlobal.forEach(([k, list]) => {
+                                                    if (!k || !Array.isArray(list)) { visibleMap.set(k, 0); return; }
+                                                    let c = 0;
+                                                    for (const r of list) {
+                                                        if (!r || !r.nums || !Array.isArray(r.nums)) continue;
+                                                        let ok = true;
+                                                        for (const nn of r.nums) if (trashedSet.has(Number(nn))) { ok = false; break; }
+                                                        if (ok) c++;
+                                                    }
+                                                    visibleMap.set(k, c);
+                                                });
+                                            }
+                                        } catch (e) { }
+
+                                        const currentSort = (typeof sortSel !== 'undefined' && sortSel && sortSel.value) ? sortSel.value : 'count_desc';
+                                        keysArr.sort((a, b) => {
+                                            if (currentSort === 'value_asc') return compareKey(a, b);
+                                            if (currentSort === 'value_desc') return compareKey(b, a);
+                                            const va = visibleMap.has(a) ? visibleMap.get(a) : 0;
+                                            const vb = visibleMap.has(b) ? visibleMap.get(b) : 0;
+                                            if (currentSort === 'count_asc') return va - vb;
+                                            return vb - va;
+                                        });
+                                    }
+                                }
+                                const idxInGlobal = keysArr.indexOf(key);
+                                if (idxInGlobal >= 0) globalRankDisplay = `${idxInGlobal + 1}/${keysArr.length}`;
+                            }
+                        } catch (e) { }
+                        let leftRankHtml = '';
+                        if (globalRankDisplay && baselineArrAll && baselineArrGlobal && baselineArrGlobal.length !== baselineArrAll.length) {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>` +
+                                `<span class='muted' title='Toàn bộ' style='font-weight:800;margin-left:6px'>${globalRankDisplay}</span>`;
+                        } else if (globalRankDisplay) {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${globalRankDisplay}</span>`;
+                        } else {
+                            leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>`;
+                        }
+
+                        const headerHtml = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
+                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
+                            `<div style='display:flex;align-items:center;gap:8px'>` +
+                            `${leftRankHtml}` +
+                            `<span class='badge'>${occDisplay}</span>` +
+                            `</div>` +
+                            `</div>`;
+
+                        const navHtml = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
                             `<div class='muted' style='align-self:center;margin-left:6px'>/ ${totalPages}</div>` +
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
+                        inner = headerHtml + navHtml;
                         inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
                         slice.forEach(r => {
                             const orderedSeq = key.split('-').map(Number);
@@ -5874,29 +6307,57 @@
                         card.dataset.mounted = '0';
                         card.dataset.page = '0';
                         card.dataset.currentPage = '-1';
-                        // Prefer baseline values for rank/occurrence when baselineArrAll is available
+                        // Prefer baseline (pre-trash) values for rank/occurrence when available
                         let rankDisplay = `${i + 1}/${totalGroups}`;
-                        let occDisplay = `${list.length} kỳ`;
-                        if (baselineArrAll && Array.isArray(baselineArrAll)) {
-                            const baselineTotal = baselineArrAll.length;
-                            const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
-                            if (idxInBaseline >= 0) {
-                                rankDisplay = `${idxInBaseline + 1}/${baselineTotal}`;
-                                occDisplay = `${baselineArrAll[idxInBaseline][1].length} kỳ`;
-                            } else {
-                                // If not found in baseline (unlikely), fall back to filtered values
-                                rankDisplay = `${i + 1}/${totalGroups}`;
-                                occDisplay = `${list.length} kỳ`;
+                        // visibleCount = number of rows currently displayed for this group (after trash filter)
+                        const visibleCount = (list && list.length) ? list.length : 0;
+                        let baselineCount = visibleCount;
+                        try {
+                            if (baselineCountsMap && typeof baselineCountsMap.get === 'function') {
+                                const c = baselineCountsMap.get(key);
+                                if (Number.isFinite(c)) baselineCount = c;
                             }
-                        }
+                        } catch (e) { baselineCount = visibleCount; }
+                        // show as visible/baseline when they differ, otherwise single number
+                        let occDisplay = '';
+                        try {
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (String(tMode) === 'exclude') occDisplay = `${visibleCount} kỳ`;
+                            else occDisplay = baselineCount !== visibleCount ? `${visibleCount}/${baselineCount} kỳ` : `${baselineCount} kỳ`;
+                        } catch (e) { occDisplay = baselineCount !== visibleCount ? `${visibleCount}/${baselineCount} kỳ` : `${baselineCount} kỳ`; }
+                        try {
+                            // within-x rank: use baselineAllKeys (captured before trash exclude)
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (String(tMode) !== 'exclude') {
+                                if (baselineAllKeys && Array.isArray(baselineAllKeys)) {
+                                    const idxInBaseline = baselineAllKeys.indexOf(key);
+                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineAllKeys.length}`;
+                                }
+                            }
+                        } catch (e) { }
 
-                        // Compute global rank (before main-x filter) if available
+                        // Compute global rank (before main-x filter) if available using baselineGlobalKeys
                         let globalRankDisplay = '';
                         try {
-                            if (baselineArrGlobal && Array.isArray(baselineArrGlobal)) {
-                                const gTotal = baselineArrGlobal.length;
-                                const idxInGlobal = baselineArrGlobal.findIndex(([k]) => k === key);
-                                if (idxInGlobal >= 0) globalRankDisplay = `${idxInGlobal + 1}/${gTotal}`;
+                            const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                            const tMode = (tEl && tEl.value) ? tEl.value : 'include';
+                            if (baselineGlobalKeys && Array.isArray(baselineGlobalKeys)) {
+                                let keysArr = baselineGlobalKeys;
+                                if (String(tMode) === 'exclude') {
+                                    const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                                    if (trashed && trashed.length && Array.isArray(trashed)) {
+                                        const trashedSet = new Set(trashed.map(v => String(Number(v))));
+                                        keysArr = baselineGlobalKeys.filter(k => {
+                                            const parts = String(k).split('-').map(p => String(Number(p)));
+                                            for (const p of parts) if (trashedSet.has(p)) return false;
+                                            return true;
+                                        });
+                                    }
+                                }
+                                const idxInGlobal = keysArr.indexOf(key);
+                                if (idxInGlobal >= 0) globalRankDisplay = `${idxInGlobal + 1}/${keysArr.length}`;
                             }
                         } catch (e) { }
 
@@ -5912,14 +6373,8 @@
                             leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>`;
                         }
 
-                        // Add rank indicator(s) next to the count badge
-                        card.innerHTML = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
-                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
-                            `<div style='display:flex;align-items:center;gap:8px'>` +
-                            `${leftRankHtml}` +
-                            `<span class='badge'>${occDisplay}</span>` +
-                            `</div>` +
-                            `</div><div class='card-body' style='min-height:120px'></div>`;
+                        // Create an empty card body; header will be rendered inside mount
+                        card.innerHTML = `<div class='card-body' style='min-height:120px'></div>`;
                         grid.appendChild(card);
                         cardRefs.set(i, card);
                         observer.observe(card);
@@ -5947,10 +6402,108 @@
             }
 
             const debouncedGroup = createDebounce(group, 300);
+            // expose the current debouncedGroup on the section so external listeners
+            // can call the latest function even if this renderer re-runs
+            try {
+                const sec = document.getElementById('cell6_5');
+                if (sec) {
+                    sec.__group = debouncedGroup;
+                    // provide an invalidate helper so external listeners can clear
+                    // internal caches and force a fresh compute/render
+                    sec.__invalidate = function () {
+                        try { groupCache = null; cacheKey = null; baselineArrAll = null; baselineArrGlobal = null; isComputing = false; } catch (e) { }
+                        try { if (wrap) wrap.innerHTML = ''; } catch (e) { }
+                    };
+                }
+            } catch (e) { }
+            // Add a local listener on the section to respond to popup trash changes.
+            // Using a section-scoped listener avoids depending solely on a global lookup
+            // and ensures the current renderer instance handles updates reliably.
+            try {
+                if (body && !body.__trash_listener_added) {
+                    body.addEventListener('trashchange', () => {
+                        try {
+                            try { console.debug('cell6_5: section-local trashchange received'); } catch (e) { }
+                            // Invalidate renderer state then trigger recompute like other inputs
+                            try { const sec = document.getElementById('cell6_5'); if (sec && typeof sec.__invalidate === 'function') sec.__invalidate(); } catch (e) { }
+                            if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                        } catch (err) { /* ignore */ }
+                    });
+                    body.__trash_listener_added = true;
+                }
+            } catch (e) { /* ignore */ }
             consec.onchange = () => { order.disabled = !consec.checked; if (!consec.checked) order.checked = false; debouncedGroup(); };
-            xSel.onchange = sortSel.onchange = order.onchange = recencySel.onchange = debouncedGroup;
+            xSel.onchange = sortSel.onchange = order.onchange = recencySel.onchange = trashSel.onchange = debouncedGroup;
             xFilter.onchange = debouncedGroup;
             if (recencySel) recencySel.onchange = debouncedGroup;
+            // Register a single global listener to respond to popup trash changes.
+            // It looks up the current selector (`cell6_5_trashSel`) and calls the
+            // section's `__group` function so the call targets the latest instance.
+            try {
+                if (!window.__cell6_5_trash_watch) {
+                    document.addEventListener('trashchange', () => {
+                        try {
+                            try { console.debug('cell6_5: global trashchange received'); } catch (e) { }
+                            const sec = document.getElementById('cell6_5');
+                            if (sec && typeof sec.__invalidate === 'function') {
+                                try { sec.__invalidate(); } catch (e) { }
+                            }
+                            // Recompute visible rows per group based on current trash mode
+                            try {
+                                // determine effective trash mode (prefer cell6_6 selector)
+                                let trashModeEl = null;
+                                try { trashModeEl = document.getElementById('cell6_6_trashSel'); } catch (e) { trashModeEl = null; }
+                                if (!trashModeEl) {
+                                    try { trashModeEl = document.getElementById('cell6_5_trashSel'); } catch (e) { trashModeEl = null; }
+                                }
+                                const trashValue = (trashModeEl && trashModeEl.value) ? trashModeEl.value : 'include';
+
+                                if (groupCache && Array.isArray(groupCache)) {
+                                    if (String(trashValue) === 'exclude') {
+                                        const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems ? window.__trashItems.slice() : []);
+                                        const trashedSet = new Set((trashed || []).map(n => Number(n)));
+                                        if (trashedSet.size) {
+                                            groupCache = groupCache.map(([key, list]) => {
+                                                const filtered = (list || []).filter(r => {
+                                                    try {
+                                                        if (!r || !r.nums || !Array.isArray(r.nums)) return false;
+                                                        for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                                                        return true;
+                                                    } catch (err) { return true; }
+                                                });
+                                                return [key, filtered];
+                                            });
+                                        }
+                                    } else {
+                                        // include mode: restore visible lists from baseline (if available)
+                                        if (baselineArrAll && Array.isArray(baselineArrAll)) {
+                                            try { groupCache = baselineArrAll.map(([k, l]) => [k, (l && l.slice) ? l.slice() : []]); } catch (e) { /* ignore */ }
+                                        }
+                                    }
+                                }
+                                // Ensure groups are re-ordered according to current sort selection
+                                try {
+                                    const currentSort = (typeof sortSel !== 'undefined' && sortSel && sortSel.value) ? sortSel.value : 'count_desc';
+                                    if (groupCache && Array.isArray(groupCache)) {
+                                        if (currentSort === 'value_asc') groupCache.sort((a, b) => compareKey(a[0], b[0]));
+                                        else if (currentSort === 'value_desc') groupCache.sort((a, b) => compareKey(b[0], a[0]));
+                                        else if (currentSort === 'count_asc') groupCache.sort((a, b) => (a[1] ? a[1].length : 0) - (b[1] ? b[1].length : 0));
+                                        else groupCache.sort((a, b) => (b[1] ? b[1].length : 0) - (a[1] ? a[1].length : 0));
+                                    }
+                                } catch (e) { /* ignore sort errors */ }
+                            } catch (e) { /* ignore recompute errors */ }
+
+                            // Force a fresh render by clearing cacheKey so group() will
+                            // re-evaluate sorting and pagination using current controls.
+                            try { cacheKey = null; isComputing = false; } catch (e) { }
+                            const fn = sec && sec.__group ? sec.__group : null;
+                            if (typeof fn === 'function') fn();
+                        } catch (e) { /* ignore */ }
+                    });
+                    window.__cell6_5_trash_watch = true;
+                }
+            } catch (e) { /* ignore */ }
+
             group();
         }
 
@@ -10190,6 +10743,8 @@
                         trashPopup.style.display = 'none';
                         // clear tracked trash items
                         trashItems.length = 0;
+                        // notify listeners that trash changed
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         // remove in-trash class from any table cells
                         try {
                             const inTrashCells = numberPickerTable.querySelectorAll('td.in-trash');
@@ -10307,6 +10862,14 @@
                 if (cell) cell.classList.add('in-trash');
                 trashItems.push(n);
                 renderTrash();
+                // notify listeners that trash changed (do not auto-toggle user selectors)
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                // also call section invalidate/group directly to ensure immediate update
+                try {
+                    const sec = document.getElementById('cell6_5');
+                    if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
+                    if (sec && typeof sec.__group === 'function') sec.__group();
+                } catch (err) { }
             }
 
             function restoreFromTrash(n) {
@@ -10317,6 +10880,14 @@
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.remove('in-trash');
                 renderTrash();
+                // notify listeners that trash changed (do not auto-toggle user selectors)
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                // also call section invalidate/group directly to ensure immediate update
+                try {
+                    const sec = document.getElementById('cell6_5');
+                    if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
+                    if (sec && typeof sec.__group === 'function') sec.__group();
+                } catch (err) { }
             }
 
             // delegated dragstart to mark source for popup cells and track trash-origin
@@ -10411,6 +10982,8 @@
             // initial state
             setTrashButtonState();
             renderTrash();
+            // expose current trash items via a safe global getter for other sections (Cell5.5 uses this)
+            try { window.getTrashItems = function () { return trashItems.slice(); }; window.__trashItems = trashItems; } catch (e) { /* ignore */ }
         })();
     </script>
 </body>
