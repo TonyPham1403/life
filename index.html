@@ -2332,7 +2332,8 @@
             min-width: 40px !important;
             max-width: 88px !important;
             padding: 4px 6px 4px 8px !important;
-            padding-right: 26px !important; /* make room for compact spinner */
+            padding-right: 26px !important;
+            /* make room for compact spinner */
             box-sizing: border-box !important;
             font-size: 13px !important;
             display: inline-block !important;
@@ -3566,6 +3567,78 @@
                 // DEBUG: log counts to help diagnose mismatched page count reported by user
                 try { console.debug('renderCell5_5 debug:', { filteredCount: data.length, pages: pages.length, totalRows: rows.length }); } catch (e) { }
 
+                // Precompute t (max-visible-k) for the entire filtered `data` once per render.
+                // This ensures the displayed k̄ and its tooltip are based on the whole filtered set,
+                // not only the currently visible page.
+                let rowTByKey = new Map();
+                let t_values_all = [];
+                let avgAll = 0;
+                try {
+                    const numberPickerTableEl_all = document.getElementById('numberPickerTable');
+                    const poolNodes_all = numberPickerTableEl_all ? Array.from(numberPickerTableEl_all.querySelectorAll('td[data-number]')) : [];
+                    const pool_all = Array.from(new Set(poolNodes_all.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
+                    const poolSet_all = new Set(pool_all);
+                    const numToRows_all = new Map();
+                    const rowKeyToIndices_all = new Map();
+                    data.forEach((r, idx) => {
+                        try {
+                            const nums = r.nums || [];
+                            const rk = (nums || []).join(',') + '|' + (r.date || '');
+                            if (!rowKeyToIndices_all.has(rk)) rowKeyToIndices_all.set(rk, []);
+                            rowKeyToIndices_all.get(rk).push(idx);
+                            for (const v of nums) {
+                                const n = Number(v);
+                                if (!poolSet_all.has(n)) continue;
+                                if (!numToRows_all.has(n)) numToRows_all.set(n, new Set());
+                                numToRows_all.get(n).add(idx);
+                            }
+                        } catch (err) { }
+                    });
+
+                    const MAX_K_TRASH = 39;
+                    const maxK_all = Math.min(MAX_K_TRASH, Math.max(1, pool_all.length));
+                    const available_all = new Set(pool_all);
+                    const excludedSet_all = new Set();
+                    const rowFirstExcludedAt_all = new Map();
+
+                    for (let k = 1; k <= maxK_all; k++) {
+                        let bestChoice = null;
+                        let bestMarginal = Infinity;
+                        for (const candidate of Array.from(available_all)) {
+                            const s = numToRows_all.get(candidate);
+                            if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                            let marginal = 0;
+                            for (const idx of s) if (!excludedSet_all.has(idx)) marginal++;
+                            if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                        }
+                        if (bestChoice === null) break;
+                        available_all.delete(bestChoice);
+                        const s2 = numToRows_all.get(bestChoice);
+                        if (s2) for (const idx of s2) excludedSet_all.add(idx);
+
+                        // mark first-excluded indices for the whole dataset
+                        for (const [rk, idxs] of rowKeyToIndices_all.entries()) {
+                            for (const di of idxs) {
+                                if (!rowFirstExcludedAt_all.has(di) && excludedSet_all.has(di)) rowFirstExcludedAt_all.set(di, k);
+                            }
+                        }
+                    }
+
+                    // compute t for every record in filtered data
+                    let sum_all = 0;
+                    for (let i = 0; i < data.length; i++) {
+                        let t = maxK_all;
+                        if (rowFirstExcludedAt_all.has(i)) t = Math.max(0, rowFirstExcludedAt_all.get(i) - 1);
+                        const rk = ((data[i].nums || []).join(',')) + '|' + (data[i].date || '');
+                        rowTByKey.set(rk, t);
+                        t_values_all.push(t);
+                        sum_all += t;
+                    }
+                    avgAll = data.length ? (sum_all / data.length) : 0;
+                    // expose maxK_all for page rendering fallback
+                    window.__cell5_5_maxK_all = Math.min(MAX_K_TRASH, Math.max(1, pool_all.length));
+                } catch (err) { /* ignore dataset precompute errors */ }
+
                 if (!pages.length) {
                     wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>";
                     return;
@@ -3623,116 +3696,50 @@
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
                     let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th></tr></thead><tbody>`;
-                    // Precompute trash-based k thresholds using the same greedy heuristic as
-                    // computeBestRemoval(k) in the trash popup. We simulate selection once per
-                    // page so each record can get its maximal visible-k (t).
+                    // Use the precomputed per-dataset t values when available.
                     try {
-                        const numberPickerTableEl = document.getElementById('numberPickerTable');
-                        const poolNodes = numberPickerTableEl ? Array.from(numberPickerTableEl.querySelectorAll('td[data-number]')) : [];
-                        const pool = Array.from(new Set(poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
-                        const poolSet = new Set(pool);
-                        // build number -> set(rowIndex) mapping over global `rows`
-                        // also build a stable key->indices map so we can match page rows
-                        const numToRows = new Map();
-                        const rowKeyToIndices = new Map();
-                        rows.forEach((r, ridx) => {
-                            try {
-                                const nums = r.nums || [];
-                                const rk = (nums || []).join(',') + '|' + (r.date || '');
-                                if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
-                                rowKeyToIndices.get(rk).push(ridx);
-                                for (const v of nums) {
-                                    const n = Number(v);
-                                    if (!poolSet.has(n)) continue;
-                                    if (!numToRows.has(n)) numToRows.set(n, new Set());
-                                    numToRows.get(n).add(ridx);
-                                }
-                            } catch (er) { }
-                        });
-
-                        const MAX_K_TRASH = 39;
-                        const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
-                        const available = new Set(pool);
-                        const excludedSet = new Set(); // row indices excluded by chosen numbers
-                        const chosenSoFar = [];
-                        // record first-k-when-excluded for rows appearing on this page
-                        const rowFirstExcludedAt = new Map();
-
-                        for (let k = 1; k <= maxK; k++) {
-                            // pick candidate minimizing marginal newly excluded rows (greedy)
-                            let bestChoice = null;
-                            let bestMarginal = Infinity;
-                            for (const candidate of Array.from(available)) {
-                                const s = numToRows.get(candidate);
-                                if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
-                                let marginal = 0;
-                                for (const idx of s) if (!excludedSet.has(idx)) marginal++;
-                                if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
-                            }
-                            if (bestChoice === null) break;
-                            // choose it
-                            available.delete(bestChoice);
-                            chosenSoFar.push(bestChoice);
-                            const s2 = numToRows.get(bestChoice);
-                            if (s2) for (const idx of s2) excludedSet.add(idx);
-
-                            // mark page rows first excluded at this k by matching stable key
-                            for (const rowObj of page) {
-                                try {
-                                    const rk = ((rowObj.nums || []).join(',')) + '|' + (rowObj.date || '');
-                                    const idxs = rowKeyToIndices.get(rk) || [];
-                                    for (const globalIdx of idxs) {
-                                        if (!rowFirstExcludedAt.has(globalIdx) && excludedSet.has(globalIdx)) {
-                                            rowFirstExcludedAt.set(globalIdx, k);
-                                        }
-                                    }
-                                } catch (er) { }
-                            }
-                        }
-
-                        // Now render rows with computed t = firstExcludedAt - 1 (or maxK if never excluded)
+                        const maxK = (window.__cell5_5_maxK_all) ? window.__cell5_5_maxK_all : 39;
                         let sumT_forPage = 0;
                         let countT_forPage = 0;
+                        const t_values_forPage = [];
                         page.forEach((row, j) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
-                            const idxs = rowKeyToIndices.get(rk) || [];
-                            let firstK = null;
-                            for (const globalIdx of idxs) {
-                                if (rowFirstExcludedAt.has(globalIdx)) {
-                                    const v = rowFirstExcludedAt.get(globalIdx);
-                                    if (firstK === null || v < firstK) firstK = v;
-                                }
-                            }
-                            let t = maxK;
-                            if (firstK !== null) t = Math.max(0, firstK - 1);
+                            let t = (rowTByKey && rowTByKey.has(rk)) ? rowTByKey.get(rk) : maxK;
+                            t_values_forPage.push(t);
                             sumT_forPage += t;
                             countT_forPage += 1;
                             table += `<tr data-result="${result}" title="k=${t}" data-k="${t}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
                         });
 
-                        // compute average k for this page and update trash popup header (if present)
-                        try {
-                            const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
-                            const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
-                            const tp = document.getElementById('trashPopup');
-                            if (tp) {
-                                try {
-                                    const firstDiv = tp.querySelector('div');
-                                    if (firstDiv) {
-                                        // remove existing avg element if present
-                                        const existing = firstDiv.querySelector('.avg-k');
-                                        if (existing) existing.remove();
-                                        const span = document.createElement('span');
-                                        span.className = 'avg-k';
-                                        span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
-                                        span.textContent = 'k̄ = ' + avgStr;
-                                        firstDiv.appendChild(span);
-                                    }
-                                } catch (e) { /* ignore DOM errors */ }
-                            }
-                        } catch (e) { /* ignore avg errors */ }
+                        // compute average k using the full filtered dataset (avgAll) when available,
+                        // and show counts based on the full dataset t_values_all so tooltip reflects
+                        // the full-selection statistics rather than only the page.
+                        const avg = (typeof avgAll === 'number' && Number.isFinite(avgAll)) ? avgAll : (countT_forPage ? (sumT_forPage / countT_forPage) : 0);
+                        const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
+                        const tp = document.getElementById('trashPopup');
+                        if (tp) {
+                            try {
+                                const firstDiv = tp.querySelector('div');
+                                if (firstDiv) {
+                                    const existing = firstDiv.querySelector('.avg-k');
+                                    if (existing) existing.remove();
+                                    const span = document.createElement('span');
+                                    span.className = 'avg-k';
+                                    span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
+                                    span.textContent = 'k̄ = ' + avgStr;
+                                    try {
+                                        const allVals = (Array.isArray(t_values_all) && t_values_all.length) ? t_values_all : (window.__cell5_5_t_values_all || []);
+                                        const countLess = allVals.filter(v => Number.isFinite(v) && v < avg).length;
+                                        const countGreater = allVals.filter(v => Number.isFinite(v) && v > avg).length;
+                                        span.title = `${countLess}<>${countGreater}`;
+                                        span.setAttribute('aria-label', `${countLess}<>${countGreater}`);
+                                    } catch (e) { /* ignore tooltip compute errors */ }
+                                    firstDiv.appendChild(span);
+                                }
+                            } catch (e) { /* ignore DOM errors */ }
+                        }
                     } catch (e) {
                         // fallback: render without tooltip
                         page.forEach((row, j) => {
@@ -11815,6 +11822,30 @@
                     const container = tr.closest && tr.closest('#cell5_5, #cell6_5, #cell6_6, #cell7, #cell8, #cell9, #cell11');
                     if (container) hideTooltip();
                 } catch (e) {/* ignore */ }
+            }, true);
+
+            // Also apply the same floating tooltip behavior to the trash popup average span
+            // Selector: #trashPopup > div:nth-child(1) > span.avg-k
+            document.addEventListener('mouseover', function (ev) {
+                try {
+                    const span = ev.target && ev.target.closest && ev.target.closest('#trashPopup > div:nth-child(1) > span.avg-k');
+                    if (!span) return;
+                    if (span.getAttribute('title')) {
+                        span.dataset._origTitle = span.getAttribute('title');
+                        span.removeAttribute('title');
+                    }
+                    showTooltipFor(ev, span);
+                } catch (e) { /* ignore */ }
+            }, true);
+
+            document.addEventListener('mouseout', function (ev) {
+                try {
+                    const span = ev.target && ev.target.closest && ev.target.closest('#trashPopup > div:nth-child(1) > span.avg-k');
+                    if (!span) return;
+                    const related = ev.relatedTarget;
+                    if (related && span.contains && span.contains(related)) return;
+                    hideTooltip();
+                } catch (e) { /* ignore */ }
             }, true);
 
             // Hide on scroll/blur to avoid stuck tooltip
