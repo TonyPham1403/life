@@ -998,6 +998,32 @@
             color: #ea0313;
         }
 
+        /* Apply same rank-tier colors inside Cell4 rank column */
+        #cell4 .rank-pill.rank-tier-1 {
+            color: #08eb56;
+            font-weight: 800;
+        }
+
+        #cell4 .rank-pill.rank-tier-2 {
+            color: #00E5FF;
+            font-weight: 800;
+        }
+
+        #cell4 .rank-pill.rank-tier-3 {
+            color: #1a62ea;
+            font-weight: 800;
+        }
+
+        #cell4 .rank-pill.rank-tier-4 {
+            color: #ea3ade;
+            font-weight: 800;
+        }
+
+        #cell4 .rank-pill.rank-tier-5 {
+            color: #ea0313;
+            font-weight: 800;
+        }
+
         /* Info popup number pill (Số column) */
         table.no-sticky td.num-cell {
             text-align: center;
@@ -2796,10 +2822,14 @@
                     "<th>Rank</th><th>Số</th><th>V1</th><th>V2</th><th>V3</th><th>V4</th><th>V5</th><th>V6</th><th>Tổng %</th></tr></thead><tbody>";
                 data.forEach((row, idx) => {
                     const bg = idx % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)";
+                    // Assign tier by 9-rank blocks: ranks 1-9 -> tier1, 10-18 -> tier2, ...
+                    let tier = Math.floor(idx / 9) + 1;
+                    if (tier < 1) tier = 1;
+                    if (tier > 5) tier = 5;
                     html += `<tr style="background:${bg};">` +
-                        `<td>#${idx + 1}</td><td><span class='pill'>${row.v}</span></td>` +
+                        `<td><span class="rank-pill rank-tier-${tier}">#${idx + 1}</span></td><td><span class='pill'>${row.v}</span></td>` +
                         row.pcts.map(p => `<td>${fmtPctCustom(p, decimals)}</td>`).join("") +
-                        `<td><span class='muted' style='font-size:12px;margin-right:8px;'>${row.count}/${total}=</span><strong>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
+                        `<td><span class='muted rank-pill rank-tier-${tier}' style='font-size:12px;margin-right:8px;'>${row.count}</span><span class='muted' style='font-size:12px;margin:0 6px'>/${total}=</span><strong class='rank-pill rank-tier-${tier}'>${fmtPctCustom(row.sum, decimals)}</strong></td></tr>`;
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
