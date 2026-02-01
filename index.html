@@ -10756,7 +10756,21 @@
             trashPopup.id = 'trashPopup';
             trashPopup.style.position = 'fixed';
             trashPopup.style.zIndex = '10001';
-            trashPopup.innerHTML = '<table><tbody></tbody></table>';
+            // minimal UI: single numeric input for k (1..45). on submit it will compute and move numbers to trash.
+            trashPopup.innerHTML = `
+                <div style="padding:8px;display:flex;gap:8px;align-items:center;">
+                    <label style="font-weight:700;color:var(--text);">Loại bỏ k số:</label>
+                    <div style="position:relative;display:inline-block;vertical-align:middle;">
+                        <input id="trashKInput" type="number" min="1" max="39" step="1" value="3" style="width:72px;padding:6px 40px 6px 6px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;" />
+                        <div style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;">
+                            <button type="button" class="trash-k-up" title="Tăng 1" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▲</button>
+                            <button type="button" class="trash-k-down" title="Giảm 1" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:6px 8px;max-height:calc(var(--trash-row-height,36px) * 15);overflow:visible;">
+                    <table><tbody></tbody></table>
+                </div>`;
             document.body.appendChild(trashPopup);
 
             // drag state for trash -> fallback restore when dragend occurs without drop
@@ -11022,10 +11036,161 @@
             // initial state
             setTrashButtonState();
             renderTrash();
+
+            // helper: get unique numbers present in the popup table
+            function getPopupNumbers() {
+                try {
+                    const nodes = Array.from(numberPickerTable.querySelectorAll('td[data-number]'));
+                    const nums = nodes.map(n => Number(n.dataset.number)).filter(n => Number.isInteger(n) && n >= 1 && n <= 45);
+                    return Array.from(new Set(nums)).sort((a, b) => a - b);
+                } catch (e) { return []; }
+            }
+
+            // compute best k-number removal (exact when combos small, greedy otherwise)
+            function computeBestRemoval(k) {
+                k = Number(k) || 0; if (k < 1) return null;
+                const filtered = rows.slice();
+                const total = filtered.length;
+                if (!total) return { total: 0, remaining: 0, pages: 0, chosen: [], excludedCount: 0 };
+
+                // build number -> set(rowIndex)
+                const pool = getPopupNumbers();
+                const poolSet = new Set(pool);
+                const numToRows = new Map();
+                filtered.forEach((r, idx) => {
+                    const nums = r.nums || [];
+                    for (let t = 0; t < nums.length; t++) {
+                        const v = Number(nums[t]);
+                        if (!poolSet.has(v)) continue;
+                        if (!numToRows.has(v)) numToRows.set(v, new Set());
+                        numToRows.get(v).add(idx);
+                    }
+                });
+
+                if (pool.length <= k) {
+                    const union = new Set();
+                    pool.forEach(p => { const s = numToRows.get(p); if (s) for (const i of s) union.add(i); });
+                    const excluded = union.size;
+                    return { total, remaining: total - excluded, pages: Math.ceil((total - excluded) / 20), chosen: pool.slice(), excludedCount: excluded };
+                }
+
+                const comb = (n, r) => { if (r > n) return 0; let res = 1; for (let i = 1; i <= r; i++) { res = res * (n - (r - i)) / i; } return Math.round(res); };
+                const combos = comb(pool.length, k);
+                const MAX_EXACT = 200000;
+                let best = { remaining: -1, chosen: [], excludedCount: 0 };
+
+                if (combos <= MAX_EXACT) {
+                    // exact backtrack
+                    const idxPool = pool;
+                    const stack = [];
+                    function backtrack(start) {
+                        if (stack.length === k) {
+                            const union = new Set();
+                            for (const p of stack) {
+                                const s = numToRows.get(p);
+                                if (s) for (const i of s) union.add(i);
+                            }
+                            const excluded = union.size; const remaining = total - excluded;
+                            if (remaining > best.remaining) best = { remaining, chosen: stack.slice(), excludedCount: excluded };
+                            return;
+                        }
+                        for (let i = start; i < idxPool.length; i++) { stack.push(idxPool[i]); backtrack(i + 1); stack.pop(); }
+                    }
+                    backtrack(0);
+                } else {
+                    // greedy approximate: pick candidates that cover fewest new rows
+                    const available = new Set(pool);
+                    const chosen = [];
+                    const excludedSet = new Set();
+                    for (let step = 0; step < k; step++) {
+                        let bestChoice = null, bestMarginal = Infinity;
+                        for (const candidate of Array.from(available)) {
+                            const s = numToRows.get(candidate);
+                            if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                            let marginal = 0; for (const idx of s) if (!excludedSet.has(idx)) marginal++;
+                            if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                        }
+                        if (bestChoice === null) break;
+                        const s2 = numToRows.get(bestChoice); if (s2) for (const i of s2) excludedSet.add(i);
+                        chosen.push(bestChoice); available.delete(bestChoice);
+                    }
+                    best = { remaining: total - excludedSet.size, chosen, excludedCount: excludedSet.size };
+                }
+
+                return { total, remaining: best.remaining, pages: Math.ceil(best.remaining / 20), chosen: best.chosen, excludedCount: best.excludedCount };
+            }
+
+            // wire input: when user enters k and presses Enter or blurs, compute and move chosen numbers to trash
+            (function wireTrashInput() {
+                try {
+                    const kInput = trashPopup.querySelector('#trashKInput');
+                    if (!kInput) return;
+                    const doComputeAndMove = async () => {
+                        let k = parseInt(kInput.value, 10);
+                        if (!Number.isInteger(k) || k < 1) { k = 1; kInput.value = '1'; }
+                        if (k > 39) { k = 39; kInput.value = '39'; }
+                        // compute
+                        const res = computeBestRemoval(k);
+                        // clear existing trash items first (replace behavior)
+                        try {
+                            if (trashItems && trashItems.length) {
+                                // remove in-trash class from popup cells
+                                try {
+                                    for (const old of trashItems.slice()) {
+                                        const c = numberPickerTable.querySelector('td[data-number="' + old + '"]');
+                                        if (c) c.classList.remove('in-trash');
+                                    }
+                                } catch (e) { }
+                                trashItems.length = 0;
+                                renderTrash();
+                                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                            }
+                        } catch (e) { }
+                        if (res && Array.isArray(res.chosen) && res.chosen.length) {
+                            for (const n of res.chosen) {
+                                try { moveToTrash(n); } catch (e) { }
+                            }
+                        }
+                    };
+                    kInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doComputeAndMove(); } });
+                    kInput.addEventListener('change', () => { doComputeAndMove(); });
+
+                    // wire spinner buttons: wrap between 1 and 39 and trigger change
+                    try {
+                        const up = trashPopup.querySelector('.trash-k-up');
+                        const down = trashPopup.querySelector('.trash-k-down');
+                        const MIN_K = 1, MAX_K = 39;
+                        if (up) up.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            let v = parseInt(kInput.value, 10);
+                            if (!Number.isInteger(v)) v = 0; // default to 0 when empty
+                            v = v + 1;
+                            if (v > MAX_K) v = MIN_K; // wrap
+                            kInput.value = String(v);
+                            try { doComputeAndMove(); } catch (e) { kInput.dispatchEvent(new Event('change', { bubbles: true })); }
+                        });
+                        if (down) down.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            let v = parseInt(kInput.value, 10);
+                            if (!Number.isInteger(v)) v = 0; // default to 0 when empty
+                            v = v - 1;
+                            if (v < MIN_K) v = MAX_K; // wrap
+                            kInput.value = String(v);
+                            try { doComputeAndMove(); } catch (e) { kInput.dispatchEvent(new Event('change', { bubbles: true })); }
+                        });
+                    } catch (err) { /* ignore spinner wiring errors */ }
+                } catch (e) { }
+            })();
             // double-click on trash popup: read clipboard and append valid numbers (tolerant parser)
             trashPopup.addEventListener('dblclick', async (ev) => {
                 try {
                     if (!trashEnabled) return;
+                    // Ignore dblclicks that originate from UI controls (buttons/inputs/selects)
+                    // This prevents spinner clicks or other control interactions from
+                    // accidentally triggering the paste/clipboard prompt.
+                    try {
+                        if (ev.target && (ev.target.closest('button') || ev.target.closest('input') || ev.target.closest('select'))) return;
+                    } catch (ee) { }
 
                     const processText = (text) => {
                         if (!text) return;
