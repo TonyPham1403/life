@@ -2300,6 +2300,53 @@
             opacity: 1 !important;
             color: inherit !important;
         }
+
+        /* Compact k input and keep trash popup header on one line */
+        #trashPopup>div:first-child {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+
+        #trashPopup input[type="number"] {
+            width: 56px;
+            min-width: 40px;
+            max-width: 88px;
+            padding: 4px 6px;
+            box-sizing: border-box;
+            font-size: 13px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Prioritize a class if present for the k field */
+        #trashPopup .k-input,
+        #trashPopup input.k-input {
+            width: 56px;
+        }
+
+        /* Override the inline style applied to the specific input #trashKInput */
+        #trashPopup #trashKInput {
+            width: 56px !important;
+            min-width: 40px !important;
+            max-width: 88px !important;
+            padding: 4px 6px 4px 8px !important;
+            padding-right: 26px !important; /* make room for compact spinner */
+            box-sizing: border-box !important;
+            font-size: 13px !important;
+            display: inline-block !important;
+            vertical-align: middle !important;
+        }
+
+        /* Keep average-k label on one line and prevent wrapping */
+        #trashPopup .avg-k {
+            white-space: nowrap;
+            margin-left: 8px;
+            flex: 0 0 auto;
+            display: inline-block;
+            align-self: center;
+        }
     </style>
 </head>
 
@@ -3576,11 +3623,124 @@
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
                     let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th></tr></thead><tbody>`;
-                    page.forEach((row, j) => {
-                        const result = (row.nums || []).join(',');
-                        const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        table += `<tr data-result="${result}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
-                    });
+                    // Precompute trash-based k thresholds using the same greedy heuristic as
+                    // computeBestRemoval(k) in the trash popup. We simulate selection once per
+                    // page so each record can get its maximal visible-k (t).
+                    try {
+                        const numberPickerTableEl = document.getElementById('numberPickerTable');
+                        const poolNodes = numberPickerTableEl ? Array.from(numberPickerTableEl.querySelectorAll('td[data-number]')) : [];
+                        const pool = Array.from(new Set(poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
+                        const poolSet = new Set(pool);
+                        // build number -> set(rowIndex) mapping over global `rows`
+                        // also build a stable key->indices map so we can match page rows
+                        const numToRows = new Map();
+                        const rowKeyToIndices = new Map();
+                        rows.forEach((r, ridx) => {
+                            try {
+                                const nums = r.nums || [];
+                                const rk = (nums || []).join(',') + '|' + (r.date || '');
+                                if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
+                                rowKeyToIndices.get(rk).push(ridx);
+                                for (const v of nums) {
+                                    const n = Number(v);
+                                    if (!poolSet.has(n)) continue;
+                                    if (!numToRows.has(n)) numToRows.set(n, new Set());
+                                    numToRows.get(n).add(ridx);
+                                }
+                            } catch (er) { }
+                        });
+
+                        const MAX_K_TRASH = 39;
+                        const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
+                        const available = new Set(pool);
+                        const excludedSet = new Set(); // row indices excluded by chosen numbers
+                        const chosenSoFar = [];
+                        // record first-k-when-excluded for rows appearing on this page
+                        const rowFirstExcludedAt = new Map();
+
+                        for (let k = 1; k <= maxK; k++) {
+                            // pick candidate minimizing marginal newly excluded rows (greedy)
+                            let bestChoice = null;
+                            let bestMarginal = Infinity;
+                            for (const candidate of Array.from(available)) {
+                                const s = numToRows.get(candidate);
+                                if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                                let marginal = 0;
+                                for (const idx of s) if (!excludedSet.has(idx)) marginal++;
+                                if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                            }
+                            if (bestChoice === null) break;
+                            // choose it
+                            available.delete(bestChoice);
+                            chosenSoFar.push(bestChoice);
+                            const s2 = numToRows.get(bestChoice);
+                            if (s2) for (const idx of s2) excludedSet.add(idx);
+
+                            // mark page rows first excluded at this k by matching stable key
+                            for (const rowObj of page) {
+                                try {
+                                    const rk = ((rowObj.nums || []).join(',')) + '|' + (rowObj.date || '');
+                                    const idxs = rowKeyToIndices.get(rk) || [];
+                                    for (const globalIdx of idxs) {
+                                        if (!rowFirstExcludedAt.has(globalIdx) && excludedSet.has(globalIdx)) {
+                                            rowFirstExcludedAt.set(globalIdx, k);
+                                        }
+                                    }
+                                } catch (er) { }
+                            }
+                        }
+
+                        // Now render rows with computed t = firstExcludedAt - 1 (or maxK if never excluded)
+                        let sumT_forPage = 0;
+                        let countT_forPage = 0;
+                        page.forEach((row, j) => {
+                            const result = (row.nums || []).join(',');
+                            const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
+                            const idxs = rowKeyToIndices.get(rk) || [];
+                            let firstK = null;
+                            for (const globalIdx of idxs) {
+                                if (rowFirstExcludedAt.has(globalIdx)) {
+                                    const v = rowFirstExcludedAt.get(globalIdx);
+                                    if (firstK === null || v < firstK) firstK = v;
+                                }
+                            }
+                            let t = maxK;
+                            if (firstK !== null) t = Math.max(0, firstK - 1);
+                            sumT_forPage += t;
+                            countT_forPage += 1;
+                            table += `<tr data-result="${result}" title="k=${t}" data-k="${t}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
+                        });
+
+                        // compute average k for this page and update trash popup header (if present)
+                        try {
+                            const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
+                            const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
+                            const tp = document.getElementById('trashPopup');
+                            if (tp) {
+                                try {
+                                    const firstDiv = tp.querySelector('div');
+                                    if (firstDiv) {
+                                        // remove existing avg element if present
+                                        const existing = firstDiv.querySelector('.avg-k');
+                                        if (existing) existing.remove();
+                                        const span = document.createElement('span');
+                                        span.className = 'avg-k';
+                                        span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
+                                        span.textContent = 'k̄ = ' + avgStr;
+                                        firstDiv.appendChild(span);
+                                    }
+                                } catch (e) { /* ignore DOM errors */ }
+                            }
+                        } catch (e) { /* ignore avg errors */ }
+                    } catch (e) {
+                        // fallback: render without tooltip
+                        page.forEach((row, j) => {
+                            const result = (row.nums || []).join(',');
+                            const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            table += `<tr data-result="${result}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
+                        });
+                    }
                     table += '</tbody></table>';
                     const header = `<div style="font-weight:700; padding:8px 12px; border-bottom:1px solid var(--border);">Bảng ${pIdx + 1} · ${page.length} mục · ${firstDate} → ${lastDate}</div>`;
                     return `<div>${header}<div style='padding:8px;'>${table}</div></div>`;
@@ -3773,6 +3933,84 @@
         const labelOf = (nums) => nums.map(getCol).join("");
         const diffPositions = (a, b) => { const pos = []; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) pos.push(i); return pos; };
 
+        // Helper: compute per-row trash k (cached). Returns t (largest k for which row remains visible)
+        (function setupRowKCache() {
+            let cache = null;
+            function computeCache() {
+                try {
+                    const npTable = document.getElementById('numberPickerTable');
+                    const poolNodes = npTable ? Array.from(npTable.querySelectorAll('td[data-number]')) : [];
+                    let pool = poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n));
+                    if (!pool || !pool.length) pool = Array.from({ length: 45 }, (_, i) => i + 1);
+                    const poolSet = new Set(pool);
+                    const numToRows = new Map();
+                    const rowKeyToIndices = new Map();
+                    rows.forEach((rr, ridx) => {
+                        try {
+                            const rk = (rr.nums || []).join(',') + '|' + (rr.date || '');
+                            if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
+                            rowKeyToIndices.get(rk).push(ridx);
+                            for (const v of (rr.nums || [])) {
+                                const n = Number(v);
+                                if (!poolSet.has(n)) continue;
+                                if (!numToRows.has(n)) numToRows.set(n, new Set());
+                                numToRows.get(n).add(ridx);
+                            }
+                        } catch (e) { }
+                    });
+
+                    const MAX_K_TRASH = 39;
+                    const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
+                    const available = new Set(pool);
+                    const excludedSet = new Set();
+                    const rowFirstExcludedAt = new Array(rows.length).fill(null);
+
+                    for (let k = 1; k <= maxK; k++) {
+                        let bestChoice = null;
+                        let bestMarginal = Infinity;
+                        for (const candidate of Array.from(available)) {
+                            const s = numToRows.get(candidate);
+                            if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                            let marginal = 0;
+                            for (const idx of s) if (!excludedSet.has(idx)) marginal++;
+                            if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                        }
+                        if (bestChoice === null) break;
+                        available.delete(bestChoice);
+                        const s2 = numToRows.get(bestChoice);
+                        if (s2) for (const idx of s2) excludedSet.add(idx);
+
+                        // mark rows first excluded at this k
+                        for (const [rk, idxs] of rowKeyToIndices) {
+                            for (const globalIdx of idxs) {
+                                if (rowFirstExcludedAt[globalIdx] === null && excludedSet.has(globalIdx)) rowFirstExcludedAt[globalIdx] = k;
+                            }
+                        }
+                    }
+
+                    cache = { rowKeyToIndices, rowFirstExcludedAt, maxK, pool };
+                    return cache;
+                } catch (e) { cache = null; return null; }
+            }
+
+            window.getRowTrashK = function (row) {
+                try {
+                    if (!cache) computeCache();
+                    if (!cache) return 0;
+                    const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
+                    const idxs = cache.rowKeyToIndices.get(rk) || [];
+                    let firstK = null;
+                    for (const gi of idxs) {
+                        const v = cache.rowFirstExcludedAt[gi];
+                        if (v !== null && v !== undefined) { if (firstK === null || v < firstK) firstK = v; }
+                    }
+                    let t = cache.maxK;
+                    if (firstK !== null) t = Math.max(0, firstK - 1);
+                    return t;
+                } catch (e) { return 0; }
+            };
+        })();
+
         // Cell6: group by label with max diff + consecutive
         function renderCell6() {
             const body = sectionShell("cell7", "Cell7 · Nhóm theo label", "max sai khác & liền kề, chỉ nhóm >=2 kỳ.");
@@ -3961,7 +4199,7 @@
                             }
                             const totalStr = euclidTotal.toFixed(2);
                             const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         inner += "</tbody></table>";
                         if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
@@ -4726,6 +4964,58 @@
                         if (slice.length === 0) {
                             inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
                         } else {
+                            // Build a stable mapping from row key -> global indices so we can
+                            // map page copies back to canonical `rows` indices for k computation
+                            const rowKeyToIndices = new Map();
+                            try {
+                                rows.forEach((rr, gi) => {
+                                    try {
+                                        const rk = (rr.nums && Array.isArray(rr.nums) ? rr.nums.join(',') : '') + '|' + (rr.date || '');
+                                        if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
+                                        rowKeyToIndices.get(rk).push(gi);
+                                    } catch (err) { }
+                                });
+                            } catch (err) { }
+
+                            // Build pool of numbers (respect numberPickerTable if present)
+                            let pool = [];
+                            try {
+                                const npTable = document.getElementById('numberPickerTable');
+                                if (npTable) {
+                                    const tds = Array.from(npTable.querySelectorAll('td[data-number]'));
+                                    pool = tds.map(td => Number(td.dataset.number)).filter(n => Number.isFinite(n));
+                                }
+                            } catch (e) { }
+                            if (!pool || !pool.length) pool = Array.from({ length: 45 }, (_, i) => i + 1);
+
+                            // Greedy simulation: record first-k when each global row becomes excluded
+                            const rowFirstExcludedAt = new Array(rows.length).fill(null);
+                            const chosen = new Set();
+                            const maxK = pool.length;
+                            for (let kIdx = 1; kIdx <= maxK; kIdx++) {
+                                let best = null; let bestNew = Infinity;
+                                for (const cand of pool) {
+                                    if (chosen.has(cand)) continue;
+                                    let newExcl = 0;
+                                    for (let gi = 0; gi < rows.length; gi++) {
+                                        if (rowFirstExcludedAt[gi] !== null) continue;
+                                        const rr = rows[gi];
+                                        if (!rr || !rr.nums || !Array.isArray(rr.nums)) continue;
+                                        for (const nn of rr.nums) { if (Number(nn) === cand) { newExcl++; break; } }
+                                    }
+                                    if (newExcl < bestNew) { bestNew = newExcl; best = cand; }
+                                }
+                                if (best === null) break;
+                                for (let gi = 0; gi < rows.length; gi++) {
+                                    if (rowFirstExcludedAt[gi] !== null) continue;
+                                    const rr = rows[gi];
+                                    if (!rr || !rr.nums || !Array.isArray(rr.nums)) continue;
+                                    for (const nn of rr.nums) { if (Number(nn) === best) { rowFirstExcludedAt[gi] = kIdx; break; } }
+                                }
+                                chosen.add(best);
+                            }
+
+                            // Now emit table rows, mapping each page-copy `r` to a global index
                             slice.forEach(r => {
                                 const orderedSeqForHighlight = (consecChecked && orderChecked) ? key.split('-').map(Number) : Array.from(setValues);
                                 const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, m, consecChecked, orderedSeqForHighlight, orderChecked);
@@ -4767,7 +5057,17 @@
                                 }
                                 const totalStr = euclidTotal.toFixed(2);
                                 const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                                inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+
+                                // determine t (largest k for which the record remains visible)
+                                let t = pool.length;
+                                try {
+                                    const rk = (r.nums && Array.isArray(r.nums) ? r.nums.join(',') : '') + '|' + (r.date || '');
+                                    const gids = rowKeyToIndices.get(rk) || [];
+                                    const gi = (gids && gids.length) ? gids[0] : null;
+                                    if (gi !== null && rowFirstExcludedAt[gi] !== null) t = Math.max(0, rowFirstExcludedAt[gi] - 1);
+                                } catch (err) { }
+
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                             });
                         }
                         if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
@@ -6115,50 +6415,116 @@
                             `</div>`;
                         inner = headerHtml + navHtml;
                         inner += `<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>`;
-                        slice.forEach(r => {
-                            const orderedSeq = key.split('-').map(Number);
-                            const requireOrder = !!(consec.checked && order && order.checked);
-                            const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked, orderedSeq, requireOrder);
-                            const labelHtml = renderHighlightedLabel(r.label, positions);
-                            let euclidPartsHtml = [];
-                            let euclidTotal = 0;
+                        // If there are rows to render, compute per-row `k` using the same
+                        // greedy trash-popup semantics so we can annotate each <tr>
+                        if (slice.length === 0) {
+                            inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
+                        } else {
+                            // Build mapping from stable row key -> global indices
+                            const rowKeyToIndices = new Map();
+                            try {
+                                rows.forEach((rr, gi) => {
+                                    try {
+                                        const rk = (rr.nums && Array.isArray(rr.nums) ? rr.nums.join(',') : '') + '|' + (rr.date || '');
+                                        if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
+                                        rowKeyToIndices.get(rk).push(gi);
+                                    } catch (err) { }
+                                });
+                            } catch (err) { }
+
+                            // Determine pool (use numberPickerTable order if available)
+                            let pool = [];
                             try {
                                 const npTable = document.getElementById('numberPickerTable');
-                                const tbody = npTable ? npTable.querySelector('tbody') : null;
-                                const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
-                                for (let j = 0; j < 5; j++) {
-                                    const n1 = r.nums[j];
-                                    const n2 = r.nums[j + 1];
-                                    let part = '';
-                                    if (npTable && tbodyRows.length > 0) {
-                                        const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
-                                        const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
-                                        if (cell1 && cell2) {
-                                            const rowElem1 = cell1.parentElement;
-                                            const rowElem2 = cell2.parentElement;
-                                            const rowIdx1 = tbodyRows.indexOf(rowElem1);
-                                            const rowIdx2 = tbodyRows.indexOf(rowElem2);
-                                            const logicalRow1 = 7 - rowIdx1;
-                                            const logicalRow2 = 7 - rowIdx2;
-                                            const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
-                                            const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
-                                            const dx = colIdx2 - colIdx1;
-                                            const dy = logicalRow2 - logicalRow1;
-                                            const d = Math.sqrt(dx * dx + dy * dy);
-                                            part = isFinite(d) ? d.toFixed(2) : '';
-                                            euclidTotal += isFinite(d) ? d : 0;
-                                        }
-                                    }
-                                    if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
-                                    else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                if (npTable) {
+                                    const tds = Array.from(npTable.querySelectorAll('td[data-number]'));
+                                    pool = tds.map(td => Number(td.dataset.number)).filter(n => Number.isFinite(n));
                                 }
-                            } catch (e) {
-                                for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                            } catch (e) { }
+                            if (!pool || !pool.length) pool = Array.from({ length: 45 }, (_, i) => i + 1);
+
+                            // Greedy simulation: compute first-k when each global row becomes excluded
+                            const rowFirstExcludedAt = new Array(rows.length).fill(null);
+                            const chosen = new Set();
+                            const maxK = pool.length;
+                            for (let kIdx = 1; kIdx <= maxK; kIdx++) {
+                                let best = null; let bestNew = Infinity;
+                                for (const cand of pool) {
+                                    if (chosen.has(cand)) continue;
+                                    let newExcl = 0;
+                                    for (let gi = 0; gi < rows.length; gi++) {
+                                        if (rowFirstExcludedAt[gi] !== null) continue;
+                                        const rr = rows[gi];
+                                        if (!rr || !rr.nums || !Array.isArray(rr.nums)) continue;
+                                        for (const nn of rr.nums) { if (Number(nn) === cand) { newExcl++; break; } }
+                                    }
+                                    if (newExcl < bestNew) { bestNew = newExcl; best = cand; }
+                                }
+                                if (best === null) break;
+                                for (let gi = 0; gi < rows.length; gi++) {
+                                    if (rowFirstExcludedAt[gi] !== null) continue;
+                                    const rr = rows[gi];
+                                    if (!rr || !rr.nums || !Array.isArray(rr.nums)) continue;
+                                    for (const nn of rr.nums) { if (Number(nn) === best) { rowFirstExcludedAt[gi] = kIdx; break; } }
+                                }
+                                chosen.add(best);
                             }
-                            const totalStr = euclidTotal.toFixed(2);
-                            const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
-                        });
+
+                            // Emit rows with computed t (largest k for which row remains visible)
+                            slice.forEach(r => {
+                                const orderedSeq = key.split('-').map(Number);
+                                const requireOrder = !!(consec.checked && order && order.checked);
+                                const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setValues, x, consec.checked, orderedSeq, requireOrder);
+                                const labelHtml = renderHighlightedLabel(r.label, positions);
+                                let euclidPartsHtml = [];
+                                let euclidTotal = 0;
+                                try {
+                                    const npTable = document.getElementById('numberPickerTable');
+                                    const tbody = npTable ? npTable.querySelector('tbody') : null;
+                                    const tbodyRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                                    for (let j = 0; j < 5; j++) {
+                                        const n1 = r.nums[j];
+                                        const n2 = r.nums[j + 1];
+                                        let part = '';
+                                        if (npTable && tbodyRows.length > 0) {
+                                            const cell1 = npTable.querySelector(`td[data-number="${n1}"]`);
+                                            const cell2 = npTable.querySelector(`td[data-number="${n2}"]`);
+                                            if (cell1 && cell2) {
+                                                const rowElem1 = cell1.parentElement;
+                                                const rowElem2 = cell2.parentElement;
+                                                const rowIdx1 = tbodyRows.indexOf(rowElem1);
+                                                const rowIdx2 = tbodyRows.indexOf(rowElem2);
+                                                const logicalRow1 = 7 - rowIdx1;
+                                                const logicalRow2 = 7 - rowIdx2;
+                                                const colIdx1 = Array.from(rowElem1.children).indexOf(cell1);
+                                                const colIdx2 = Array.from(rowElem2.children).indexOf(cell2);
+                                                const dx = colIdx2 - colIdx1;
+                                                const dy = logicalRow2 - logicalRow1;
+                                                const d = Math.sqrt(dx * dx + dy * dy);
+                                                part = isFinite(d) ? d.toFixed(2) : '';
+                                                euclidTotal += isFinite(d) ? d : 0;
+                                            }
+                                        }
+                                        if (part) euclidPartsHtml.push(`<span class="euclid-pill">${part}</span>`);
+                                        else euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                    }
+                                } catch (e) {
+                                    for (let j = 0; j < 5; j++) euclidPartsHtml.push(`<span class="euclid-pill empty">-</span>`);
+                                }
+                                const totalStr = euclidTotal.toFixed(2);
+                                const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
+
+                                let t = pool.length;
+                                try {
+                                    const rk = (r.nums && Array.isArray(r.nums) ? r.nums.join(',') : '') + '|' + (r.date || '');
+                                    const gids = rowKeyToIndices.get(rk) || [];
+                                    const gi = (gids && gids.length) ? gids[0] : null;
+                                    if (gi !== null && rowFirstExcludedAt[gi] !== null) t = Math.max(0, rowFirstExcludedAt[gi] - 1);
+                                } catch (err) { }
+
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            });
+                        }
                         if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
@@ -6893,7 +7259,7 @@
                         }
                         const totalStr = euclidTotal.toFixed(2);
                         const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -7179,7 +7545,7 @@
                             const totalStr = euclidTotal.toFixed(2);
                             // Let CSS handle centering and fixed width; avoid left-padding with NBSPs
                             const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            inner += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
@@ -7839,7 +8205,7 @@
                             }
                             const totalStr = euclidTotal.toFixed(2);
                             const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -8056,7 +8422,7 @@
                             }
                             const totalStr = euclidTotal.toFixed(2);
                             const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                            html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -8861,7 +9227,7 @@
                         }
                         const totalStr = euclidTotal.toFixed(2);
                         const euclidHtml = euclidPartsHtml.join('') + `<span class="euclid-total-pill">${totalStr}</span>`;
-                        html += `<tr data-result="${r.nums.join(',')}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
+                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;font-family:monospace'>${euclidHtml}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -10768,12 +11134,12 @@
             // minimal UI: single numeric input for k (1..45). on submit it will compute and move numbers to trash.
             trashPopup.innerHTML = `
                 <div style="padding:8px;display:flex;gap:8px;align-items:center;">
-                    <label style="font-weight:700;color:var(--text);">Loại bỏ k số:</label>
+                    <label id="trashKLabel" style="font-weight:700;color:var(--text);display:inline-flex;align-items:center;height:32px;padding:0 4px 0 0;">ktrash:</label>
                     <div style="position:relative;display:inline-block;vertical-align:middle;">
-                        <input id="trashKInput" type="number" min="1" max="39" step="1" value="3" style="width:72px;padding:6px 40px 6px 6px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;" />
-                        <div style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;">
-                            <button type="button" class="trash-k-up" title="Tăng 1" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▲</button>
-                            <button type="button" class="trash-k-down" title="Giảm 1" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▼</button>
+                        <input id="trashKInput" type="number" min="1" max="39" step="1" value="3" style="width:56px;padding:6px 26px 6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;" />
+                        <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;z-index:3;pointer-events:auto;width:22px;align-items:center;">
+                            <button type="button" class="trash-k-up" title="Tăng 1" style="width:18px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▲</button>
+                            <button type="button" class="trash-k-down" title="Giảm 1" style="width:18px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▼</button>
                         </div>
                     </div>
                 </div>
@@ -11378,6 +11744,99 @@
                 } catch (err) { /* ignore */ }
             }
             window.addEventListener('keyup', onShiftKeyUp, true);
+        })();
+    </script>
+    </script>
+    <!-- Instant floating tooltip for Cell5.5 / Cell6.5 / Cell6.6 rows: appears immediately and follows the cursor -->
+    <script>
+        (function () {
+            const tooltip = document.createElement('div');
+            tooltip.id = 'instantTooltip';
+            tooltip.style.cssText = 'position:fixed;pointer-events:none;padding:6px 8px;background:rgba(0,0,0,0.85);color:#fff;border-radius:6px;font-size:13px;z-index:99999;display:none;white-space:nowrap;';
+            document.body.appendChild(tooltip);
+
+            let activeTr = null;
+            let moveHandler = null;
+
+            function positionClient(e) {
+                const pad = 12;
+                const w = tooltip.offsetWidth || 80;
+                const h = tooltip.offsetHeight || 20;
+                let x = e.clientX + 12;
+                let y = e.clientY + 12;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                if (x + w + pad > vw) x = Math.max(8, e.clientX - w - 12);
+                if (y + h + pad > vh) y = Math.max(8, e.clientY - h - 12);
+                tooltip.style.left = x + 'px';
+                tooltip.style.top = y + 'px';
+            }
+
+            function showTooltipFor(e, tr) {
+                if (!tr) return;
+                activeTr = tr;
+                // strip native title to avoid browser delay
+                if (tr.getAttribute('title')) {
+                    tr.dataset._origTitle = tr.getAttribute('title');
+                    tr.removeAttribute('title');
+                }
+                const k = tr.getAttribute('data-k') || tr.dataset.k;
+                tooltip.textContent = k ? `k=${k}` : (tr.dataset._origTitle || '');
+                tooltip.style.display = 'block';
+                positionClient(e);
+                if (!moveHandler) {
+                    moveHandler = (ev) => { if (activeTr) positionClient(ev); };
+                    document.addEventListener('mousemove', moveHandler);
+                }
+            }
+
+            function hideTooltip() {
+                tooltip.style.display = 'none';
+                activeTr = null;
+                if (moveHandler) { document.removeEventListener('mousemove', moveHandler); moveHandler = null; }
+            }
+
+            // Delegated mouseover / mouseout to detect rows with data-k in the three cells
+            document.addEventListener('mouseover', function (ev) {
+                try {
+                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result][data-k]');
+                    if (!tr) return;
+                    const container = tr.closest && tr.closest('#cell5_5, #cell6_5, #cell6_6, #cell7, #cell8, #cell9, #cell11');
+                    if (container) showTooltipFor(ev, tr);
+                } catch (e) {/* ignore */ }
+            }, true);
+
+            document.addEventListener('mouseout', function (ev) {
+                try {
+                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result][data-k]');
+                    if (!tr) return;
+                    const related = ev.relatedTarget;
+                    if (related && tr.contains && tr.contains(related)) return;
+                    const container = tr.closest && tr.closest('#cell5_5, #cell6_5, #cell6_6, #cell7, #cell8, #cell9, #cell11');
+                    if (container) hideTooltip();
+                } catch (e) {/* ignore */ }
+            }, true);
+
+            // Hide on scroll/blur to avoid stuck tooltip
+            document.addEventListener('scroll', hideTooltip, true);
+            window.addEventListener('blur', hideTooltip);
+
+            // Strip native title attributes for existing and newly-added rows in the three containers
+            const containers = ['cell5_5', 'cell6_5', 'cell6_6', 'cell7', 'cell8', 'cell9', 'cell11'].map(id => document.getElementById(id)).filter(Boolean);
+            for (const c of containers) {
+                try { c.querySelectorAll && c.querySelectorAll('tr[title]').forEach(el => { el.dataset._origTitle = el.getAttribute('title'); el.removeAttribute('title'); }); } catch (e) { }
+                const mo = new MutationObserver(records => {
+                    for (const r of records) {
+                        r.addedNodes && r.addedNodes.forEach(node => {
+                            try {
+                                if (node.querySelectorAll) node.querySelectorAll('tr[title]').forEach(el => { el.dataset._origTitle = el.getAttribute('title'); el.removeAttribute('title'); });
+                                if (node.matches && node.matches('tr[title]')) { node.dataset._origTitle = node.getAttribute('title'); node.removeAttribute('title'); }
+                            } catch (e) {/* ignore */ }
+                        });
+                    }
+                });
+                mo.observe(c, { childList: true, subtree: true });
+            }
         })();
     </script>
 </body>
