@@ -3567,78 +3567,6 @@
                 // DEBUG: log counts to help diagnose mismatched page count reported by user
                 try { console.debug('renderCell5_5 debug:', { filteredCount: data.length, pages: pages.length, totalRows: rows.length }); } catch (e) { }
 
-                // Precompute t (max-visible-k) for the entire filtered `data` once per render.
-                // This ensures the displayed k̄ and its tooltip are based on the whole filtered set,
-                // not only the currently visible page.
-                let rowTByKey = new Map();
-                let t_values_all = [];
-                let avgAll = 0;
-                try {
-                    const numberPickerTableEl_all = document.getElementById('numberPickerTable');
-                    const poolNodes_all = numberPickerTableEl_all ? Array.from(numberPickerTableEl_all.querySelectorAll('td[data-number]')) : [];
-                    const pool_all = Array.from(new Set(poolNodes_all.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
-                    const poolSet_all = new Set(pool_all);
-                    const numToRows_all = new Map();
-                    const rowKeyToIndices_all = new Map();
-                    data.forEach((r, idx) => {
-                        try {
-                            const nums = r.nums || [];
-                            const rk = (nums || []).join(',') + '|' + (r.date || '');
-                            if (!rowKeyToIndices_all.has(rk)) rowKeyToIndices_all.set(rk, []);
-                            rowKeyToIndices_all.get(rk).push(idx);
-                            for (const v of nums) {
-                                const n = Number(v);
-                                if (!poolSet_all.has(n)) continue;
-                                if (!numToRows_all.has(n)) numToRows_all.set(n, new Set());
-                                numToRows_all.get(n).add(idx);
-                            }
-                        } catch (err) { }
-                    });
-
-                    const MAX_K_TRASH = 39;
-                    const maxK_all = Math.min(MAX_K_TRASH, Math.max(1, pool_all.length));
-                    const available_all = new Set(pool_all);
-                    const excludedSet_all = new Set();
-                    const rowFirstExcludedAt_all = new Map();
-
-                    for (let k = 1; k <= maxK_all; k++) {
-                        let bestChoice = null;
-                        let bestMarginal = Infinity;
-                        for (const candidate of Array.from(available_all)) {
-                            const s = numToRows_all.get(candidate);
-                            if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
-                            let marginal = 0;
-                            for (const idx of s) if (!excludedSet_all.has(idx)) marginal++;
-                            if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
-                        }
-                        if (bestChoice === null) break;
-                        available_all.delete(bestChoice);
-                        const s2 = numToRows_all.get(bestChoice);
-                        if (s2) for (const idx of s2) excludedSet_all.add(idx);
-
-                        // mark first-excluded indices for the whole dataset
-                        for (const [rk, idxs] of rowKeyToIndices_all.entries()) {
-                            for (const di of idxs) {
-                                if (!rowFirstExcludedAt_all.has(di) && excludedSet_all.has(di)) rowFirstExcludedAt_all.set(di, k);
-                            }
-                        }
-                    }
-
-                    // compute t for every record in filtered data
-                    let sum_all = 0;
-                    for (let i = 0; i < data.length; i++) {
-                        let t = maxK_all;
-                        if (rowFirstExcludedAt_all.has(i)) t = Math.max(0, rowFirstExcludedAt_all.get(i) - 1);
-                        const rk = ((data[i].nums || []).join(',')) + '|' + (data[i].date || '');
-                        rowTByKey.set(rk, t);
-                        t_values_all.push(t);
-                        sum_all += t;
-                    }
-                    avgAll = data.length ? (sum_all / data.length) : 0;
-                    // expose maxK_all for page rendering fallback
-                    window.__cell5_5_maxK_all = Math.min(MAX_K_TRASH, Math.max(1, pool_all.length));
-                } catch (err) { /* ignore dataset precompute errors */ }
-
                 if (!pages.length) {
                     wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>";
                     return;
@@ -3696,50 +3624,118 @@
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
                     let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th></tr></thead><tbody>`;
-                    // Use the precomputed per-dataset t values when available.
+                    // Precompute trash-based k thresholds using the same greedy heuristic as
+                    // computeBestRemoval(k) in the trash popup. We simulate selection once per
+                    // page so each record can get its maximal visible-k (t).
                     try {
-                        const maxK = (window.__cell5_5_maxK_all) ? window.__cell5_5_maxK_all : 39;
+                        const numberPickerTableEl = document.getElementById('numberPickerTable');
+                        const poolNodes = numberPickerTableEl ? Array.from(numberPickerTableEl.querySelectorAll('td[data-number]')) : [];
+                        const pool = Array.from(new Set(poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
+                        const poolSet = new Set(pool);
+                        // build number -> set(rowIndex) mapping over global `rows`
+                        // also build a stable key->indices map so we can match page rows
+                        const numToRows = new Map();
+                        const rowKeyToIndices = new Map();
+                        rows.forEach((r, ridx) => {
+                            try {
+                                const nums = r.nums || [];
+                                const rk = (nums || []).join(',') + '|' + (r.date || '');
+                                if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
+                                rowKeyToIndices.get(rk).push(ridx);
+                                for (const v of nums) {
+                                    const n = Number(v);
+                                    if (!poolSet.has(n)) continue;
+                                    if (!numToRows.has(n)) numToRows.set(n, new Set());
+                                    numToRows.get(n).add(ridx);
+                                }
+                            } catch (er) { }
+                        });
+
+                        const MAX_K_TRASH = 39;
+                        const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
+                        const available = new Set(pool);
+                        const excludedSet = new Set(); // row indices excluded by chosen numbers
+                        const chosenSoFar = [];
+                        // record first-k-when-excluded for rows appearing on this page
+                        const rowFirstExcludedAt = new Map();
+
+                        for (let k = 1; k <= maxK; k++) {
+                            // pick candidate minimizing marginal newly excluded rows (greedy)
+                            let bestChoice = null;
+                            let bestMarginal = Infinity;
+                            for (const candidate of Array.from(available)) {
+                                const s = numToRows.get(candidate);
+                                if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                                let marginal = 0;
+                                for (const idx of s) if (!excludedSet.has(idx)) marginal++;
+                                if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                            }
+                            if (bestChoice === null) break;
+                            // choose it
+                            available.delete(bestChoice);
+                            chosenSoFar.push(bestChoice);
+                            const s2 = numToRows.get(bestChoice);
+                            if (s2) for (const idx of s2) excludedSet.add(idx);
+
+                            // mark page rows first excluded at this k by matching stable key
+                            for (const rowObj of page) {
+                                try {
+                                    const rk = ((rowObj.nums || []).join(',')) + '|' + (rowObj.date || '');
+                                    const idxs = rowKeyToIndices.get(rk) || [];
+                                    for (const globalIdx of idxs) {
+                                        if (!rowFirstExcludedAt.has(globalIdx) && excludedSet.has(globalIdx)) {
+                                            rowFirstExcludedAt.set(globalIdx, k);
+                                        }
+                                    }
+                                } catch (er) { }
+                            }
+                        }
+
+                        // Now render rows with computed t = firstExcludedAt - 1 (or maxK if never excluded)
                         let sumT_forPage = 0;
                         let countT_forPage = 0;
-                        const t_values_forPage = [];
                         page.forEach((row, j) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
-                            let t = (rowTByKey && rowTByKey.has(rk)) ? rowTByKey.get(rk) : maxK;
-                            t_values_forPage.push(t);
+                            const idxs = rowKeyToIndices.get(rk) || [];
+                            let firstK = null;
+                            for (const globalIdx of idxs) {
+                                if (rowFirstExcludedAt.has(globalIdx)) {
+                                    const v = rowFirstExcludedAt.get(globalIdx);
+                                    if (firstK === null || v < firstK) firstK = v;
+                                }
+                            }
+                            let t = maxK;
+                            if (firstK !== null) t = Math.max(0, firstK - 1);
                             sumT_forPage += t;
                             countT_forPage += 1;
                             table += `<tr data-result="${result}" title="k=${t}" data-k="${t}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
                         });
 
-                        // compute average k using the full filtered dataset (avgAll) when available,
-                        // and show counts based on the full dataset t_values_all so tooltip reflects
-                        // the full-selection statistics rather than only the page.
-                        const avg = (typeof avgAll === 'number' && Number.isFinite(avgAll)) ? avgAll : (countT_forPage ? (sumT_forPage / countT_forPage) : 0);
-                        const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
-                        const tp = document.getElementById('trashPopup');
-                        if (tp) {
-                            try {
-                                const firstDiv = tp.querySelector('div');
-                                if (firstDiv) {
-                                    const existing = firstDiv.querySelector('.avg-k');
-                                    if (existing) existing.remove();
-                                    const span = document.createElement('span');
-                                    span.className = 'avg-k';
-                                    span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
-                                    span.textContent = 'k̄ = ' + avgStr;
-                                    try {
-                                        const allVals = (Array.isArray(t_values_all) && t_values_all.length) ? t_values_all : (window.__cell5_5_t_values_all || []);
-                                        const countLess = allVals.filter(v => Number.isFinite(v) && v < avg).length;
-                                        const countGreater = allVals.filter(v => Number.isFinite(v) && v > avg).length;
-                                        span.title = `${countLess}<>${countGreater}`;
-                                        span.setAttribute('aria-label', `${countLess}<>${countGreater}`);
-                                    } catch (e) { /* ignore tooltip compute errors */ }
-                                    firstDiv.appendChild(span);
-                                }
-                            } catch (e) { /* ignore DOM errors */ }
-                        }
+                        // compute average k for this page and update trash popup header (if present)
+                        try {
+                            const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
+                            const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
+                            const tp = document.getElementById('trashPopup');
+                            if (tp) {
+                                try {
+                                    const firstDiv = tp.querySelector('div');
+                                    if (firstDiv) {
+                                        // remove existing avg element if present
+                                        const existing = firstDiv.querySelector('.avg-k');
+                                        if (existing) existing.remove();
+                                        const span = document.createElement('span');
+                                        span.className = 'avg-k';
+                                        span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
+                                        span.textContent = 'k̄ = ' + avgStr;
+                                        firstDiv.appendChild(span);
+                                    }
+                                } catch (e) { /* ignore DOM errors */ }
+                            }
+                            // store last-average globally so other UI (trash tooltip) can use it
+                            try { window.__lastAvgK = Number(avgStr); } catch (e) { window.__lastAvgK = null; }
+                        } catch (e) { /* ignore avg errors */ }
                     } catch (e) {
                         // fallback: render without tooltip
                         page.forEach((row, j) => {
@@ -11289,7 +11285,311 @@
                     tbody.appendChild(tr);
                 }
                 adjustTrashPosition();
+                // After rendering trash cells update their tooltips (x<>y)
+                try { updateTrashTooltips(); } catch (e) { /* ignore */ }
             }
+
+            // Helper: read current average k (try header span, fallback to visible rows)
+            function getCurrentAvgK() {
+                try {
+                    if (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) return window.__lastAvgK;
+                } catch (e) { }
+                try {
+                    const tp = document.getElementById('trashPopup');
+                    if (tp) {
+                        const span = tp.querySelector('.avg-k');
+                        if (span) {
+                            const m = String(span.textContent || '').match(/([0-9]+(?:\.[0-9]+)?)/);
+                            if (m) return Number(m[1]);
+                        }
+                    }
+                } catch (e) { }
+                // fallback: compute avg from full filtered rows (no scrolling) using row cache
+                try {
+                    const filtered = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                    const ks = filtered.map(r => {
+                        try { return (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(r)) : NaN; } catch (e) { return NaN; }
+                    }).filter(v => Number.isFinite(v));
+                    if (!ks.length) return 0;
+                    return ks.reduce((a, b) => a + b, 0) / ks.length;
+                } catch (e) { return 0; }
+            }
+
+            // Return array of row objects matching current Cell5.5 filters (year/month/trash)
+            window.getCell5_5FilteredRows = function () {
+                try {
+                    const section = document.getElementById('cell5_5');
+                    if (!section) return rows.slice();
+                    const controls = section.querySelector('.controls');
+                    if (!controls) return rows.slice();
+                    const selects = Array.from(controls.querySelectorAll('select'));
+                    // selects order in renderCell5_5: [sortSel, yearSel, monthSel, (maybe) trashSel]
+                    const yearSel = selects[1] || null;
+                    const monthSel = selects[2] || null;
+                    const trashSel = selects[3] || null;
+                    const yearVal = yearSel ? yearSel.value : 'all';
+                    const monthVal = monthSel ? monthSel.value : 'all';
+                    const trashVal = trashSel ? trashSel.value : 'include';
+
+                    // filter rows similar to buildCountsHtml/populateMonths
+                    const filtered = rows.filter(r => {
+                        try {
+                            const s = String(r.date || '');
+                            if (!s) return false;
+                            if (yearVal && yearVal !== 'all') {
+                                if (s.length < 4 || s.slice(-4) !== yearVal) return false;
+                            }
+                            if (monthVal && monthVal !== 'all') {
+                                // parse dd/mm/yyyy or other common formats similar to renderCell5_5.parseDateSortable
+                                let ts = 0;
+                                let m1 = s.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*$/);
+                                if (m1) {
+                                    let dd = Number(m1[1]), mm = Number(m1[2]), yy = Number(m1[3]);
+                                    if (yy < 100) yy += 2000;
+                                    const dt = new Date(yy, mm - 1, dd);
+                                    if (!isNaN(dt)) ts = dt.getTime();
+                                }
+                                if (!ts) {
+                                    const digits = s.replace(/\D/g, '');
+                                    if (/^\d+$/.test(digits)) {
+                                        if (digits.length === 8) {
+                                            const dd = Number(digits.slice(0, 2)), mm = Number(digits.slice(2, 4)), yyyy = Number(digits.slice(4, 8));
+                                            const dt2 = new Date(yyyy, mm - 1, dd);
+                                            if (!isNaN(dt2)) ts = dt2.getTime();
+                                        } else {
+                                            const d6 = digits.padStart(6, '0');
+                                            const dd = Number(d6.slice(0, 2)), mm = Number(d6.slice(2, 4)), yy2 = 2000 + Number(d6.slice(4, 6));
+                                            const dt3 = new Date(yy2, mm - 1, dd);
+                                            if (!isNaN(dt3)) ts = dt3.getTime();
+                                        }
+                                    }
+                                }
+                                if (!ts) {
+                                    const dtf = new Date(s);
+                                    if (!isNaN(dtf)) ts = dtf.getTime();
+                                }
+                                if (!ts) return false;
+                                const dtFinal = new Date(ts);
+                                const m = String(dtFinal.getMonth() + 1).padStart(2, '0');
+                                if (m !== monthVal) return false;
+                            }
+                            // if trashSel == 'exclude', filter out rows that do not contain any number currently in trash
+                            if (trashVal === 'exclude') {
+                                // when excluding, keep rows that DO NOT contain any trashed number
+                                try {
+                                    if (!Array.isArray(r.nums)) return true;
+                                    for (const v of (r.nums || [])) if (trashItems.includes(Number(v))) return false;
+                                } catch (e) { }
+                            }
+                            return true;
+                        } catch (e) { return false; }
+                    });
+                    return filtered;
+                } catch (e) { return rows.slice(); }
+            };
+
+            // Update tooltip (title) on each trash-number cell to show x<>y
+            function updateTrashTooltips() {
+                try {
+                    const tp = document.getElementById('trashPopup');
+                    if (!tp) return;
+                    const avg = getCurrentAvgK();
+                    const tds = Array.from(tp.querySelectorAll('td.trash-number'));
+                    // get the full set of filtered rows (not just DOM-mounted pages)
+                    const filteredRows = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                    for (const td of tds) {
+                        try {
+                            const n = Number(td.dataset.number);
+                            if (!n) { td.removeAttribute('title'); continue; }
+                            let x = 0, y = 0;
+                            for (const rowObj of filteredRows) {
+                                try {
+                                    const nums = rowObj.nums || [];
+                                    const has = nums.some(v => Number(v) === n);
+                                    if (!has) continue;
+                                    const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
+                                    if (!Number.isFinite(kVal)) continue;
+                                    if (kVal < avg) x++; else if (kVal > avg) y++;
+                                } catch (e) { }
+                            }
+                            td.title = `${x}<>${y}`;
+                        } catch (e) { /* per-td ignore */ }
+                    }
+                    // also update avg-k header span to show aggregate counts across visible rows
+                    try {
+                        const firstDiv = tp.querySelector('div');
+                        if (firstDiv) {
+                            const avgSpan = firstDiv.querySelector('.avg-k');
+                            if (avgSpan) {
+                                // compute aggregated x/y across filteredRows
+                                let aggX = 0, aggY = 0;
+                                for (const rowObj of filteredRows) {
+                                    try {
+                                        const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
+                                        if (!Number.isFinite(kVal)) continue;
+                                        if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
+                                    } catch (e) { }
+                                }
+                                avgSpan.title = `${aggX}<>${aggY}`;
+                                // ensure tooltip updates on hover: attach recompute handler once
+                                try {
+                                    if (!avgSpan.__aggTooltipBound) {
+                                        avgSpan.addEventListener('mouseenter', (ev) => {
+                                            try {
+                                                // recompute against full filtered rows
+                                                let ax = 0, ay = 0;
+                                                const curFiltered = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                                                for (const r2 of curFiltered) {
+                                                    try {
+                                                        const kv = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(r2)) : NaN;
+                                                        if (!Number.isFinite(kv)) continue;
+                                                        if (kv < avg) ax++; else if (kv > avg) ay++;
+                                                    } catch (ee) { }
+                                                }
+                                                avgSpan.title = `${ax}<>${ay}`;
+                                            } catch (ee) { }
+                                        });
+                                        avgSpan.__aggTooltipBound = true;
+                                        // make span focusable so tooltip can appear on keyboard focus too
+                                        if (!avgSpan.hasAttribute('tabindex')) avgSpan.setAttribute('tabindex', '0');
+                                    }
+                                } catch (e) { }
+                            }
+                        }
+                    } catch (e) { }
+                } catch (e) { }
+            }
+
+            // Observe changes to Cell5.5 so tooltips recalc after user changes year/month or pages
+            try {
+                const cell55 = document.getElementById('cell5_5');
+                if (cell55 && !cell55.__trashTooltipObserverAdded) {
+                    const mo55 = new MutationObserver(() => { try { updateTrashTooltips(); } catch (e) { } });
+                    mo55.observe(cell55, { childList: true, subtree: true, attributes: true });
+                    cell55.__trashTooltipObserverAdded = true;
+                }
+            } catch (e) { }
+
+            // Also recalc when trash content changes
+            try { (document.getElementById('trashPopup') || document.body).addEventListener('trashchange', () => { try { updateTrashTooltips(); } catch (e) { } }); } catch (e) { }
+
+            // Create floating tooltip element and delegated handlers as a robust fallback
+            try {
+                function ensureTrashAggTooltip() {
+                    if (document.getElementById('trashAggTooltip')) return document.getElementById('trashAggTooltip');
+                    const t = document.createElement('div');
+                    t.id = 'trashAggTooltip';
+                    t.style.position = 'fixed';
+                    t.style.zIndex = 12000;
+                    t.style.padding = '6px 8px';
+                    t.style.borderRadius = '6px';
+                    t.style.background = 'rgba(0,0,0,0.8)';
+                    t.style.color = '#fff';
+                    t.style.fontWeight = '700';
+                    t.style.fontSize = '12px';
+                    t.style.pointerEvents = 'none';
+                    t.style.transition = 'opacity 0.12s';
+                    t.style.opacity = '0';
+                    t.style.whiteSpace = 'nowrap';
+                    document.body.appendChild(t);
+                    return t;
+                }
+
+                const aggTip = ensureTrashAggTooltip();
+
+                let aggHideTimeout = null;
+                function showAggTipAt(text, rect) {
+                    try {
+                        aggTip.textContent = text;
+                        const pad = 8;
+                        let left = Math.round(rect.left + (rect.width / 2) - aggTip.offsetWidth / 2);
+                        if (Number.isNaN(left)) left = rect.left + pad;
+                        left = Math.max(8, Math.min(left, window.innerWidth - aggTip.offsetWidth - 8));
+                        let top = rect.bottom + 8;
+                        if (top + aggTip.offsetHeight + 8 > window.innerHeight) top = rect.top - aggTip.offsetHeight - 8;
+                        aggTip.style.left = left + 'px';
+                        aggTip.style.top = top + 'px';
+                        aggTip.style.opacity = '1';
+                        if (aggHideTimeout) { clearTimeout(aggHideTimeout); aggHideTimeout = null; }
+                    } catch (e) { }
+                }
+                function hideAggTipSoon() { if (aggHideTimeout) clearTimeout(aggHideTimeout); aggHideTimeout = setTimeout(() => { try { aggTip.style.opacity = '0'; } catch (e) { } }, 100); }
+
+                document.addEventListener('mouseover', (ev) => {
+                    try {
+                        const td = ev.target.closest && ev.target.closest('td.trash-number');
+                        const avgEl = ev.target.closest && ev.target.closest('#trashPopup .avg-k');
+                        if (td) {
+                            // compute x<>y for this specific number
+                            const n = Number(td.dataset.number);
+                            if (!n) return;
+                            const filteredRows = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                            let x = 0, y = 0;
+                            const avg = getCurrentAvgK();
+                            for (const rowObj of filteredRows) {
+                                try {
+                                    const nums = rowObj.nums || [];
+                                    const has = nums.some(v => Number(v) === n);
+                                    if (!has) continue;
+                                    const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
+                                    if (!Number.isFinite(kVal)) continue;
+                                    if (kVal < avg) x++; else if (kVal > avg) y++;
+                                } catch (e) { }
+                            }
+                            const rect = td.getBoundingClientRect();
+                            showAggTipAt(`${x}<>${y}`, rect);
+                            return;
+                        }
+                        if (avgEl) {
+                            const avg = getCurrentAvgK();
+                            const filteredRows = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                            let aggX = 0, aggY = 0;
+                            for (const rowObj of filteredRows) {
+                                try {
+                                    const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
+                                    if (!Number.isFinite(kVal)) continue;
+                                    if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
+                                } catch (e) { }
+                            }
+                            const rect = avgEl.getBoundingClientRect();
+                            showAggTipAt(`${aggX}<>${aggY}`, rect);
+                            return;
+                        }
+                    } catch (e) { }
+                }, true);
+
+                document.addEventListener('mouseout', (ev) => {
+                    try {
+                        const related = ev.relatedTarget;
+                        // if leaving to an element inside tooltip or same td/span, ignore
+                        if (related && (related.closest && (related.closest('#trashPopup') || related.closest('#trashAggTooltip')))) return;
+                        hideAggTipSoon();
+                    } catch (e) { }
+                }, true);
+
+                // keyboard focus fallback
+                document.addEventListener('focusin', (ev) => {
+                    try {
+                        const el = ev.target;
+                        if (!el) return;
+                        if (el.matches && el.matches('#trashPopup .avg-k')) {
+                            const rect = el.getBoundingClientRect();
+                            const avg = getCurrentAvgK();
+                            const filteredRows = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
+                            let aggX = 0, aggY = 0;
+                            for (const rowObj of filteredRows) {
+                                try {
+                                    const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
+                                    if (!Number.isFinite(kVal)) continue;
+                                    if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
+                                } catch (e) { }
+                            }
+                            showAggTipAt(`${aggX}<>${aggY}`, rect);
+                        }
+                    } catch (e) { }
+                }, true);
+                document.addEventListener('focusout', hideAggTipSoon, true);
+            } catch (e) { }
 
             function moveToTrash(n) {
                 n = Number(n);
@@ -11822,30 +12122,6 @@
                     const container = tr.closest && tr.closest('#cell5_5, #cell6_5, #cell6_6, #cell7, #cell8, #cell9, #cell11');
                     if (container) hideTooltip();
                 } catch (e) {/* ignore */ }
-            }, true);
-
-            // Also apply the same floating tooltip behavior to the trash popup average span
-            // Selector: #trashPopup > div:nth-child(1) > span.avg-k
-            document.addEventListener('mouseover', function (ev) {
-                try {
-                    const span = ev.target && ev.target.closest && ev.target.closest('#trashPopup > div:nth-child(1) > span.avg-k');
-                    if (!span) return;
-                    if (span.getAttribute('title')) {
-                        span.dataset._origTitle = span.getAttribute('title');
-                        span.removeAttribute('title');
-                    }
-                    showTooltipFor(ev, span);
-                } catch (e) { /* ignore */ }
-            }, true);
-
-            document.addEventListener('mouseout', function (ev) {
-                try {
-                    const span = ev.target && ev.target.closest && ev.target.closest('#trashPopup > div:nth-child(1) > span.avg-k');
-                    if (!span) return;
-                    const related = ev.relatedTarget;
-                    if (related && span.contains && span.contains(related)) return;
-                    hideTooltip();
-                } catch (e) { /* ignore */ }
             }, true);
 
             // Hide on scroll/blur to avoid stuck tooltip
