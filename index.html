@@ -11550,17 +11550,19 @@
                                 avgSpan.removeAttribute('title');
                                 // ensure tooltip updates on hover: attach recompute handler once
                                 try {
-                                    if (!avgSpan.__aggTooltipBound) {
+                                        if (!avgSpan.__aggTooltipBound) {
                                         avgSpan.addEventListener('mouseenter', (ev) => {
                                             try {
-                                                // recompute against full filtered rows
+                                                // recompute average at the moment of hover so the tooltip
+                                                // always reflects the latest k̄ rather than a stale closure
+                                                const liveAvg = getCurrentAvgK();
                                                 let ax = 0, ay = 0;
                                                 const curFiltered = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
                                                 for (const r2 of curFiltered) {
                                                     try {
                                                         const kv = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(r2)) : NaN;
                                                         if (!Number.isFinite(kv)) continue;
-                                                        if (kv < avg) ax++; else if (kv > avg) ay++;
+                                                        if (kv < liveAvg) ax++; else if (kv > liveAvg) ay++;
                                                     } catch (ee) { }
                                                 }
                                                 // update data-agg for the styled tooltip fallback
