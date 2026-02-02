@@ -818,6 +818,66 @@
             outline: 1px solid var(--accent);
         }
 
+        /* Custom select/popup styling to match other controls */
+        .custom-select .nav-btn {
+            border: 2px solid var(--accent);
+            background: var(--card);
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: 10px;
+            /* match .nav-btn and other controls */
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 36px;
+            /* ensures same visual height as other inputs/buttons */
+            box-sizing: border-box;
+        }
+
+        .custom-select .nav-btn .label {
+            flex: 1;
+            text-align: left;
+        }
+
+        .custom-select-options {
+            position: absolute;
+            z-index: 2000;
+            background: var(--card);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            /* match other dropdown corner radius */
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            padding: 6px 6px;
+            max-height: 324px;
+            /* 9 items × ~36px each */
+            overflow-y: auto;
+            min-width: 140px;
+            box-sizing: border-box;
+        }
+
+        .custom-select-option {
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .custom-select-option:hover {
+            background: rgba(56, 239, 125, 0.12);
+            color: var(--text-strong);
+        }
+
+        .custom-select .nav-btn:focus,
+        .custom-select .nav-btn.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(56, 239, 125, 0.06);
+            outline: none;
+        }
+
         /* Hide number input spinner arrows */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
@@ -2509,35 +2569,110 @@
                 return combs;
             }
 
+            // Helper to compute union of number arrays (unique sorted)
+            function unionOfArrays(arrs) {
+                const s = new Set();
+                for (const a of arrs) for (const v of (a || [])) s.add(Number(v));
+                return Array.from(s).filter(n => Number.isFinite(n)).sort((a,b)=>a-b);
+            }
+
             self.onmessage = (e) => {
                 const { rows, xSel, consec, order, sortSel, workerType } = e.data;
                 if (workerType === 'groupBySet') {
                     const x = parseInt(xSel, 10);
                     const groups = new Map();
 
-                    rows.forEach((r, rowIndex) => {
-                        const nums = r.nums;
-                        if (consec) {
+                    // threshold used when including rows into candidate groups
+                    const THRESHOLD = 6;
+
+                    if (consec) {
+                        // consecutive slices per single row
+                        rows.forEach((r, rowIndex) => {
+                            const nums = r.nums || [];
                             for (let i = 0; i <= nums.length - x; i++) {
                                 const slice = nums.slice(i, i + x).slice();
                                 const key = order ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
                                 if (!groups.has(key)) groups.set(key, new Set());
                                 groups.get(key).add(rowIndex);
                             }
-                        } else {
-                            // Always enumerate combinations of size x from the 6 numbers.
-                            // This ensures sets like size 5 (and 6) are counted correctly
-                            // rather than only checking consecutive slices.
-                            const indexed = nums.map((v, i) => [i, v]);
-                            const combos = kCombinations(indexed, x);
-                            combos.forEach(combo => {
-                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
-                                const key = values.join("-");
-                                if (!groups.has(key)) groups.set(key, new Set());
+                        });
+                    } else {
+                        // Non-consecutive: handle three cases
+                        if (x <= 6) {
+                            // enumerate combinations inside a single row (fast)
+                            rows.forEach((r, rowIndex) => {
+                                const nums = r.nums || [];
+                                const indexed = nums.map((v, i) => [i, v]);
+                                const combos = kCombinations(indexed, x);
+                                combos.forEach(combo => {
+                                    const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                    const key = values.join("-");
+                                    if (!groups.has(key)) groups.set(key, new Set());
                                     groups.get(key).add(rowIndex);
                                 });
+                            });
+                        } else if (x > 6 && x <= 12) {
+                            // Pairwise unions of two rows (heuristic similar to main-thread quick path)
+                            const MAX_ROWS_FOR_PAIRING = Math.min(rows.length, 500);
+                            const seen = new Set();
+                            for (let i = 0; i < MAX_ROWS_FOR_PAIRING; i++) {
+                                for (let j = i + 1; j < MAX_ROWS_FOR_PAIRING; j++) {
+                                    try {
+                                        const a = rows[i].nums || [];
+                                        const b = rows[j].nums || [];
+                                        const union = unionOfArrays([a, b]);
+                                        if (union.length !== x) continue;
+                                        const key = union.join('-');
+                                        if (seen.has(key)) continue;
+                                        seen.add(key);
+                                        groups.set(key, new Set());
+                                    } catch (err) { /* ignore */ }
+                                }
                             }
-                        });
+                            // include rows that intersect the candidate group by at least THRESHOLD
+                            for (const key of Array.from(groups.keys())) {
+                                const parts = key.split('-').map(Number);
+                                rows.forEach((r, rowIndex) => {
+                                    try {
+                                        const common = (r.nums || []).filter(n => parts.includes(n)).length;
+                                        if (common >= THRESHOLD) groups.get(key).add(rowIndex);
+                                    } catch (err) { }
+                                });
+                            }
+                        } else {
+                            // x >= 13: need to consider unions of multiple rows (triples)
+                            // We'll try triples as a compromise between coverage and performance.
+                            const MAX_ROWS_FOR_TRIPLE = Math.min(rows.length, 200);
+                            const seen = new Set();
+                            for (let i = 0; i < MAX_ROWS_FOR_TRIPLE; i++) {
+                                for (let j = i + 1; j < MAX_ROWS_FOR_TRIPLE; j++) {
+                                    for (let k = j + 1; k < MAX_ROWS_FOR_TRIPLE; k++) {
+                                        try {
+                                            const a = rows[i].nums || [];
+                                            const b = rows[j].nums || [];
+                                            const c = rows[k].nums || [];
+                                            const union = unionOfArrays([a, b, c]);
+                                            if (union.length !== x) continue;
+                                            const key = union.join('-');
+                                            if (seen.has(key)) continue;
+                                            seen.add(key);
+                                            groups.set(key, new Set());
+                                        } catch (err) { /* ignore */ }
+                                    }
+                                }
+                            }
+                            // include rows that intersect the candidate group by at least THRESHOLD
+                            for (const key of Array.from(groups.keys())) {
+                                const parts = key.split('-').map(Number);
+                                rows.forEach((r, rowIndex) => {
+                                    try {
+                                        const common = (r.nums || []).filter(n => parts.includes(n)).length;
+                                        if (common >= THRESHOLD) groups.get(key).add(rowIndex);
+                                    } catch (err) { }
+                                });
+                            }
+                        }
+                    }
 
                     let arr = [...groups.entries()].filter(([, indices]) => indices.size >= 2);
                     if (sortSel === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
@@ -2558,6 +2693,8 @@
             if (!worker) worker = new Worker(workerUrl);
             return worker;
         };
+        // warm the worker early to avoid worker creation latency on first heavy query
+        try { getWorker(); } catch (e) { /* ignore if worker creation fails */ }
 
         // ===== Data Loading =====
         let rows = [];
@@ -5320,7 +5457,79 @@
             } catch (e) { /* ignore if DOM ops fail */ }
 
             const controls = document.createElement("div"); controls.className = "controls";
-            const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
+            // Bộ số selector: now supports 1..18 (expanded per request)
+            const xSel = document.createElement("select");[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = `Bộ ${v}`; xSel.appendChild(o); }); xSel.value = "2";
+            // Keep native select for logic but hide it; provide a custom popup limited to 9 visible items
+            try {
+                xSel.style.display = 'none';
+                xSel.setAttribute('aria-hidden', 'true');
+
+                const xSelWrapper = document.createElement('div');
+                xSelWrapper.className = 'custom-select';
+                xSelWrapper.style.position = 'relative';
+                xSelWrapper.style.display = 'inline-block';
+                xSelWrapper.style.verticalAlign = 'middle';
+
+                const xSelBtn = document.createElement('button');
+                xSelBtn.type = 'button';
+                xSelBtn.className = 'nav-btn';
+                xSelBtn.textContent = `Bộ ${xSel.value}`;
+                xSelBtn.style.minWidth = '96px';
+
+                const optionsDiv = document.createElement('div');
+                optionsDiv.className = 'custom-select-options';
+                optionsDiv.style.position = 'absolute';
+                optionsDiv.style.top = '100%';
+                optionsDiv.style.left = '0';
+                optionsDiv.style.zIndex = '3000';
+                optionsDiv.style.background = 'var(--card)';
+                optionsDiv.style.border = '1px solid var(--border)';
+                optionsDiv.style.borderRadius = '8px';
+                optionsDiv.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)';
+                optionsDiv.style.minWidth = '96px';
+                optionsDiv.style.maxHeight = '324px'; /* 9 * 36px */
+                optionsDiv.style.overflowY = 'auto';
+                optionsDiv.style.display = 'none';
+
+                // populate options
+                for (let v = 1; v <= 18; v++) {
+                    const opt = document.createElement('div');
+                    opt.className = 'custom-select-option';
+                    opt.textContent = `Bộ ${v}`;
+                    opt.dataset.value = String(v);
+                    opt.style.padding = '8px 10px';
+                    opt.style.cursor = 'pointer';
+                    opt.style.whiteSpace = 'nowrap';
+                    opt.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const val = String(v);
+                        xSel.value = val;
+                        try { xSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { xSel.dispatchEvent(new Event('change')); }
+                        xSelBtn.textContent = `Bộ ${val}`;
+                        optionsDiv.style.display = 'none';
+                    });
+                    optionsDiv.appendChild(opt);
+                }
+
+                xSelBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    optionsDiv.style.display = optionsDiv.style.display === 'none' ? 'block' : 'none';
+                });
+
+                // close on outside click
+                document.addEventListener('click', () => { try { optionsDiv.style.display = 'none'; } catch (e) { } });
+
+                // keyboard: close on Escape
+                document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') optionsDiv.style.display = 'none'; });
+
+                xSelWrapper.appendChild(xSelBtn);
+                xSelWrapper.appendChild(optionsDiv);
+                // keep native select for code logic accessible under wrapper
+                xSelWrapper.appendChild(xSel);
+
+                // expose wrapper so we can insert it into controls later
+                body.__xSelWrapper = xSelWrapper;
+            } catch (e) { /* ignore custom UI if DOM fails */ }
             // remember previous comb so we only clear extras when shrinking the set
             let prevComb = parseInt(xSel.value, 10) || 1;
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề")); consec.checked = false;
@@ -5489,7 +5698,8 @@
             function rebuildComboExtras(prefill = []) {
                 comboExtras.innerHTML = '';
                 const comb = parseInt(xSel.value, 10) || 1;
-                const count = Math.max(0, comb - 1);
+                // Limit dynamic extra inputs to at most 5 (user requested: số x + 5 ô dynamic là đủ)
+                const count = Math.max(0, Math.min(comb - 1, 5));
                 for (let i = 0; i < count; i++) {
                     // container mimics Cell9 input container with drag handle and up/down buttons
                     const container = document.createElement('div');
@@ -5740,7 +5950,7 @@
                 });
             } catch (e) { }
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", xSel, consecLabel, orderLabel, "Sắp xếp:", sortSel, recencySel, "Trash:", trashSel);
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, sortSel, recencySel, "Trash:", trashSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -5981,34 +6191,86 @@
 
                 const x = parseInt(xSel.value, 10);
 
-                if (x <= 2 || consec.checked) {
-                    computeQuick();
-                } else {
-                    computeWithWorker();
-                }
+                // Defer heavy work slightly so the loader can paint.
+                // For small x or consecutive mode use quick path. For moderate x (7..12)
+                // we still try the quick pairing heuristic. For larger requested group
+                // sizes (13+), fallback to the worker-based computation which can handle larger unions.
+                setTimeout(() => {
+                    try {
+                        if (x <= 2 || consec.checked || (x > 6 && x <= 12)) {
+                            computeQuick();
+                        } else {
+                            computeWithWorker();
+                        }
+                    } catch (err) {
+                        // Ensure we clear computing flag on unexpected errors
+                        isComputing = false;
+                        wrap.innerHTML = "<div class='error'>Lỗi khi xử lý</div>";
+                    }
+                }, 12);
 
                 function computeQuick() {
+                    // Groups map: key -> Set(rowIndex)
                     const groups = new Map();
-                    rows.forEach((r, rowIndex) => {
-                        const nums = r.nums;
-                        if (consec.checked) {
-                            for (let i = 0; i <= nums.length - x; i++) {
-                                const slice = nums.slice(i, i + x).slice();
-                                const key = order.checked ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
-                                if (!groups.has(key)) groups.set(key, new Set());
-                                groups.get(key).add(rowIndex);
+
+                    // If requested group size is larger than typical row length (6),
+                    // build candidate groups by pairing rows (heuristic) and then
+                    // include any row that contains at least 6 numbers from the
+                    // candidate group (user example: bộ 9 -> include rows with 6/9)
+                    if (x > 6 && !consec.checked) {
+                        const seen = new Set();
+                        // limit pairs processed for performance on large datasets
+                        const MAX_ROWS_FOR_PAIRING = 500;
+                        const limitedRows = rows.slice(0, Math.min(rows.length, MAX_ROWS_FOR_PAIRING));
+                        for (let i = 0; i < limitedRows.length; i++) {
+                            for (let j = i + 1; j < limitedRows.length; j++) {
+                                try {
+                                    const a = limitedRows[i].nums || [];
+                                    const b = limitedRows[j].nums || [];
+                                    const union = Array.from(new Set([...a, ...b])).sort((p, q) => p - q);
+                                    if (union.length !== x) continue; // we want candidate groups of exact size
+                                    const key = union.join('-');
+                                    if (seen.has(key)) continue;
+                                    seen.add(key);
+                                    groups.set(key, new Set());
+                                } catch (e) { /* ignore row parsing errors */ }
                             }
-                        } else {
-                            const indexed = nums.map((v, i) => [i, v]);
-                            const combos = kCombinations(indexed, x);
-                            combos.forEach(combo => {
-                                const values = combo.map(c => c[1]).sort((a, b) => a - b);
-                                const key = values.join("-");
-                                if (!groups.has(key)) groups.set(key, new Set());
-                                groups.get(key).add(rowIndex);
+                        }
+
+                        // For each candidate group, include rows that have intersection >= 6
+                        const threshold = 6;
+                        for (const [key] of Array.from(groups.entries())) {
+                            const parts = key.split('-').map(Number);
+                            rows.forEach((r, rowIndex) => {
+                                try {
+                                    const common = r.nums.filter(n => parts.includes(n)).length;
+                                    if (common >= threshold) groups.get(key).add(rowIndex);
+                                } catch (e) { }
                             });
                         }
-                    });
+                    } else {
+                        // existing logic for x <= 6 or consecutive
+                        rows.forEach((r, rowIndex) => {
+                            const nums = r.nums;
+                            if (consec.checked) {
+                                for (let i = 0; i <= nums.length - x; i++) {
+                                    const slice = nums.slice(i, i + x).slice();
+                                    const key = order.checked ? slice.join("-") : slice.slice().sort((a, b) => a - b).join("-");
+                                    if (!groups.has(key)) groups.set(key, new Set());
+                                    groups.get(key).add(rowIndex);
+                                }
+                            } else {
+                                const indexed = nums.map((v, i) => [i, v]);
+                                const combos = kCombinations(indexed, x);
+                                combos.forEach(combo => {
+                                    const values = combo.map(c => c[1]).sort((a, b) => a - b);
+                                    const key = values.join("-");
+                                    if (!groups.has(key)) groups.set(key, new Set());
+                                    groups.get(key).add(rowIndex);
+                                });
+                            }
+                        });
+                    }
 
                     let arr = [...groups.entries()]
                         .map(([key, indices]) => [key, [...indices].map(i => rows[i])])
@@ -6098,7 +6360,8 @@
 
                 function computeWithWorker() {
                     const worker = getWorker();
-                    const rowsForWorker = rows.map(r => ({ nums: r.nums, date: r.date, label: r.label }));
+                    // send only numeric arrays to reduce serialization cost
+                    const rowsForWorker = rows.map(r => ({ nums: r.nums }));
 
                     worker.onmessage = (e) => {
                         let arr = e.data.result.map(([key, indices]) => [key, indices.map(i => rows[i])]);
