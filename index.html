@@ -11412,7 +11412,9 @@
                                     if (kVal < avg) x++; else if (kVal > avg) y++;
                                 } catch (e) { }
                             }
-                            td.title = `${x}<>${y}`;
+                            // store aggregated counts on a data attribute instead of `title`
+                            td.setAttribute('data-agg', `${x}<>${y}`);
+                            td.removeAttribute('title');
                         } catch (e) { /* per-td ignore */ }
                     }
                     // also update avg-k header span to show aggregate counts across visible rows
@@ -11430,7 +11432,9 @@
                                         if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
                                     } catch (e) { }
                                 }
-                                avgSpan.title = `${aggX}<>${aggY}`;
+                                // store aggregated counts on a data attribute to avoid native tooltip
+                                avgSpan.setAttribute('data-agg', `${aggX}<>${aggY}`);
+                                avgSpan.removeAttribute('title');
                                 // ensure tooltip updates on hover: attach recompute handler once
                                 try {
                                     if (!avgSpan.__aggTooltipBound) {
@@ -11446,7 +11450,8 @@
                                                         if (kv < avg) ax++; else if (kv > avg) ay++;
                                                     } catch (ee) { }
                                                 }
-                                                avgSpan.title = `${ax}<>${ay}`;
+                                                // update data-agg for the styled tooltip fallback
+                                                avgSpan.setAttribute('data-agg', `${ax}<>${ay}`);
                                             } catch (ee) { }
                                         });
                                         avgSpan.__aggTooltipBound = true;
@@ -11498,27 +11503,72 @@
                 const aggTip = ensureTrashAggTooltip();
 
                 let aggHideTimeout = null;
-                function showAggTipAt(text, rect) {
+                let aggMoveHandler = null;
+                function showAggTipAt(text, rect, followCursor = false) {
                     try {
                         aggTip.textContent = text;
-                        const pad = 8;
-                        let left = Math.round(rect.left + (rect.width / 2) - aggTip.offsetWidth / 2);
-                        if (Number.isNaN(left)) left = rect.left + pad;
-                        left = Math.max(8, Math.min(left, window.innerWidth - aggTip.offsetWidth - 8));
-                        let top = rect.bottom + 8;
-                        if (top + aggTip.offsetHeight + 8 > window.innerHeight) top = rect.top - aggTip.offsetHeight - 8;
-                        aggTip.style.left = left + 'px';
-                        aggTip.style.top = top + 'px';
                         aggTip.style.opacity = '1';
                         if (aggHideTimeout) { clearTimeout(aggHideTimeout); aggHideTimeout = null; }
+
+                        // If requested, follow the cursor: install a document-level mousemove handler
+                        if (followCursor) {
+                            if (!aggMoveHandler) {
+                                aggMoveHandler = (ev) => {
+                                    try {
+                                        const pad = 12;
+                                        let left = ev.clientX + 12;
+                                        let top = ev.clientY + 18;
+                                        // prevent going offscreen horizontally
+                                        if (left + aggTip.offsetWidth + 8 > window.innerWidth) left = ev.clientX - aggTip.offsetWidth - 12;
+                                        if (left < 8) left = 8;
+                                        // prevent going offscreen vertically
+                                        if (top + aggTip.offsetHeight + 8 > window.innerHeight) top = ev.clientY - aggTip.offsetHeight - 12;
+                                        if (top < 8) top = 8;
+                                        aggTip.style.left = Math.round(left) + 'px';
+                                        aggTip.style.top = Math.round(top) + 'px';
+                                    } catch (e) { }
+                                };
+                                document.addEventListener('mousemove', aggMoveHandler, true);
+                            }
+                            // position immediately based on provided rect or cursor fallback
+                            if (rect && rect.left != null) {
+                                aggTip.style.left = Math.round(rect.left + (rect.width / 2) - aggTip.offsetWidth / 2) + 'px';
+                                let top = rect.bottom + 8;
+                                if (top + aggTip.offsetHeight + 8 > window.innerHeight) top = rect.top - aggTip.offsetHeight - 8;
+                                aggTip.style.top = Math.round(top) + 'px';
+                            }
+                        } else {
+                            // position relative to element rectangle (centered)
+                            if (rect && rect.left != null) {
+                                const pad = 8;
+                                let left = Math.round(rect.left + (rect.width / 2) - aggTip.offsetWidth / 2);
+                                if (Number.isNaN(left)) left = rect.left + pad;
+                                left = Math.max(8, Math.min(left, window.innerWidth - aggTip.offsetWidth - 8));
+                                let top = rect.bottom + 8;
+                                if (top + aggTip.offsetHeight + 8 > window.innerHeight) top = rect.top - aggTip.offsetHeight - 8;
+                                aggTip.style.left = left + 'px';
+                                aggTip.style.top = top + 'px';
+                            }
+                        }
                     } catch (e) { }
                 }
-                function hideAggTipSoon() { if (aggHideTimeout) clearTimeout(aggHideTimeout); aggHideTimeout = setTimeout(() => { try { aggTip.style.opacity = '0'; } catch (e) { } }, 100); }
+                function hideAggTipSoon(delay = 100) {
+                    try {
+                        if (aggHideTimeout) { clearTimeout(aggHideTimeout); aggHideTimeout = null; }
+                        // remove mousemove handler when hiding
+                        if (aggMoveHandler) { try { document.removeEventListener('mousemove', aggMoveHandler, true); } catch (e) { } aggMoveHandler = null; }
+                        if (!delay || Number(delay) <= 0) {
+                            try { aggTip.style.opacity = '0'; } catch (e) { }
+                        } else {
+                            aggHideTimeout = setTimeout(() => { try { aggTip.style.opacity = '0'; } catch (e) { } }, Number(delay));
+                        }
+                    } catch (e) { }
+                }
 
                 document.addEventListener('mouseover', (ev) => {
                     try {
                         const td = ev.target.closest && ev.target.closest('td.trash-number');
-                        const avgEl = ev.target.closest && ev.target.closest('#trashPopup .avg-k');
+                        const avgEl = ev.target.closest && ev.target.closest('#trashPopup > div:nth-child(1) > span');
                         if (td) {
                             // compute x<>y for this specific number
                             const n = Number(td.dataset.number);
@@ -11537,7 +11587,7 @@
                                 } catch (e) { }
                             }
                             const rect = td.getBoundingClientRect();
-                            showAggTipAt(`${x}<>${y}`, rect);
+                            showAggTipAt(`${x}<>${y}`, rect, true);
                             return;
                         }
                         if (avgEl) {
@@ -11552,7 +11602,7 @@
                                 } catch (e) { }
                             }
                             const rect = avgEl.getBoundingClientRect();
-                            showAggTipAt(`${aggX}<>${aggY}`, rect);
+                            showAggTipAt(`${aggX}<>${aggY}`, rect, true);
                             return;
                         }
                     } catch (e) { }
@@ -11561,9 +11611,16 @@
                 document.addEventListener('mouseout', (ev) => {
                     try {
                         const related = ev.relatedTarget;
+                        const tgt = ev.target;
                         // if leaving to an element inside tooltip or same td/span, ignore
-                        if (related && (related.closest && (related.closest('#trashPopup') || related.closest('#trashAggTooltip')))) return;
-                        hideAggTipSoon();
+                        // keep tooltip while moving inside the specific header span or the floating tooltip
+                        if (related && (related.closest && (related.closest('#trashPopup > div:nth-child(1) > span') || related.closest('#trashAggTooltip')))) return;
+                        // if the pointer left the specific header span, hide immediately
+                        if (tgt && tgt.closest && tgt.closest('#trashPopup > div:nth-child(1) > span')) {
+                            hideAggTipSoon(0);
+                        } else {
+                            hideAggTipSoon();
+                        }
                     } catch (e) { }
                 }, true);
 
@@ -11572,7 +11629,7 @@
                     try {
                         const el = ev.target;
                         if (!el) return;
-                        if (el.matches && el.matches('#trashPopup .avg-k')) {
+                        if (el.matches && el.matches('#trashPopup > div:nth-child(1) > span')) {
                             const rect = el.getBoundingClientRect();
                             const avg = getCurrentAvgK();
                             const filteredRows = (window.getCell5_5FilteredRows && window.getCell5_5FilteredRows()) || rows.slice();
@@ -11584,11 +11641,11 @@
                                     if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
                                 } catch (e) { }
                             }
-                            showAggTipAt(`${aggX}<>${aggY}`, rect);
+                            showAggTipAt(`${aggX}<>${aggY}`, rect, true);
                         }
                     } catch (e) { }
                 }, true);
-                document.addEventListener('focusout', hideAggTipSoon, true);
+                document.addEventListener('focusout', () => hideAggTipSoon(), true);
             } catch (e) { }
 
             function moveToTrash(n) {
