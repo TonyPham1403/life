@@ -3617,7 +3617,26 @@
                 for (let i = 0; i < data.length; i += pageSize) pages.push(data.slice(i, i + pageSize));
 
                 // DEBUG: log counts to help diagnose mismatched page count reported by user
-                try { console.debug('renderCell5_5 debug:', { filteredCount: data.length, pages: pages.length, totalRows: rows.length }); } catch (e) { }
+                //try { console.log('renderCell5_5 debug:', { filteredCount: data.length, pages: pages.length, totalRows: rows.length }); } catch (e) { }
+
+                // Compute a single global average k (use cached helper) so the
+                // trash popup and all pages render consistently regardless of
+                // page ordering. Store as rounded number in window.__lastAvgK.
+                try {
+                    const allTvals = data.map(r => {
+                        try {
+                            if (typeof window.getRowTrashK === 'function') {
+                                const v = window.getRowTrashK(r);
+                                return Number.isFinite(v) ? v : 0;
+                            }
+                        } catch (e) { }
+                        return 0;
+                    });
+                    const sumAll = allTvals.reduce((s, v) => s + v, 0);
+                    const globalAvg = allTvals.length ? (sumAll / allTvals.length) : 0;
+                    window.__lastAvgK = Number.isFinite(globalAvg) ? Number(globalAvg.toFixed(2)) : null;
+                    //console.log('[TRASH-DEBUG] renderCell5_5 set global __lastAvgK=', window.__lastAvgK);
+                } catch (e) { window.__lastAvgK = null; }
 
                 if (!pages.length) {
                     wrap.innerHTML = "<div class='loader'>Không có dữ liệu cho lựa chọn này</div>";
@@ -3676,84 +3695,20 @@
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
                     let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>k</th></tr></thead><tbody>`;
-                    // Precompute trash-based k thresholds using the same greedy heuristic as
-                    // computeBestRemoval(k) in the trash popup. We simulate selection once per
-                    // page so each record can get its maximal visible-k (t).
+                    // Use the global row-trash cache when available so k̄ is consistent
+                    // across different display orders/views. Fall back to 0 when not ready.
                     try {
-                        const numberPickerTableEl = document.getElementById('numberPickerTable');
-                        const poolNodes = numberPickerTableEl ? Array.from(numberPickerTableEl.querySelectorAll('td[data-number]')) : [];
-                        const pool = Array.from(new Set(poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
-                        const poolSet = new Set(pool);
-                        const numToRows = new Map();
-                        const rowKeyToIndices = new Map();
-                        rows.forEach((r, ridx) => {
-                            try {
-                                const nums = r.nums || [];
-                                const rk = (nums || []).join(',') + '|' + (r.date || '');
-                                if (!rowKeyToIndices.has(rk)) rowKeyToIndices.set(rk, []);
-                                rowKeyToIndices.get(rk).push(ridx);
-                                for (const v of nums) {
-                                    const n = Number(v);
-                                    if (!poolSet.has(n)) continue;
-                                    if (!numToRows.has(n)) numToRows.set(n, new Set());
-                                    numToRows.get(n).add(ridx);
-                                }
-                            } catch (er) { }
-                        });
-
-                        const MAX_K_TRASH = 39;
-                        const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
-                        const available = new Set(pool);
-                        const excludedSet = new Set();
-                        const chosenSoFar = [];
-                        const rowFirstExcludedAt = new Map();
-
-                        for (let k = 1; k <= maxK; k++) {
-                            let bestChoice = null;
-                            let bestMarginal = Infinity;
-                            for (const candidate of Array.from(available)) {
-                                const s = numToRows.get(candidate);
-                                if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
-                                let marginal = 0;
-                                for (const idx of s) if (!excludedSet.has(idx)) marginal++;
-                                if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
-                            }
-                            if (bestChoice === null) break;
-                            available.delete(bestChoice);
-                            chosenSoFar.push(bestChoice);
-                            const s2 = numToRows.get(bestChoice);
-                            if (s2) for (const idx of s2) excludedSet.add(idx);
-
-                            for (const rowObj of page) {
-                                try {
-                                    const rk = ((rowObj.nums || []).join(',')) + '|' + (rowObj.date || '');
-                                    const idxs = rowKeyToIndices.get(rk) || [];
-                                    for (const globalIdx of idxs) {
-                                        if (!rowFirstExcludedAt.has(globalIdx) && excludedSet.has(globalIdx)) {
-                                            rowFirstExcludedAt.set(globalIdx, k);
-                                        }
-                                    }
-                                } catch (er) { }
-                            }
-                        }
-
-                        // Collect per-row t values first so we can compute the page average
-                        const rowsData = [];
-                        page.forEach((row) => {
+                        const rowsData = page.map((row) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                            const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
-                            const idxs = rowKeyToIndices.get(rk) || [];
-                            let firstK = null;
-                            for (const globalIdx of idxs) {
-                                if (rowFirstExcludedAt.has(globalIdx)) {
-                                    const v = rowFirstExcludedAt.get(globalIdx);
-                                    if (firstK === null || v < firstK) firstK = v;
+                            let t = 0;
+                            try {
+                                if (typeof window.getRowTrashK === 'function') {
+                                    const val = window.getRowTrashK(row);
+                                    t = Number.isFinite(val) ? val : 0;
                                 }
-                            }
-                            let t = maxK;
-                            if (firstK !== null) t = Math.max(0, firstK - 1);
-                            rowsData.push({ date: row.date, result, numsHtml, t });
+                            } catch (er) { t = 0; }
+                            return { date: row.date, result, numsHtml, t };
                         });
 
                         const sumT_forPage = rowsData.reduce((s, it) => s + (Number.isFinite(it.t) ? it.t : 0), 0);
@@ -3761,7 +3716,10 @@
                         const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
                         const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
 
-                        // update trash popup header (if present) and global last average
+                        // update trash popup header (if present). Use the global
+                        // window.__lastAvgK if available; otherwise fall back to
+                        // the page-local avg for display only. Do NOT overwrite
+                        // the global cached value here (we set it once above).
                         try {
                             const tp = document.getElementById('trashPopup');
                             if (tp) {
@@ -3773,18 +3731,19 @@
                                         const span = document.createElement('span');
                                         span.className = 'avg-k';
                                         span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
-                                        span.textContent = 'k̄ = ' + avgStr;
+                                        const displayAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK.toFixed(2) : avgStr;
+                                        span.textContent = 'k̄ = ' + displayAvg;
                                         firstDiv.appendChild(span);
                                     }
                                 } catch (e) { /* ignore DOM errors */ }
                             }
-                            try { window.__lastAvgK = Number(avgStr); } catch (e) { window.__lastAvgK = null; }
                         } catch (e) { /* ignore avg errors */ }
 
                         // Render rows using class based on comparison to avg
                         rowsData.forEach((rdat) => {
                             const tooltip = `${rdat.t}`;
-                            const cls = (rdat.t >= avg) ? 'k-cyan' : 'k-yellow';
+                            const compareAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK : avg;
+                            const cls = (rdat.t >= compareAvg) ? 'k-cyan' : 'k-yellow';
                             table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:left'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left'><span class="k-value ${cls}">${tooltip}</span></td></tr>`;
                         });
                     } catch (e) {
@@ -6898,7 +6857,7 @@
                 if (body && !body.__trash_listener_added) {
                     body.addEventListener('trashchange', () => {
                         try {
-                            try { console.debug('cell6_5: section-local trashchange received'); } catch (e) { }
+                            try { console.log('cell6_5: section-local trashchange received'); } catch (e) { }
                             // Invalidate renderer state then trigger recompute like other inputs
                             try { const sec = document.getElementById('cell6_5'); if (sec && typeof sec.__invalidate === 'function') sec.__invalidate(); } catch (e) { }
                             if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
@@ -6918,7 +6877,7 @@
                 if (!window.__cell6_5_trash_watch) {
                     document.addEventListener('trashchange', () => {
                         try {
-                            try { console.debug('cell6_5: global trashchange received'); } catch (e) { }
+                            try { console.log('cell6_5: global trashchange received'); } catch (e) { }
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') {
                                 try { sec.__invalidate(); } catch (e) { }
@@ -11435,7 +11394,10 @@
             // Helper: read current average k (try header span, fallback to visible rows)
             function getCurrentAvgK() {
                 try {
-                    if (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) return window.__lastAvgK;
+                    if (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) {
+                        //console.log('[TRASH-DEBUG] getCurrentAvgK returning __lastAvgK=', window.__lastAvgK);
+                        return window.__lastAvgK;
+                    }
                 } catch (e) { }
                 try {
                     const tp = document.getElementById('trashPopup');
@@ -11443,7 +11405,10 @@
                         const span = tp.querySelector('.avg-k');
                         if (span) {
                             const m = String(span.textContent || '').match(/([0-9]+(?:\.[0-9]+)?)/);
-                            if (m) return Number(m[1]);
+                            if (m) {
+                                //console.log('[TRASH-DEBUG] getCurrentAvgK parsed avg from popup span=', Number(m[1]));
+                                return Number(m[1]);
+                            }
                         }
                     }
                 } catch (e) { }
@@ -11454,7 +11419,9 @@
                         try { return (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(r)) : NaN; } catch (e) { return NaN; }
                     }).filter(v => Number.isFinite(v));
                     if (!ks.length) return 0;
-                    return ks.reduce((a, b) => a + b, 0) / ks.length;
+                    const computed = ks.reduce((a, b) => a + b, 0) / ks.length;
+                    //console.log('[TRASH-DEBUG] getCurrentAvgK computed fallback avg=', computed, 'count=', ks.length);
+                    return computed;
                 } catch (e) { return 0; }
             }
 
