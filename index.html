@@ -6616,10 +6616,10 @@
                             const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
                             const tMode = (tEl && tEl.value) ? tEl.value : 'include';
                             if (String(tMode) !== 'exclude') {
-                                if (baselineAllKeys && Array.isArray(baselineAllKeys)) {
-                                    const idxInBaseline = baselineAllKeys.indexOf(key);
-                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineAllKeys.length}`;
-                                }
+                                if (baselineArrAll && Array.isArray(baselineArrAll)) {
+                                        const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
+                                        if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineArrAll.length}`;
+                                    }
                             }
                         } catch (e) { }
                         let globalRankDisplay = '';
@@ -7028,9 +7028,9 @@
                             const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
                             const tMode = (tEl && tEl.value) ? tEl.value : 'include';
                             if (String(tMode) !== 'exclude') {
-                                if (baselineAllKeys && Array.isArray(baselineAllKeys)) {
-                                    const idxInBaseline = baselineAllKeys.indexOf(key);
-                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineAllKeys.length}`;
+                                if (baselineArrAll && Array.isArray(baselineArrAll)) {
+                                    const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
+                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineArrAll.length}`;
                                 }
                             }
                         } catch (e) { }
