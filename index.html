@@ -1847,9 +1847,9 @@
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
             overflow-y: auto;
             overflow-x: hidden;
-            /* prevent horizontal scrollbar */
-            transform: none !important;
-            will-change: width, height, left, top;
+            /* allow transform so trash can scale with popup */
+            transform-origin: top right;
+            will-change: transform, width, height, left, top;
         }
 
         /* Cell5.5 count highlight */
@@ -1897,6 +1897,33 @@
             border: 2px solid var(--connection-line-color);
             /* keep td as a table-cell so the table layout enforces 3 columns
                use an inner wrapper for flex layout instead of changing td display */
+        }
+
+        /* Scale handle for trash popup (bottom-left corner) */
+        #trashPopup .trash-scale-handle {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 18px;
+            height: 18px;
+            background: transparent;
+            border-radius: 4px;
+            cursor: nesw-resize;
+            z-index: 10002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.9;
+            pointer-events: auto;
+        }
+        #trashPopup .trash-scale-handle:after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid var(--border);
+            border-bottom: 2px solid var(--border);
+            transform: rotate(45deg);
+            opacity: 0.9;
         }
 
         /* inner flex wrapper inside each trash cell to position rank and number */
@@ -2332,7 +2359,7 @@
             min-width: 40px !important;
             max-width: 88px !important;
             padding: 4px 6px 4px 8px !important;
-            padding-right: 26px !important;
+            padding-right: 18px !important;
             /* make room for compact spinner */
             box-sizing: border-box !important;
             font-size: 13px !important;
@@ -9392,6 +9419,13 @@
 
             const applyPopupScale = () => {
                 numberPickerPopup.style.transform = `scale(${popupScaleState.scale})`;
+                try {
+                    const tp = document.getElementById('trashPopup');
+                    if (tp) {
+                        tp.style.transform = `scale(${popupScaleState.scale})`;
+                        tp.style.transformOrigin = 'top right';
+                    }
+                } catch (e) { }
             };
 
             const applyPopupScaleInstant = () => {
@@ -9399,6 +9433,18 @@
                 const oldTransition = numberPickerPopup.style.transition;
                 numberPickerPopup.style.transition = 'none';
                 numberPickerPopup.style.transform = `scale(${popupScaleState.scale})`;
+                try {
+                    const tp = document.getElementById('trashPopup');
+                    if (tp) {
+                        const oldT = tp.style.transition;
+                        tp.style.transition = 'none';
+                        tp.style.transform = `scale(${popupScaleState.scale})`;
+                        tp.style.transformOrigin = 'top right';
+                        // force layout read to apply instantly
+                        void tp.offsetHeight;
+                        tp.style.transition = oldT;
+                    }
+                } catch (e) { }
                 // Force browser to process the change
                 void numberPickerPopup.offsetHeight;
                 numberPickerPopup.style.transition = oldTransition;
@@ -9444,6 +9490,51 @@
             };
 
             loadPopupScale();
+
+            // Add a mirrored scale handle for the trash popup (bottom-left)
+            const addTrashScaleHandle = () => {
+                const trash = document.getElementById('trashPopup');
+                if (!trash) return;
+                let th = trash.querySelector('.trash-scale-handle');
+                if (th) th.remove();
+                th = document.createElement('div');
+                th.className = 'trash-scale-handle';
+
+                let isScalingT = false;
+                let startX_T = 0;
+                let startScale_T = popupScaleState.scale;
+
+                th.addEventListener('mousedown', (e) => {
+                    isScalingT = true;
+                    startX_T = e.clientX;
+                    startScale_T = popupScaleState.scale;
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isScalingT) return;
+                    // inverted horizontal direction because handle is on bottom-left
+                    const diff = startX_T - e.clientX;
+                    const newScale = Math.max(0.5, Math.min(2, startScale_T + diff * 0.0025));
+                    popupScaleState.scale = parseFloat(newScale.toFixed(3));
+                    applyPopupScale();
+                    try { if (typeof adjustTrashPosition === 'function') adjustTrashPosition(); } catch (err) { }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isScalingT) {
+                        isScalingT = false;
+                        savePopupScale();
+                    }
+                });
+
+                trash.appendChild(th);
+            };
+
+            // apply initial scale instantly and attach trash handle if element exists
+            try { applyPopupScaleInstant(); } catch (e) { }
+            try { addTrashScaleHandle(); } catch (e) { }
 
             // Generate number picker table (rotated 90° counter-clockwise)
             function generateNumberPickerTable() {
@@ -10543,13 +10634,28 @@
                         requestAnimationFrame(() => {
                             numberPickerPopup.style.opacity = String(__desiredPopupAlpha());
                         });
+                        // restore trash popup to previous state if it was visible before the Ctrl-hide
+                        try {
+                            const t = document.getElementById('trashPopup');
+                            if (t && window.__prevTrashVisible) {
+                                t.style.display = 'block';
+                                if (window.__adjustTrashPosition && typeof window.__adjustTrashPosition === 'function') {
+                                    try { window.__adjustTrashPosition(); } catch (e) { }
+                                }
+                            }
+                        } catch (e) { }
                     } else {
                         numberPickerPopup.style.opacity = '0';
                         setTimeout(() => {
                             numberPickerPopup.style.display = 'none';
                         }, 300);
                         // hide trash popup when picker is programmatically hidden via Ctrl toggle
-                        try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
+                        try {
+                            const t = document.getElementById('trashPopup');
+                            // record previous visible state so we can restore when opening again
+                            window.__prevTrashVisible = !!(t && (getComputedStyle(t).display !== 'none'));
+                            if (t) t.style.display = 'none';
+                        } catch (e) { }
                     }
 
                     // Show/hide scale handle
@@ -11139,10 +11245,10 @@
                 <div style="padding:8px;display:flex;gap:8px;align-items:center;">
                     <label id="trashKLabel" style="font-weight:700;color:var(--text);display:inline-flex;align-items:center;height:32px;padding:0 4px 0 0;">ktrash:</label>
                     <div style="position:relative;display:inline-block;vertical-align:middle;">
-                        <input id="trashKInput" type="number" min="1" max="39" step="1" value="3" style="width:56px;padding:6px 26px 6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;" />
-                        <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;z-index:3;pointer-events:auto;width:22px;align-items:center;">
-                            <button type="button" class="trash-k-up" title="Tăng 1" style="width:18px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▲</button>
-                            <button type="button" class="trash-k-down" title="Giảm 1" style="width:18px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;">▼</button>
+                        <input id="trashKInput" type="number" min="1" max="39" step="1" value="5" style="width:56px;padding:6px 18px 6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;" />
+                        <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;z-index:3;pointer-events:auto;width:18px;align-items:center;">
+                            <button type="button" class="trash-k-up" title="Tăng 1" style="width:16px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:9px;line-height:10px;text-align:center;font-weight:700;">▲</button>
+                            <button type="button" class="trash-k-down" title="Giảm 1" style="width:16px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:9px;line-height:10px;text-align:center;font-weight:700;">▼</button>
                         </div>
                     </div>
                 </div>
@@ -11150,6 +11256,10 @@
                     <table><tbody></tbody></table>
                 </div>`;
             document.body.appendChild(trashPopup);
+            // start hidden by default
+            try { trashPopup.style.display = 'none'; } catch (e) { }
+            // expose helper for restoring position from other scopes
+            try { window.__adjustTrashPosition = adjustTrashPosition; } catch (e) { }
 
             // drag state for trash -> fallback restore when dragend occurs without drop
             let draggingFromTrash = null;
@@ -11173,6 +11283,7 @@
                     if (!trashEnabled) {
                         // hide popup
                         trashPopup.style.display = 'none';
+                        window.__prevTrashVisible = false;
                         // clear tracked trash items
                         trashItems.length = 0;
                         // notify listeners that trash changed
@@ -11191,6 +11302,8 @@
             trashBtn.addEventListener('click', (ev) => {
                 if (!trashEnabled) return; // only clickable when enabled
                 trashPopup.style.display = (trashPopup.style.display === 'block') ? 'none' : 'block';
+                // remember the user's explicit toggle state
+                window.__prevTrashVisible = (trashPopup.style.display === 'block');
                 adjustTrashPosition();
             });
 
@@ -11409,7 +11522,7 @@
                                     if (!has) continue;
                                     const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
                                     if (!Number.isFinite(kVal)) continue;
-                                    if (kVal < avg) x++; else if (kVal > avg) y++;
+                                    if (kVal < avg) x++; else if (kVal >= avg) y++;
                                 } catch (e) { }
                             }
                             // store aggregated counts on a data attribute instead of `title`
@@ -11598,7 +11711,7 @@
                                 try {
                                     const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
                                     if (!Number.isFinite(kVal)) continue;
-                                    if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
+                                    if (kVal < avg) aggX++; else if (kVal >= avg) aggY++;
                                 } catch (e) { }
                             }
                             const rect = avgEl.getBoundingClientRect();
@@ -11638,7 +11751,7 @@
                                 try {
                                     const kVal = (typeof window.getRowTrashK === 'function') ? Number(window.getRowTrashK(rowObj)) : NaN;
                                     if (!Number.isFinite(kVal)) continue;
-                                    if (kVal < avg) aggX++; else if (kVal > avg) aggY++;
+                                    if (kVal < avg) aggX++; else if (kVal >= avg) aggY++;
                                 } catch (e) { }
                             }
                             showAggTipAt(`${aggX}<>${aggY}`, rect, true);
