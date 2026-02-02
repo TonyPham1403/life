@@ -60,6 +60,30 @@
             --header-height: 64px;
         }
 
+        /* k value badges inside Cell5.5: cyan when >= k̄, yellow when < k̄ */
+        .k-value {
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        .k-cyan {
+            background: #00FFFF;
+            /* brighter cyan */
+            color: black;
+            box-shadow: 0 2px 6px rgba(0, 229, 255, 0.18);
+        }
+
+        .k-yellow {
+            background: #FFFF00;
+            /* brighter yellow */
+            color: black;
+            box-shadow: 0 2px 6px rgba(255, 215, 0, 0.14);
+        }
+
         [data-theme="dark"] body {
             background: radial-gradient(circle at 20% 20%, rgba(56, 239, 125, 0.08), transparent 35%),
                 radial-gradient(circle at 80% 10%, rgba(102, 126, 234, 0.12), transparent 40%),
@@ -1916,6 +1940,7 @@
             opacity: 0.9;
             pointer-events: auto;
         }
+
         #trashPopup .trash-scale-handle:after {
             content: '';
             width: 10px;
@@ -3650,7 +3675,7 @@
                     const start = pIdx * pageSize;
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
-                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th></tr></thead><tbody>`;
+                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>k</th></tr></thead><tbody>`;
                     // Precompute trash-based k thresholds using the same greedy heuristic as
                     // computeBestRemoval(k) in the trash popup. We simulate selection once per
                     // page so each record can get its maximal visible-k (t).
@@ -3659,8 +3684,6 @@
                         const poolNodes = numberPickerTableEl ? Array.from(numberPickerTableEl.querySelectorAll('td[data-number]')) : [];
                         const pool = Array.from(new Set(poolNodes.map(n => Number(n.dataset.number)).filter(n => Number.isFinite(n))));
                         const poolSet = new Set(pool);
-                        // build number -> set(rowIndex) mapping over global `rows`
-                        // also build a stable key->indices map so we can match page rows
                         const numToRows = new Map();
                         const rowKeyToIndices = new Map();
                         rows.forEach((r, ridx) => {
@@ -3681,13 +3704,11 @@
                         const MAX_K_TRASH = 39;
                         const maxK = Math.min(MAX_K_TRASH, Math.max(1, pool.length));
                         const available = new Set(pool);
-                        const excludedSet = new Set(); // row indices excluded by chosen numbers
+                        const excludedSet = new Set();
                         const chosenSoFar = [];
-                        // record first-k-when-excluded for rows appearing on this page
                         const rowFirstExcludedAt = new Map();
 
                         for (let k = 1; k <= maxK; k++) {
-                            // pick candidate minimizing marginal newly excluded rows (greedy)
                             let bestChoice = null;
                             let bestMarginal = Infinity;
                             for (const candidate of Array.from(available)) {
@@ -3698,13 +3719,11 @@
                                 if (marginal < bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
                             }
                             if (bestChoice === null) break;
-                            // choose it
                             available.delete(bestChoice);
                             chosenSoFar.push(bestChoice);
                             const s2 = numToRows.get(bestChoice);
                             if (s2) for (const idx of s2) excludedSet.add(idx);
 
-                            // mark page rows first excluded at this k by matching stable key
                             for (const rowObj of page) {
                                 try {
                                     const rk = ((rowObj.nums || []).join(',')) + '|' + (rowObj.date || '');
@@ -3718,10 +3737,9 @@
                             }
                         }
 
-                        // Now render rows with computed t = firstExcludedAt - 1 (or maxK if never excluded)
-                        let sumT_forPage = 0;
-                        let countT_forPage = 0;
-                        page.forEach((row, j) => {
+                        // Collect per-row t values first so we can compute the page average
+                        const rowsData = [];
+                        page.forEach((row) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const rk = ((row.nums || []).join(',')) + '|' + (row.date || '');
@@ -3735,21 +3753,21 @@
                             }
                             let t = maxK;
                             if (firstK !== null) t = Math.max(0, firstK - 1);
-                            sumT_forPage += t;
-                            countT_forPage += 1;
-                            table += `<tr data-result="${result}" title="k=${t}" data-k="${t}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
+                            rowsData.push({ date: row.date, result, numsHtml, t });
                         });
 
-                        // compute average k for this page and update trash popup header (if present)
+                        const sumT_forPage = rowsData.reduce((s, it) => s + (Number.isFinite(it.t) ? it.t : 0), 0);
+                        const countT_forPage = rowsData.length;
+                        const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
+                        const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
+
+                        // update trash popup header (if present) and global last average
                         try {
-                            const avg = countT_forPage ? (sumT_forPage / countT_forPage) : 0;
-                            const avgStr = Number.isFinite(avg) ? avg.toFixed(2) : '0';
                             const tp = document.getElementById('trashPopup');
                             if (tp) {
                                 try {
                                     const firstDiv = tp.querySelector('div');
                                     if (firstDiv) {
-                                        // remove existing avg element if present
                                         const existing = firstDiv.querySelector('.avg-k');
                                         if (existing) existing.remove();
                                         const span = document.createElement('span');
@@ -3760,15 +3778,27 @@
                                     }
                                 } catch (e) { /* ignore DOM errors */ }
                             }
-                            // store last-average globally so other UI (trash tooltip) can use it
                             try { window.__lastAvgK = Number(avgStr); } catch (e) { window.__lastAvgK = null; }
                         } catch (e) { /* ignore avg errors */ }
+
+                        // Render rows using class based on comparison to avg
+                        rowsData.forEach((rdat) => {
+                            const tooltip = `${rdat.t}`;
+                            const cls = (rdat.t >= avg) ? 'k-cyan' : 'k-yellow';
+                            table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:left'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left'><span class="k-value ${cls}">${tooltip}</span></td></tr>`;
+                        });
                     } catch (e) {
                         // fallback: render without tooltip
                         page.forEach((row, j) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                            table += `<tr data-result="${result}"><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td></tr>`;
+                            // fallback: try to compute k via global helper if available
+                            let tFallback = '';
+                            try { if (typeof getRowTrashK === 'function') tFallback = getRowTrashK(row); else if (typeof window.getRowTrashK === 'function') tFallback = window.getRowTrashK(row); } catch (e) { tFallback = ''; }
+                            const tooltip = tFallback !== '' ? `${tFallback}` : '';
+                            let cls = 'k-yellow';
+                            try { if (typeof window !== 'undefined' && typeof window.__lastAvgK === 'number' && tooltip !== '' && Number(tooltip) >= window.__lastAvgK) cls = 'k-cyan'; } catch (er) { }
+                            table += `<tr data-result="${result}"${tooltip ? ` title="${tooltip}" data-k="${tFallback}"` : ''}><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td><td style='padding:6px;text-align:left'><span class="k-value ${cls}">${tooltip}</span></td></tr>`;
                         });
                     }
                     table += '</tbody></table>';
@@ -11550,7 +11580,7 @@
                                 avgSpan.removeAttribute('title');
                                 // ensure tooltip updates on hover: attach recompute handler once
                                 try {
-                                        if (!avgSpan.__aggTooltipBound) {
+                                    if (!avgSpan.__aggTooltipBound) {
                                         avgSpan.addEventListener('mouseenter', (ev) => {
                                             try {
                                                 // recompute average at the moment of hover so the tooltip
