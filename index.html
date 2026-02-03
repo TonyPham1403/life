@@ -12626,12 +12626,16 @@
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
+                // Always notify listeners that trash content changed so other sections
+                // (e.g. Cell5.5) can react in realtime — individual sections can
+                // decide whether to redraw based on their own trash selector.
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                // Additionally, if Cell6.5/6.6 are using exclude mode, trigger their
+                // local recompute to keep those sections in sync (preserve original behavior).
                 try {
                     const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
                     const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
                     if (mode === 'exclude') {
-                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         try {
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
@@ -12693,12 +12697,16 @@
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
+                // Always notify listeners that trash content changed so other sections
+                // (e.g. Cell5.5) can react in realtime — individual sections can
+                // decide whether to redraw based on their own trash selector.
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                // Additionally, if Cell6.5/6.6 are using exclude mode, trigger their
+                // local recompute to keep those sections in sync (preserve original behavior).
                 try {
                     const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
                     const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
                     if (mode === 'exclude') {
-                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         try {
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
