@@ -3299,15 +3299,13 @@
             infoBtn.style.fontSize = '12px';
             infoBtn.style.marginLeft = '6px';
 
-            controls.append("Sắp xếp:", sortSel, "Năm:", yearSel, "Tháng:", monthSel, infoBtn);
-            body.appendChild(controls);
-
             // Trash filter selector (compact): include | exclude
             const trashSel = document.createElement('select');
             [["include", "include"], ["exclude", "exclude"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; trashSel.appendChild(o); });
             trashSel.value = 'include';
-            // append trash selector to controls for Cell5.5
-            controls.append("Trash:", trashSel);
+
+            controls.append(sortSel, "Năm:", yearSel, "Tháng:", monthSel, "Trash:", trashSel, infoBtn);
+            body.appendChild(controls);
 
             // Ensure Cell5.5 redraws when the popup trash changes (only add listener once)
             try {
@@ -4909,7 +4907,7 @@
                 });
             } catch (e) { }
 
-            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Sắp xếp:', sortSel, recencySel, 'Trash:', trashSel);
+            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Trash:', trashSel, sortSel, recencySel);
             body.appendChild(controls);
 
             const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
@@ -5950,7 +5948,7 @@
                 });
             } catch (e) { }
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, sortSel, recencySel, "Trash:", trashSel);
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, sortSel, recencySel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -6617,9 +6615,9 @@
                             const tMode = (tEl && tEl.value) ? tEl.value : 'include';
                             if (String(tMode) !== 'exclude') {
                                 if (baselineArrAll && Array.isArray(baselineArrAll)) {
-                                        const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
-                                        if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineArrAll.length}`;
-                                    }
+                                    const idxInBaseline = baselineArrAll.findIndex(([k]) => k === key);
+                                    if (idxInBaseline >= 0) rankDisplay = `${idxInBaseline + 1}/${baselineArrAll.length}`;
+                                }
                             }
                         } catch (e) { }
                         let globalRankDisplay = '';
@@ -12030,14 +12028,21 @@
                 if (cell) cell.classList.add('in-trash');
                 trashItems.push(n);
                 renderTrash();
-                // notify listeners that trash changed (do not auto-toggle user selectors)
-                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                // also call section invalidate/group directly to ensure immediate update
+                // update trash popup tooltips immediately
+                try { updateTrashTooltips(); } catch (e) { }
+                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
                 try {
-                    const sec = document.getElementById('cell6_5');
-                    if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
-                    if (sec && typeof sec.__group === 'function') sec.__group();
-                } catch (err) { }
+                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                    const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
+                    if (mode === 'exclude') {
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                        try {
+                            const sec = document.getElementById('cell6_5');
+                            if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
+                            if (sec && typeof sec.__group === 'function') sec.__group();
+                        } catch (err) { }
+                    }
+                } catch (e) { }
             }
 
             function restoreFromTrash(n) {
@@ -12048,14 +12053,21 @@
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.remove('in-trash');
                 renderTrash();
-                // notify listeners that trash changed (do not auto-toggle user selectors)
-                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                // also call section invalidate/group directly to ensure immediate update
+                // update trash popup tooltips immediately
+                try { updateTrashTooltips(); } catch (e) { }
+                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
                 try {
-                    const sec = document.getElementById('cell6_5');
-                    if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
-                    if (sec && typeof sec.__group === 'function') sec.__group();
-                } catch (err) { }
+                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                    const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
+                    if (mode === 'exclude') {
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                        try {
+                            const sec = document.getElementById('cell6_5');
+                            if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
+                            if (sec && typeof sec.__group === 'function') sec.__group();
+                        } catch (err) { }
+                    }
+                } catch (e) { }
             }
 
             // delegated dragstart to mark source for popup cells and track trash-origin
