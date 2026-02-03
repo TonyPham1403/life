@@ -931,6 +931,24 @@
             appearance: textfield;
         }
 
+        /* Ensure optimizer checkbox tick is visible and uses the theme accent color.
+           Some environments may hide native ticks or override appearance; force
+           a consistent visible tick for the optimizer control. */
+        #cell6_5_optimize {
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+            appearance: auto !important;
+            -webkit-appearance: auto !important;
+            -moz-appearance: auto !important;
+            accent-color: var(--accent) !important;
+        }
+
+        #cell6_5_optimize:checked {
+            accent-color: var(--accent) !important;
+            filter: none !important;
+        }
+
         button.primary {
             background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100());
             border: none;
@@ -1959,6 +1977,24 @@
         }
 
         /* Trash popup styles */
+        /* Ensure clear button inside trash popup is visible and accessible */
+        #trashPopup .clear-btn {
+            display: inline-block !important;
+            color: var(--text) !important;
+            background: var(--card) !important;
+            border: 1px solid var(--border) !important;
+            padding: 6px 10px !important;
+            height: 32px !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            z-index: 10005 !important;
+        }
+
+        #trashPopup {
+            z-index: 10001;
+        }
+
+        /* ensure popup sits above other overlays */
         #trashPopup {
             position: absolute;
             z-index: 10001;
@@ -2281,6 +2317,11 @@
             cursor: pointer;
         }
 
+        #trashBtn.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         /* Tiny circular badge displayed at the corner of the trash button (like Messenger) */
         .trash-badge {
             position: absolute;
@@ -2307,11 +2348,6 @@
 
         .trash-badge.hidden {
             display: none;
-        }
-
-        #trashBtn.disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
         }
 
         #trashToggle {
@@ -3099,6 +3135,29 @@
             return showSection;
         }
 
+        // Keep the trashPopup average `k̄` in sync with the active section.
+        // Remove the `.avg-k` element whenever we leave `cell5_5`, and recreate
+        // it when `cell5_5` becomes active so the UI never shows k̄ on other pages.
+        document.addEventListener('sectionchange', (ev) => {
+            try {
+                const id = ev && ev.detail && ev.detail.id;
+                const tp = document.getElementById('trashPopup');
+                if (!tp) return;
+                const firstDiv = tp.querySelector('div');
+                if (!firstDiv) return;
+                const existing = firstDiv.querySelector('.avg-k');
+                if (existing) existing.remove();
+                if (id === 'cell5_5') {
+                    const span = document.createElement('span');
+                    span.className = 'avg-k';
+                    span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
+                    const displayAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK.toFixed(2) : '';
+                    span.textContent = displayAvg ? ('k̄ = ' + displayAvg) : 'k̄ = ';
+                    firstDiv.appendChild(span);
+                }
+            } catch (e) { /* ignore */ }
+        });
+
 
         function renderCell4() {
             const body = sectionShell("cell4", "Cell4 · Tỷ lệ theo vị trí (home)", "Top/Sort tương tự notebook: hiển thị tỷ lệ từng số theo 6 vị trí.");
@@ -3382,6 +3441,8 @@
             const trashSel = document.createElement('select');
             [["include", "include"], ["exclude", "exclude"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; trashSel.appendChild(o); });
             trashSel.value = 'include';
+            // stable id so external listeners can find current selector after re-renders
+            try { trashSel.id = 'cell5_5_trashSel'; trashSel.className = 'trash-mode'; } catch (e) { }
 
             controls.append(sortSel, "Năm:", yearSel, "Tháng:", monthSel, "Trash:", trashSel, infoBtn);
             body.appendChild(controls);
@@ -3391,8 +3452,19 @@
                 if (!window.__cell5_5_trash_listener_added) {
                     document.addEventListener('trashchange', function () {
                         try {
-                            if (trashSel && trashSel.value === 'exclude') {
-                                draw();
+                            // Query the current selector(s) by id to avoid stale closure references
+                            const cur = document.getElementById('cell5_5_trashSel');
+                            const other = document.getElementById('cell6_6_trashSel');
+                            const isExclude = (cur && String(cur.value) === 'exclude') || (other && String(other.value) === 'exclude');
+                            if (isExclude) {
+                                try {
+                                    // Invalidate cached grouping so new trash contents are applied
+                                    try { groupCache = null; } catch (e) { }
+                                    try { cacheKey = null; } catch (e) { }
+                                    try { baselineArrAll = null; baselineArrGlobal = null; baselineCountsMap = null; baselineAllKeys = null; baselineGlobalKeys = null; } catch (e) { }
+                                    // Redraw (draw -> group) so exclude filtering is recomputed
+                                    try { if (typeof draw === 'function') draw(); else if (typeof group === 'function') group(); } catch (err) { /* ignore */ }
+                                } catch (err) { }
                             }
                         } catch (e) { }
                     });
@@ -3942,12 +4014,17 @@
                                     if (firstDiv) {
                                         const existing = firstDiv.querySelector('.avg-k');
                                         if (existing) existing.remove();
-                                        const span = document.createElement('span');
-                                        span.className = 'avg-k';
-                                        span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
-                                        const displayAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK.toFixed(2) : avgStr;
-                                        span.textContent = 'k̄ = ' + displayAvg;
-                                        firstDiv.appendChild(span);
+                                        // Only show the global average k (k̄) when Cell5.5 is visible.
+                                        const cell5 = document.getElementById('cell5_5');
+                                        const isCell5Visible = cell5 && window.getComputedStyle(cell5).display !== 'none' && window.getComputedStyle(cell5).visibility !== 'hidden';
+                                        if (isCell5Visible) {
+                                            const span = document.createElement('span');
+                                            span.className = 'avg-k';
+                                            span.style.cssText = 'margin-left:12px;color:var(--muted);font-weight:700;';
+                                            const displayAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK.toFixed(2) : avgStr;
+                                            span.textContent = 'k̄ = ' + displayAvg;
+                                            firstDiv.appendChild(span);
+                                        }
                                     }
                                 } catch (e) { /* ignore DOM errors */ }
                             }
@@ -6121,7 +6198,19 @@
                             }
 
                             const lk = (body && body.__lkControls) ? body.__lkControls : null;
-                            if (lk) lk.style.display = isUnpair ? 'none' : '';
+                            const modeSelect = (body && body.__modeSel) ? body.__modeSel : null;
+                            if (lk) {
+                                try {
+                                    if (isUnpair) {
+                                        lk.style.display = 'none';
+                                    } else if (modeSelect && String(modeSelect.value || '') !== 'lienket') {
+                                        // only show lienket controls when header mode is explicitly 'lienket'
+                                        lk.style.display = 'none';
+                                    } else {
+                                        lk.style.display = '';
+                                    }
+                                } catch (e) { }
+                            }
                         } catch (e) { }
                     } catch (e) { }
                 }
@@ -6167,6 +6256,212 @@
             // helper arrays of keys for quick rank lookups
             let baselineAllKeys = null;
             let baselineGlobalKeys = null;
+            // --- Optimization: compute which unpair row when dragged-out (its dontmatch numbers
+            // added to trash) would maximize the number of rows whose `dontmatch` lists are
+            // fully present in the trash (i.e., rows that become green). When the user
+            // checks the `optChk` checkbox we perform the computation and dispatch
+            // a `moveMultipleToTrash` for the chosen row's numbers. Unchecking restores.
+            function clearOptimizeUI() {
+                try {
+                    const prev = wrap.querySelectorAll('[data-optimal]');
+                    prev.forEach(el => {
+                        try { el.removeAttribute('data-optimal'); el.style.boxShadow = ''; el.style.outline = ''; } catch (e) { }
+                    });
+                    const prevTd = wrap.querySelectorAll('.optimal-dontmatch');
+                    prevTd.forEach(td => { try { td.classList.remove('optimal-dontmatch'); td.style.background = ''; td.style.borderColor = ''; } catch (e) { } });
+                    try { window.__optCandidateNums = null; } catch (e) { }
+                } catch (e) { }
+            }
+
+            async function computeOptimize(force = false) {
+                try {
+                    clearOptimizeUI();
+                    if (!force && (!optChk || !optChk.checked)) return;
+                    const currentTrash = (typeof window.getTrashItems === 'function') ? (window.getTrashItems() || []) : (window.__trashItems || []);
+                    const baseSet = new Set((currentTrash || []).map(n => Number(n)));
+                    const tbl = wrap.querySelector('table');
+                    if (!tbl) return;
+                    const rowsDom = Array.from(tbl.querySelectorAll('tbody tr'));
+                    if (!rowsDom.length) return;
+                    const parsed = rowsDom.map(tr => {
+                        try {
+                            const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                            const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                            const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                            return { tr, nums };
+                        } catch (e) { return { tr, nums: [] }; }
+                    });
+
+                    let best = null;
+                    let bestCount = -1;
+                    for (const cand of parsed) {
+                        try {
+                            const candSet = new Set(baseSet);
+                            cand.nums.forEach(n => { if (Number.isFinite(n)) candSet.add(Number(n)); });
+                            const optMode = (typeof optSel !== 'undefined' && optSel && optSel.value) ? String(optSel.value) : 'green';
+                            let cnt = 0;
+                            if (optMode === 'green') {
+                                for (const p of parsed) {
+                                    try {
+                                        const others = p.nums || [];
+                                        if (!others || others.length === 0) continue;
+                                        let mainNum = null;
+                                        try {
+                                            const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
+                                            const rawNum = numTd ? (numTd.textContent || '').trim() : '';
+                                            mainNum = Number(rawNum);
+                                        } catch (e) { mainNum = null; }
+                                        if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) continue;
+                                        let ok = true;
+                                        for (const o of others) if (!candSet.has(Number(o))) { ok = false; break; }
+                                        if (ok) cnt++;
+                                    } catch (e) { }
+                                }
+                            } else if (optMode === 'red') {
+                                for (const p of parsed) {
+                                    try {
+                                        let mainNum = null;
+                                        try {
+                                            const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
+                                            const rawNum = numTd ? (numTd.textContent || '').trim() : '';
+                                            mainNum = Number(rawNum);
+                                        } catch (e) { mainNum = null; }
+                                        if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) cnt++;
+                                    } catch (e) { }
+                                }
+                            }
+                            if (cnt > bestCount) { bestCount = cnt; best = cand; }
+                        } catch (e) { }
+                    }
+
+                    if (best && best.nums && best.nums.length) {
+                        try {
+                            const uniq = Array.from(new Set(best.nums.map(n => Number(n)).filter(n => Number.isFinite(n)))).sort((a, b) => a - b);
+                            if (uniq.length) {
+                                try { window.__optAddedToTrash = uniq.slice(); } catch (e) { window.__optAddedToTrash = uniq.slice(); }
+                                try { window.__optCandidateNums = uniq.slice(); } catch (e) { window.__optCandidateNums = uniq.slice(); }
+
+                                const applyStylingAfterTrash = () => {
+                                    try {
+                                        clearOptimizeUI();
+                                        const tblNow = wrap.querySelector('table');
+                                        if (!tblNow) return;
+                                        const rowsNow = Array.from(tblNow.querySelectorAll('tbody tr'));
+                                        const targetSet = new Set((window.__optCandidateNums || []).map(n => Number(n)));
+                                        for (const tr of rowsNow) {
+                                            try {
+                                                const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                                                const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                                const s = new Set(nums.map(n => Number(n)));
+                                                if (s.size === targetSet.size) {
+                                                    let eq = true;
+                                                    for (const v of s) if (!targetSet.has(v)) { eq = false; break; }
+                                                    if (eq) {
+                                                        try { tr.setAttribute('data-optimal', '1'); tr.style.outline = '3px solid rgba(102,126,234,0.25)'; tr.style.boxShadow = '0 6px 18px rgba(102,126,234,0.12)'; }
+                                                        catch (e) { }
+                                                        const dontTdNow = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                        if (dontTdNow) { try { dontTdNow.classList.add('optimal-dontmatch'); dontTdNow.style.background = 'rgba(102,126,234,0.06)'; dontTdNow.style.borderColor = 'var(--accent-2)'; } catch (e) { } }
+                                                        break;
+                                                    }
+                                                }
+                                            } catch (e) { }
+                                        }
+                                    } catch (e) { }
+                                };
+
+                                const once = () => { try { applyStylingAfterTrash(); } catch (e) { } finally { try { document.removeEventListener('trashupdated', once); } catch (er) { } } };
+                                try { document.addEventListener('trashupdated', once); } catch (e) { setTimeout(() => { try { applyStylingAfterTrash(); } catch (er) { } }, 120); }
+
+                                try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); }
+                                catch (e) { }
+                            }
+                        } catch (e) { }
+                    }
+                } catch (e) { }
+            }
+
+            try {
+                if (optChk) {
+                    optChk.addEventListener('change', (e) => {
+                        try {
+                            try { if (typeof optSel !== 'undefined') optSel.disabled = !optChk.checked; } catch (e) { }
+                            if (!optChk.checked) {
+                                try {
+                                    // emulate pressing the trash popup "Xóa" button so behavior is identical
+                                    const clearBtn = document.getElementById('trashClearBtn') || (typeof trashPopup !== 'undefined' && trashPopup ? trashPopup.querySelector('#trashClearBtn') : null);
+                                    if (clearBtn) {
+                                        try { clearBtn.click(); } catch (err) { try { clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) { } }
+                                    }
+                                } catch (e) { }
+                                return;
+                            } else {
+                                // When in Unpair mode, the optimizer must replace the trash contents
+                                // instead of unioning with existing items. Clear trash first so the
+                                // compute+moveMultipleToTrash operate on a clean state.
+                                try {
+                                    const isUnpair = (controls && controls.classList && controls.classList.contains('unpair-mode'));
+                                    if (isUnpair) {
+                                        try {
+                                            // clear tracked trash items and popup visuals
+                                            try {
+                                                if (window && Array.isArray(window.__trashItems)) {
+                                                    window.__trashItems.length = 0;
+                                                } else if (typeof trashItems !== 'undefined' && Array.isArray(trashItems)) {
+                                                    trashItems.length = 0;
+                                                } else {
+                                                    try { window.__trashItems = []; } catch (e) { }
+                                                }
+                                            } catch (e) { /* ignore */ }
+                                            try { const inTrashCells = numberPickerTable.querySelectorAll('td.in-trash'); inTrashCells.forEach(c => c.classList.remove('in-trash')); } catch (e) { }
+                                            try { renderTrash(); } catch (e) { }
+                                            try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                                            try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                                        } catch (e) { }
+                                    }
+                                } catch (e) { }
+                                computeOptimize();
+                            }
+                        } catch (err) { }
+                    });
+
+                    try {
+                        if (typeof optSel !== 'undefined') {
+                            try { optSel._prevMode = String(optSel.value || 'green'); } catch (e) { optSel._prevMode = 'green'; }
+                            optSel.addEventListener('change', () => {
+                                try {
+                                    const prev = String(optSel._prevMode || 'green');
+                                    const curr = String(optSel.value || 'green');
+                                    if (prev !== curr) {
+                                        try {
+                                            // Ensure trash is cleared/rendered before computing when mode changes
+                                            try {
+                                                const isUnpair = (controls && controls.classList && controls.classList.contains('unpair-mode'));
+                                                if (isUnpair) {
+                                                    if (window && Array.isArray(window.__trashItems)) window.__trashItems.length = 0;
+                                                    else if (typeof trashItems !== 'undefined' && Array.isArray(trashItems)) trashItems.length = 0;
+                                                    else try { window.__trashItems = []; } catch (e) { }
+                                                    try { const inTrashCells = numberPickerTable.querySelectorAll('td.in-trash'); inTrashCells.forEach(c => c.classList.remove('in-trash')); } catch (e) { }
+                                                    try { renderTrash(); } catch (e) { }
+                                                    try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                                                    try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                                                }
+                                            } catch (e) { }
+                                            // Compute immediately after ensuring trash UI updated
+                                            try { computeOptimize(true); } catch (e) { }
+                                        } catch (ee) { try { setTimeout(() => { try { computeOptimize(true); } catch (er) { } }, 80); } catch (er) { } }
+                                    } else {
+                                        try { computeOptimize(true); } catch (e) { }
+                                    }
+                                    optSel._prevMode = curr;
+                                } catch (e) { }
+                            });
+                        }
+                    } catch (e) { }
+
+                    try { document.addEventListener('trashupdated', () => { try { if (optChk && optChk.checked) computeOptimize(); } catch (e) { } }); } catch (e) { }
+                }
+            } catch (e) { }
             let isComputing = false;
 
             // Mode switching: if the header-inserted selector exists, wire it to show/hide
@@ -6533,197 +6828,6 @@
                             }
                         }
                     } catch (e) { }
-
-                    // --- Optimization: compute which unpair row when dragged-out (its dontmatch numbers
-                    // added to trash) would maximize the number of rows whose `dontmatch` lists are
-                    // fully present in the trash (i.e., rows that become green). When the user
-                    // checks the `optChk` checkbox we perform the computation and dispatch
-                    // a `moveMultipleToTrash` for the chosen row's numbers. Unchecking restores.
-                    function clearOptimizeUI() {
-                        try {
-                            // remove any inline styling/attributes applied by optimizer
-                            const prev = wrap.querySelectorAll('[data-optimal]');
-                            prev.forEach(el => {
-                                try { el.removeAttribute('data-optimal'); el.style.boxShadow = ''; el.style.outline = ''; } catch (e) { }
-                            });
-                            const prevTd = wrap.querySelectorAll('.optimal-dontmatch');
-                            prevTd.forEach(td => { try { td.classList.remove('optimal-dontmatch'); td.style.background = ''; td.style.borderColor = ''; } catch (e) { } });
-                            try { window.__optCandidateNums = null; } catch (e) { }
-                        } catch (e) { }
-                    }
-
-                    async function computeOptimize(force = false) {
-                        try {
-                            clearOptimizeUI();
-                            if (!force && (!optChk || !optChk.checked)) return;
-                            // get current trash items
-                            const currentTrash = (typeof window.getTrashItems === 'function') ? (window.getTrashItems() || []) : (window.__trashItems || []);
-                            const baseSet = new Set((currentTrash || []).map(n => Number(n)));
-                            const tbl = wrap.querySelector('table');
-                            if (!tbl) return;
-                            const rowsDom = Array.from(tbl.querySelectorAll('tbody tr'));
-                            if (!rowsDom.length) return;
-                            // parse dontmatch lists for each row
-                            const parsed = rowsDom.map(tr => {
-                                try {
-                                    const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
-                                    const raw = dontTd ? (dontTd.textContent || '').trim() : '';
-                                    const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
-                                    return { tr, nums };
-                                } catch (e) { return { tr, nums: [] }; }
-                            });
-
-                            let best = null;
-                            let bestCount = -1;
-                            // For each candidate row, simulate adding its dontmatch numbers to trash
-                            for (const cand of parsed) {
-                                try {
-                                    const candSet = new Set(baseSet);
-                                    cand.nums.forEach(n => { if (Number.isFinite(n)) candSet.add(Number(n)); });
-                                    // determine optimization mode (green/red)
-                                    const optMode = (typeof optSel !== 'undefined' && optSel && optSel.value) ? String(optSel.value) : 'green';
-                                    let cnt = 0;
-                                    if (optMode === 'green') {
-                                        // count rows that would be green: all dontmatch present AND main num not trashed
-                                        for (const p of parsed) {
-                                            try {
-                                                const others = p.nums || [];
-                                                if (!others || others.length === 0) continue;
-                                                // determine this row's main number (first cell)
-                                                let mainNum = null;
-                                                try {
-                                                    const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
-                                                    const rawNum = numTd ? (numTd.textContent || '').trim() : '';
-                                                    mainNum = Number(rawNum);
-                                                } catch (e) { mainNum = null; }
-                                                if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) continue;
-                                                let ok = true;
-                                                for (const o of others) if (!candSet.has(Number(o))) { ok = false; break; }
-                                                if (ok) cnt++;
-                                            } catch (e) { }
-                                        }
-                                    } else if (optMode === 'red') {
-                                        // count rows that would become red: their main number would be present in candSet
-                                        for (const p of parsed) {
-                                            try {
-                                                let mainNum = null;
-                                                try {
-                                                    const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
-                                                    const rawNum = numTd ? (numTd.textContent || '').trim() : '';
-                                                    mainNum = Number(rawNum);
-                                                } catch (e) { mainNum = null; }
-                                                if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) cnt++;
-                                            } catch (e) { }
-                                        }
-                                    }
-                                    if (cnt > bestCount) { bestCount = cnt; best = cand; }
-                                } catch (e) { }
-                            }
-
-                            if (best && best.nums && best.nums.length) {
-                                // compute a stable key for this candidate (sorted unique numbers)
-                                try {
-                                    const uniq = Array.from(new Set(best.nums.map(n => Number(n)).filter(n => Number.isFinite(n)))).sort((a, b) => a - b);
-                                    if (uniq.length) {
-                                        // persist choice so we can apply styling after the table re-renders
-                                        try { window.__optAddedToTrash = uniq.slice(); } catch (e) { window.__optAddedToTrash = uniq.slice(); }
-                                        try { window.__optCandidateNums = uniq.slice(); } catch (e) { window.__optCandidateNums = uniq.slice(); }
-
-                                        // When we add to trash this will usually cause the table to re-render.
-                                        // Apply visual styling only after the popup/table has updated so
-                                        // DOM nodes are stable (avoids styling elements that get replaced).
-                                        const applyStylingAfterTrash = () => {
-                                            try {
-                                                clearOptimizeUI();
-                                                const tblNow = wrap.querySelector('table');
-                                                if (!tblNow) return;
-                                                const rowsNow = Array.from(tblNow.querySelectorAll('tbody tr'));
-                                                // find the row whose dontmatch numbers set equals the chosen candidate
-                                                const targetSet = new Set((window.__optCandidateNums || []).map(n => Number(n)));
-                                                for (const tr of rowsNow) {
-                                                    try {
-                                                        const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
-                                                        const raw = dontTd ? (dontTd.textContent || '').trim() : '';
-                                                        const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
-                                                        const s = new Set(nums.map(n => Number(n)));
-                                                        if (s.size === targetSet.size) {
-                                                            let eq = true;
-                                                            for (const v of s) if (!targetSet.has(v)) { eq = false; break; }
-                                                            if (eq) {
-                                                                try { tr.setAttribute('data-optimal', '1'); tr.style.outline = '3px solid rgba(102,126,234,0.25)'; tr.style.boxShadow = '0 6px 18px rgba(102,126,234,0.12)'; }
-                                                                catch (e) { }
-                                                                const dontTdNow = tr.children && tr.children[1] ? tr.children[1] : null;
-                                                                if (dontTdNow) { try { dontTdNow.classList.add('optimal-dontmatch'); dontTdNow.style.background = 'rgba(102,126,234,0.06)'; dontTdNow.style.borderColor = 'var(--accent-2)'; } catch (e) { } }
-                                                                break;
-                                                            }
-                                                        }
-                                                    } catch (e) { }
-                                                }
-                                            } catch (e) { }
-                                        };
-
-                                        // listen once for the trash update, then apply styling
-                                        const once = () => { try { applyStylingAfterTrash(); } catch (e) { } finally { try { document.removeEventListener('trashupdated', once); } catch (er) { } } };
-                                        try { document.addEventListener('trashupdated', once); } catch (e) { setTimeout(() => { try { applyStylingAfterTrash(); } catch (er) { } }, 120); }
-
-                                        // dispatch the event to add numbers to trash (union semantics)
-                                        try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); }
-                                        catch (e) { }
-                                    }
-                                } catch (e) { }
-                            }
-                        } catch (e) { }
-                    }
-
-                    // wire checkbox change to computeOptimize (also recompute when trash updates)
-                    try {
-                        if (optChk) {
-                            optChk.addEventListener('change', (e) => {
-                                try {
-                                    // enable/disable the select only when checkbox is checked
-                                    try { if (typeof optSel !== 'undefined') optSel.disabled = !optChk.checked; } catch (e) { }
-                                    if (!optChk.checked) {
-                                        // on uncheck, clear the trash popup (remove all trashed numbers)
-                                        try {
-                                            document.dispatchEvent(new CustomEvent('clearTrashPopup', { bubbles: true, composed: true }));
-                                        } catch (er) { }
-                                        try { window.__optAddedToTrash = null; } catch (er) { }
-                                        clearOptimizeUI();
-                                    } else {
-                                        computeOptimize();
-                                    }
-                                } catch (err) { }
-                            });
-
-                            // recompute when mode dropdown changes while checkbox is active
-                            try {
-                                if (typeof optSel !== 'undefined') {
-                                    // store previous mode to detect transitions (green -> red)
-                                    try { optSel._prevMode = String(optSel.value || 'green'); } catch (e) { optSel._prevMode = 'green'; }
-                                    optSel.addEventListener('change', () => {
-                                        try {
-                                            const prev = String(optSel._prevMode || 'green');
-                                            const curr = String(optSel.value || 'green');
-                                            // If mode changed in either direction, clear the trash popup first
-                                            // so the compute runs against a fresh popup state.
-                                            if (prev !== curr) {
-                                                try { document.dispatchEvent(new CustomEvent('clearTrashPopup', { bubbles: true, composed: true })); } catch (ee) { }
-                                                const once = () => { try { computeOptimize(true); } catch (e) { } finally { try { document.removeEventListener('trashupdated', once); } catch (er) { } } };
-                                                try { document.addEventListener('trashupdated', once); } catch (e) { setTimeout(() => { try { computeOptimize(true); } catch (er) { } }, 80); }
-                                            } else {
-                                                try { computeOptimize(true); } catch (e) { }
-                                            }
-                                            optSel._prevMode = curr;
-                                        } catch (e) { }
-                                    });
-                                }
-                            } catch (e) { }
-
-                            // recompute if trash changes while checkbox is on
-                            try { document.addEventListener('trashupdated', () => { try { if (optChk && optChk.checked) computeOptimize(); } catch (e) { } }); } catch (e) { }
-                        }
-                    } catch (e) { }
-
                     isComputing = false;
                     // don't continue normal flow
                     return;
@@ -12047,6 +12151,7 @@
                             <button type="button" class="trash-k-down" title="Giảm 1" style="width:16px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:9px;line-height:10px;text-align:center;font-weight:700;">▼</button>
                         </div>
                     </div>
+                    <button id="trashClearBtn" class="clear-btn" title="Xóa" style="height:32px;padding:6px 10px;">Xóa</button>
                 </div>
                 <div style="padding:6px 8px;max-height:calc(var(--trash-row-height,36px) * 15);overflow:visible;">
                     <table><tbody></tbody></table>
@@ -12069,7 +12174,6 @@
             function setTrashButtonState() {
                 trashBtn.classList.toggle('disabled', !trashEnabled);
                 trashToggle.textContent = trashEnabled ? 'On' : 'Off';
-                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
             }
 
             trashToggle.addEventListener('click', (ev) => {
@@ -12092,7 +12196,6 @@
                         } catch (innerErr) { /* ignore */ }
                         // re-render the (now-empty) trash popup
                         renderTrash();
-                        try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                     }
                 } catch (e) { /* ignore */ }
             });
@@ -12108,10 +12211,13 @@
             function adjustTrashPosition() {
                 const sample = numberPickerTable.querySelector('tbody tr td');
                 const cellW = sample ? Math.max(28, Math.round(sample.getBoundingClientRect().width)) : 80;
-                const trashW = 3 * cellW + 80; // add extra width to avoid horizontal scrollbar
+                let trashW = 3 * cellW + 80; // add extra width to avoid horizontal scrollbar
+                const MIN_TRASH_W = 300; // ensure popup is wide enough to contain header controls (k̄, buttons)
+                trashW = Math.max(trashW, MIN_TRASH_W);
                 const trashH = Math.round(trashW / 1.732);
                 trashPopup.style.setProperty('--trash-width', trashW + 'px');
                 trashPopup.style.width = trashW + 'px';
+                trashPopup.style.minWidth = MIN_TRASH_W + 'px';
                 trashPopup.style.height = trashH + 'px';
 
                 // position relative to the picker popup but in viewport coords
@@ -12198,7 +12304,35 @@
                 adjustTrashPosition();
                 // After rendering trash cells update their tooltips (x<>y)
                 try { updateTrashTooltips(); } catch (e) { /* ignore */ }
+                // update the visual badge on the trash button so users see count
                 try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+            }
+
+            function ensureTrashBadge() {
+                try {
+                    let b = document.getElementById('trashBadge');
+                    const btn = document.getElementById('trashBtn');
+                    if (!btn) return null;
+                    if (!b) {
+                        b = document.createElement('span');
+                        b.id = 'trashBadge';
+                        b.className = 'trash-badge hidden';
+                        b.setAttribute('aria-hidden', 'true');
+                        try { if (btn && btn.style) btn.style.position = btn.style.position || 'relative'; } catch (e) { }
+                        try { btn.appendChild(b); } catch (e) { }
+                    }
+                    return b;
+                } catch (e) { return null; }
+            }
+
+            function updateTrashBadge() {
+                try {
+                    const b = ensureTrashBadge();
+                    if (!b) return;
+                    const count = Array.isArray(trashItems) ? trashItems.length : ((window.getTrashItems && window.getTrashItems().length) || 0);
+                    if (!count) { b.classList.add('hidden'); b.textContent = ''; }
+                    else { b.classList.remove('hidden'); b.textContent = (count > 99 ? '99+' : String(count)); }
+                } catch (e) { /* ignore */ }
             }
 
             // Helper: read current average k (try header span, fallback to visible rows)
@@ -12435,6 +12569,21 @@
 
             try { (trashPopup || document.body).addEventListener('trashupdated', () => { try { updateCell6_5Highlights(); } catch (e) { } }); } catch (e) { }
 
+            // Keep Cell5.5 in sync when trash changes and mode = 'exclude'
+            try {
+                (trashPopup || document.body).addEventListener('trashupdated', () => {
+                    try {
+                        const cell55 = document.getElementById('cell5_5');
+                        if (!cell55 || cell55.classList.contains('hidden')) return;
+                        const sel = document.getElementById('cell5_5_trashSel');
+                        // If selector missing (rare) or set to 'exclude', trigger the internal 'trashchange' event
+                        // so the existing in-closure listener inside renderCell5_5 recomputes without creating a new section.
+                        if (!sel || sel.value === 'exclude') {
+                            try { (document.body || document).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                        }
+                    } catch (e) { }
+                });
+            } catch (e) { }
             // Also update highlights whenever Cell6.5 content rerenders
             try {
                 const cell65 = document.getElementById('cell6_5');
@@ -12617,25 +12766,32 @@
 
             function moveToTrash(n) {
                 n = Number(n);
+                try { if (window && window.__trashClearing) return; } catch (e) { }
                 if (!n || trashItems.includes(n)) return;
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.add('in-trash');
                 trashItems.push(n);
                 renderTrash();
-                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                // Always notify listeners that trash content changed so other sections
-                // (e.g. Cell5.5) can react in realtime — individual sections can
-                // decide whether to redraw based on their own trash selector.
-                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                // Additionally, if Cell6.5/6.6 are using exclude mode, trigger their
-                // local recompute to keep those sections in sync (preserve original behavior).
+                // If a user dragged a number from the popup into the trash, treat this as
+                // a manual change and disable the Cell6.5 optimizer (if active).
                 try {
-                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                    if (typeof draggingNumber !== 'undefined' && draggingNumber === n && (draggingFromTrash === null || draggingFromTrash === undefined)) {
+                        const opt = document.getElementById('cell6_5_optimize');
+                        if (opt && opt.checked) {
+                            opt.checked = false;
+                            try { opt.dispatchEvent(new Event('change', { bubbles: true })); } catch (er) { try { opt.dispatchEvent(new Event('change')); } catch (ee) { } }
+                        }
+                    }
+                } catch (e) { }
+                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
+                try {
+                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel') || document.getElementById('cell5_5_trashSel'));
                     const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
                     if (mode === 'exclude') {
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         try {
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
@@ -12667,22 +12823,6 @@
                         }
                     } catch (e) { }
                 });
-                // Allow clearing the entire trash popup (empty it and re-render)
-                document.addEventListener('clearTrashPopup', (ev) => {
-                    try {
-                        // remove in-trash marker from popup cells
-                        try {
-                            for (const old of (trashItems || []).slice()) {
-                                const c = numberPickerTable.querySelector('td[data-number="' + old + '"]');
-                                if (c) c.classList.remove('in-trash');
-                            }
-                        } catch (inner) { }
-                        // clear internal array and re-render
-                        try { trashItems.length = 0; renderTrash(); try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { } } catch (inner) { }
-                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                    } catch (e) { }
-                });
             } catch (e) { }
 
             function restoreFromTrash(n) {
@@ -12693,20 +12833,23 @@
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.remove('in-trash');
                 renderTrash();
-                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                // Always notify listeners that trash content changed so other sections
-                // (e.g. Cell5.5) can react in realtime — individual sections can
-                // decide whether to redraw based on their own trash selector.
-                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                // Additionally, if Cell6.5/6.6 are using exclude mode, trigger their
-                // local recompute to keep those sections in sync (preserve original behavior).
+                // If optimizer checkbox is active for Cell6.5, uncheck it when user restores any number
                 try {
-                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
+                    const opt = document.getElementById('cell6_5_optimize');
+                    if (opt && opt.checked) {
+                        opt.checked = false;
+                        try { opt.dispatchEvent(new Event('change', { bubbles: true })); } catch (er) { try { opt.dispatchEvent(new Event('change')); } catch (ee) { } }
+                    }
+                } catch (e) { }
+                // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
+                try {
+                    const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel') || document.getElementById('cell5_5_trashSel'));
                     const mode = (tEl && tEl.value) ? String(tEl.value) : 'include';
                     if (mode === 'exclude') {
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         try {
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') sec.__invalidate();
@@ -12819,7 +12962,6 @@
             // initial state
             setTrashButtonState();
             renderTrash();
-            try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
 
             // helper: get unique numbers present in the popup table
             function getPopupNumbers() {
@@ -13115,34 +13257,119 @@
                     setTimeout(() => { clean(''); }, 12000);
                 } catch (err) { /* ignore overall */ }
             });
+            // Clear-all button inside trash popup: remove all tracked trash items and update visuals
+            try {
+                const clearBtn = trashPopup.querySelector('#trashClearBtn');
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', (ev) => {
+                        try {
+                            ev.preventDefault();
+                        } catch (e) { }
+                        try { window.__trashClearing = true; } catch (e) { }
+                        try {
+                            // clear popup-tracked array if present and sync to closure variable
+                            try {
+                                if (Array.isArray(window.__trashItems)) window.__trashItems.length = 0;
+                            } catch (e) { /* ignore */ }
+                            try { window.__trashItems = window.__trashItems || []; } catch (e) { }
+                        } catch (e) { }
+                        try {
+                            // clear local tracked array and remove in-trash classes
+                            try {
+                                for (const old of (trashItems || []).slice()) {
+                                    try {
+                                        const c = numberPickerTable.querySelector('td[data-number="' + old + '"]');
+                                        if (c) c.classList.remove('in-trash');
+                                    } catch (ee) { }
+                                }
+                            } catch (ee) { }
+                            // empty the array and ensure global reference points to same array
+                            try { trashItems.length = 0; } catch (ee) { }
+                            try { window.__trashItems = trashItems; } catch (ee) { }
+                        } catch (e) { }
+                        try { renderTrash(); } catch (e) { }
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                        try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                        // Ensure popup visuals fully reflect cleared state:
+                        try {
+                            // remove any displayed avg-k span
+                            const tp = document.getElementById('trashPopup');
+                            if (tp) {
+                                try {
+                                    const firstDiv = tp.querySelector('div');
+                                    if (firstDiv) {
+                                        const existing = firstDiv.querySelector('.avg-k');
+                                        if (existing) existing.remove();
+                                    }
+                                    // clear any trash-number cells inside the popup table and strip draggable
+                                    const trows = tp.querySelectorAll('td.trash-number');
+                                    for (const td of Array.from(trows)) {
+                                        try { td.draggable = false; td.removeAttribute('draggable'); } catch (er) { }
+                                        try { td.remove(); } catch (er) { try { td.innerHTML = ''; } catch (ee) { } }
+                                    }
+                                    // also clear tbody to remove any lingering rows
+                                    try {
+                                        const tb = tp.querySelector('tbody');
+                                        if (tb) {
+                                            tb.innerHTML = '';
+                                            const pr = document.createElement('tr');
+                                            for (let i = 0; i < 3; i++) { const e = document.createElement('td'); e.innerHTML = ''; pr.appendChild(e); }
+                                            tb.appendChild(pr);
+                                        }
+                                    } catch (er) { }
+                                } catch (err) { }
+                            }
+                            // also clear in-trash markers inside the number picker popup cells
+                            try {
+                                const picker = document.getElementById('numberPickerTable');
+                                if (picker) {
+                                    const marked = picker.querySelectorAll('td.in-trash');
+                                    for (const m of Array.from(marked)) try { m.classList.remove('in-trash'); } catch (er) { }
+                                }
+                                // ensure number cells remain draggable after clearing trash
+                                try {
+                                    const numberCells = picker.querySelectorAll('td[data-number]');
+                                    for (const c of Array.from(numberCells)) {
+                                        try { c.draggable = true; c.setAttribute('draggable', 'true'); } catch (er) { }
+                                    }
+                                } catch (er) { }
+                            } catch (err) { }
+                            // re-render the trash popup to reflect now-empty state
+                            try { renderTrash(); } catch (err) { }
+                        } catch (e) { }
+                        // If Cell6.5 optimizer is active, uncheck it when user clears trash
+                        try {
+                            const opt = document.getElementById('cell6_5_optimize');
+                            const optMode = document.getElementById('cell6_5_optMode');
+                            if (opt && opt.checked) {
+                                opt.checked = false;
+                                try { opt.dispatchEvent(new Event('change', { bubbles: true })); } catch (er) { try { opt.dispatchEvent(new Event('change')); } catch (ee) { } }
+                            }
+                            if (optMode) optMode.disabled = true;
+                        } catch (e) { }
+                        // Schedule a short re-check to ensure no other listener repopulated the popup
+                        try {
+                            setTimeout(() => {
+                                try { if (Array.isArray(window.__trashItems)) window.__trashItems.length = 0; } catch (e) { }
+                                try { if (Array.isArray(trashItems)) trashItems.length = 0; } catch (e) { }
+                                try {
+                                    const tp2 = document.getElementById('trashPopup');
+                                    if (tp2) {
+                                        const tb2 = tp2.querySelector('tbody');
+                                        if (tb2) tb2.innerHTML = '';
+                                    }
+                                } catch (e) { }
+                                try { renderTrash(); } catch (e) { }
+                                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                                try { window.__trashClearing = false; } catch (e) { }
+                            }, 60);
+                        } catch (e) { }
+                    });
+                }
+            } catch (e) { }
             // expose current trash items via a safe global getter for other sections (Cell5.5 uses this)
             try { window.getTrashItems = function () { return trashItems.slice(); }; window.__trashItems = trashItems; } catch (e) { /* ignore */ }
-
-            // Create/update a small circular corner badge on the trash button
-            function ensureTrashBadge() {
-                try {
-                    let b = document.getElementById('trashBadge');
-                    if (!b) {
-                        b = document.createElement('span');
-                        b.id = 'trashBadge';
-                        b.className = 'trash-badge hidden';
-                        b.setAttribute('aria-hidden', 'true');
-                        try { if (trashBtn && trashBtn.style) trashBtn.style.position = trashBtn.style.position || 'relative'; } catch (e) { }
-                        try { if (trashBtn) trashBtn.appendChild(b); } catch (e) { }
-                    }
-                    return b;
-                } catch (e) { return null; }
-            }
-
-            function updateTrashBadge() {
-                try {
-                    const b = ensureTrashBadge();
-                    if (!b) return;
-                    const count = Array.isArray(trashItems) ? trashItems.length : ((window.getTrashItems && window.getTrashItems().length) || 0);
-                    if (!count) { b.classList.add('hidden'); b.textContent = ''; }
-                    else { b.classList.remove('hidden'); b.textContent = (count > 99 ? '99+' : String(count)); }
-                } catch (e) { /* ignore */ }
-            }
 
             // Shift-key toggle: when the main number picker popup is open, pressing
             // and releasing the Shift key will toggle the visibility of the trash popup.
