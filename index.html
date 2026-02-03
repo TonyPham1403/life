@@ -785,6 +785,47 @@
             margin-bottom: 14px;
         }
 
+        /* When unpair mode is active inside Cell6.5, show only the numtrash field */
+        #cell6_5 .controls.unpair-mode>* {
+            display: none !important;
+        }
+
+        #cell6_5 .controls.unpair-mode>.numtrash-wrapper {
+            display: flex !important;
+        }
+
+        /* Highlight a row while it's being dragged out from Cell6.5 (unpair)
+           and keep a persistent highlight when the record has been dragged out. */
+        #cell6_5 table tr.dragging-out,
+        #cell6_5 table tr.dragged-out {
+            position: relative !important;
+            z-index: 9999 !important;
+            outline: 3px solid #0f9f5c !important;
+            outline-offset: -2px !important;
+            box-shadow: 0 10px 30px rgba(15, 158, 86, 0.22) !important;
+            background-clip: padding-box !important;
+        }
+
+        /* Highlight the `num` cell when all its `dontmatch` numbers are present in the trashPopup (green) */
+        #cell6_5 td.cell6-num-highlight {
+            background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%) !important;
+            color: var(--highlight-text) !important;
+            font-weight: 800 !important;
+            border-radius: 6px !important;
+            padding: 6px 8px !important;
+        }
+
+        /* Highlight the `num` cell when the num itself is present in the trashPopup (yellow->red gradient)
+           This takes precedence visually over the green `cell6-num-highlight`. */
+        #cell6_5 td.cell6-num-in-trash {
+            background: linear-gradient(135deg, #ffef62 0%, #ff6b6b 100%) !important;
+            color: #2b2b2b !important;
+            font-weight: 900 !important;
+            border-radius: 6px !important;
+            padding: 6px 8px !important;
+            box-shadow: 0 6px 18px rgba(255, 106, 106, 0.14) !important;
+        }
+
         /* Remove right margin caused by inner child of the 6th control in Cell6.6 */
         #cell6_6>div>div.controls>div:nth-child(6)>* {
             margin-right: 0 !important;
@@ -2223,12 +2264,49 @@
         }
 
         /* Small visual for the trash button when active */
+        /* allow badge to overflow without being clipped by ancestors */
+        #modeRowRank>div,
+        #modeRowRank,
         #trashBtn {
+            overflow: visible;
+        }
+
+        #trashBtn {
+            position: relative;
+            /* allow corner badge positioning */
             background: transparent;
             border: 1px solid var(--border);
             padding: 6px 8px;
             border-radius: 6px;
             cursor: pointer;
+        }
+
+        /* Tiny circular badge displayed at the corner of the trash button (like Messenger) */
+        .trash-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #ff3b30;
+            /* red similar to messenger */
+            color: white;
+            font-weight: 800;
+            font-size: 11px;
+            line-height: 1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+            /* purely decorative */
+            z-index: 20000;
+        }
+
+        .trash-badge.hidden {
+            display: none;
         }
 
         #trashBtn.disabled {
@@ -2492,7 +2570,8 @@
                 <div class="mode-row" id="modeRowRank"
                     style="font-size:14px;gap:8px;align-items:center;display:flex;justify-content:space-between;width:100%;order:999;">
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="trashBtn" title="Thùng rác">🗑️</button>
+                        <button id="trashBtn" title="Thùng rác" aria-label="Thùng rác">🗑️<span id="trashBadge"
+                                class="trash-badge hidden" aria-hidden="true"></span></button>
                         <button id="trashToggle" title="Bật thùng rác">Off</button>
                     </div>
                     <div id="rankSummary"
@@ -5418,10 +5497,11 @@
                     const modeSel = document.createElement('select');
                     modeSel.title = 'Chế độ hiển thị';
                     modeSel.style.marginLeft = '12px';
-                    ['truy', 'lienket'].forEach(k => {
+                    ['truy', 'lienket', 'unpair'].forEach(k => {
                         const o = document.createElement('option');
                         if (k === 'truy') { o.value = 'truy'; o.textContent = 'Truy x (mặc định)'; }
-                        else { o.value = 'lienket'; o.textContent = 'Liên kết x'; }
+                        else if (k === 'lienket') { o.value = 'lienket'; o.textContent = 'Liên kết x'; }
+                        else { o.value = 'unpair'; o.textContent = 'Unpair'; }
                         modeSel.appendChild(o);
                     });
                     // insert inside the H2 so the dropdown stays compact on the same line
@@ -5923,18 +6003,139 @@
             // stable id so external listeners can find current selector after re-renders
             try { trashSel.id = 'cell6_5_trashSel'; trashSel.className = 'trash-mode'; } catch (e) { }
 
+            // Special input for Unpair mode: only one numeric field 'numtrash' (1..44)
+            // Remove any previously-created wrappers to avoid duplicate labels after re-renders
+            try {
+                const old = document.querySelectorAll('#cell6_5 .numtrash-wrapper');
+                old.forEach(n => { try { n.remove(); } catch (e) { /* ignore */ } });
+            } catch (e) { /* ignore */ }
+            const numTrashInput = document.createElement('input');
+            numTrashInput.type = 'number';
+            numTrashInput.min = 1; numTrashInput.max = 44; numTrashInput.value = 3;
+            numTrashInput.style.width = '80px';
+            numTrashInput.title = 'Số lượng nhóm cuối cùng (1-44)';
+            // Create +/- buttons styled like the Số x control
+            const numTrashContainer = document.createElement('div');
+            numTrashContainer.style.cssText = 'position:relative;display:inline-block;vertical-align:middle;margin-right:8px;';
+            numTrashInput.style.paddingRight = '40px';
+            numTrashInput.style.boxSizing = 'border-box';
+            const numBtnGroup = document.createElement('div');
+            numBtnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+            const numArrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+            const numUpBtn = document.createElement('button'); numUpBtn.type = 'button'; numUpBtn.className = 'arrow-up'; numUpBtn.innerHTML = '▲'; numUpBtn.title = 'Tăng 1'; numUpBtn.style.cssText = numArrowStyle;
+            const numDownBtn = document.createElement('button'); numDownBtn.type = 'button'; numDownBtn.className = 'arrow-down'; numDownBtn.innerHTML = '▼'; numDownBtn.title = 'Giảm 1'; numDownBtn.style.cssText = numArrowStyle;
+
+            numUpBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
+                if (!Number.isFinite(n)) n = 0;
+                n = n + 1;
+                if (n > 44) n = 1; // wrap
+                if (n < 1) n = 1;
+                numTrashInput.value = String(n);
+                numTrashInput.dispatchEvent(new Event('input'));
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+            numDownBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
+                if (!Number.isFinite(n)) n = 0;
+                n = n - 1;
+                if (n < 1) n = 44; // wrap
+                if (n > 44) n = 44;
+                numTrashInput.value = String(n);
+                numTrashInput.dispatchEvent(new Event('input'));
+                if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+            });
+
+            numBtnGroup.appendChild(numUpBtn);
+            numBtnGroup.appendChild(numDownBtn);
+            numTrashContainer.appendChild(numTrashInput);
+            numTrashContainer.appendChild(numBtnGroup);
+
+            const numTrashLabel = document.createElement('label');
+            numTrashLabel.className = 'flex';
+            numTrashLabel.classList.add('numtrash-wrapper');
+            numTrashLabel.style.alignItems = 'center';
+            numTrashLabel.style.gap = '6px';
+            numTrashLabel.append(document.createTextNode('numtrash:'), numTrashContainer);
+            // hidden by default; shown only when trashSel === 'unpair'
+            numTrashLabel.style.display = 'none';
+
+            // Optimize checkbox: shown only in Unpair mode alongside numtrash
+            const optChk = document.createElement('input'); optChk.type = 'checkbox'; optChk.id = 'cell6_5_optimize';
+            const optLabel = document.createElement('label'); optLabel.className = 'flex';
+            optLabel.classList.add('numtrash-wrapper'); // ensure visibility only in unpair-mode
+            optLabel.style.alignItems = 'center'; optLabel.style.gap = '6px';
+            optLabel.append(optChk, document.createTextNode('Tối ưu'));
+            // dropdown for optimize mode: 'nền xanh' (green) or 'nền đỏ' (red)
+            const optSel = document.createElement('select');
+            optSel.id = 'cell6_5_optMode';
+            const o1 = document.createElement('option'); o1.value = 'green'; o1.textContent = 'nền xanh'; optSel.appendChild(o1);
+            const o2 = document.createElement('option'); o2.value = 'red'; o2.textContent = 'nền đỏ'; optSel.appendChild(o2);
+            optSel.value = 'green';
+            optSel.disabled = true; // enabled only when checkbox is checked
+            optSel.style.marginLeft = '8px';
+            optLabel.appendChild(optSel);
+            optLabel.style.display = 'none';
+
             // Mirror Cell6.6's selector syncing: when this selector changes,
             // propagate value to Cell6.6's selector, dispatch a global trashchange
             // and trigger a local recompute. Also listen for external trashchange
             // events to keep this selector in sync when Cell6.6 or popup updates.
             try {
+                // helper to toggle UI when Unpair is selected
+                function updateTrashModeUI(mode) {
+                    try {
+                        const isUnpair = String(mode) === 'unpair';
+                        try { controls.classList.toggle('unpair-mode', isUnpair); } catch (e) { }
+
+                        try {
+                            // Wrap plain-text label nodes into span.control-label so we can hide them
+                            Array.from(controls.childNodes).forEach(node => {
+                                try {
+                                    if (node && node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim()) {
+                                        const txt = node.textContent;
+                                        const span = document.createElement('span');
+                                        span.className = 'control-label';
+                                        span.textContent = txt;
+                                        controls.replaceChild(span, node);
+                                    }
+                                } catch (e) { /* ignore */ }
+                            });
+
+                            // Toggle visibility: show only .numtrash-wrapper when in Unpair
+                            Array.from(controls.children).forEach(el => {
+                                try {
+                                    if (el.classList && el.classList.contains('numtrash-wrapper')) {
+                                        el.style.display = isUnpair ? 'flex' : '';
+                                    } else {
+                                        el.style.display = isUnpair ? 'none' : '';
+                                    }
+                                } catch (e) { }
+                            });
+
+                            // ensure main controls are visible when entering Unpair
+                            if (isUnpair) {
+                                try { controls.style.display = ''; } catch (e) { }
+                            }
+
+                            const lk = (body && body.__lkControls) ? body.__lkControls : null;
+                            if (lk) lk.style.display = isUnpair ? 'none' : '';
+                        } catch (e) { }
+                    } catch (e) { }
+                }
+
                 trashSel.addEventListener('change', () => {
                     try {
                         const other = document.getElementById('cell6_6_trashSel');
                         if (other) other.value = trashSel.value;
                     } catch (e) { }
                     try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                    try {
+                        updateTrashModeUI(trashSel.value);
+                        if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
+                    } catch (e) { try { if (typeof group === 'function') group(); } catch (er) { } }
                 });
             } catch (e) { }
 
@@ -5948,7 +6149,9 @@
                 });
             } catch (e) { }
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, sortSel, recencySel);
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, numTrashLabel, optLabel, sortSel, recencySel);
+            // wire numTrash input to trigger recompute when changed
+            try { numTrashInput.addEventListener('input', () => { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); }); } catch (e) { }
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
@@ -5975,6 +6178,14 @@
                 if (modeSel) {
                     const switchToTruy = () => {
                         controls.style.display = '';
+                        try { controls.classList.remove('unpair-mode'); } catch (e) { }
+                        try { numTrashLabel.style.display = 'none'; } catch (e) { }
+                        try { controls.querySelectorAll('.numtrash-wrapper').forEach(n => { try { n.style.display = 'none'; } catch (e) { } }); } catch (e) { }
+                        // ensure trash selector returns to a non-unpair value so group() doesn't
+                        // accidentally re-enter the unpair rendering branch
+                        try { if (trashSel) trashSel.value = 'include'; } catch (e) { }
+                        try { if (typeof updateTrashModeUI === 'function') updateTrashModeUI('include'); } catch (e) { }
+                        try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                         if (lkControls) lkControls.style.display = 'none';
                         // clear any lienket output
                         try { wrap.innerHTML = ''; } catch (e) { }
@@ -5993,7 +6204,15 @@
                     };
                     modeSel.addEventListener('change', (ev) => {
                         const v = String(modeSel.value || 'truy');
-                        if (v === 'lienket') switchToLienKet(); else switchToTruy();
+                        if (v === 'lienket') switchToLienKet();
+                        else if (v === 'unpair') {
+                            // Do not set `trashSel.value` to 'unpair' because the
+                            // Cell6.5 inline trash dropdown only supports include/exclude.
+                            // Toggle UI and re-run the group computation in unpair mode.
+                            try { if (typeof updateTrashModeUI === 'function') updateTrashModeUI('unpair'); } catch (e) { }
+                            try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                            try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                        } else switchToTruy();
                     });
 
                     // compute function for Liên kết x: take top-N combos of chosen bộ, aggregate number frequencies
@@ -6180,6 +6399,333 @@
                 const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${recencySel ? recencySel.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
+                    return;
+                }
+
+                // Special 'unpair' mode: build per-number list of other numbers
+                // that appear least often when paired with the given number.
+                // Uses `numTrashInput` as the number of items to return (1..44).
+                // Unpair may be indicated either by the trash selector (external)
+                // or by the controls being put into `.unpair-mode` by the header.
+                if (String(trashValue) === 'unpair' || (controls && controls.classList && controls.classList.contains('unpair-mode'))) {
+                    // validate num
+                    let n = 16;
+                    try { n = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 16)); } catch (e) { n = 16; }
+
+                    // build pair counts
+                    const pairCounts = new Map();
+                    try {
+                        rows.forEach(r => {
+                            try {
+                                const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                for (let i = 0; i < nums.length; i++) {
+                                    for (let j = i + 1; j < nums.length; j++) {
+                                        const a = nums[i], b = nums[j];
+                                        const key = `${a}-${b}`;
+                                        pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+                                    }
+                                }
+                            } catch (e) { }
+                        });
+                    } catch (e) { }
+
+                    // build table html
+                    let html = "<div class='muted header-summary' style='flex-basis:100%;margin-bottom:8px'>Unpair — trả về các số ít gặp khi ghép với x</div>";
+                    html += "<div class='grid-centered'><table class='table'><thead><tr><th>num</th><th>dontmatch</th></tr></thead><tbody>";
+                    for (let xnum = 1; xnum <= 45; xnum++) {
+                        const others = [];
+                        for (let y = 1; y <= 45; y++) {
+                            if (y === xnum) continue;
+                            const a = Math.min(xnum, y), b = Math.max(xnum, y);
+                            const key = `${a}-${b}`;
+                            const c = pairCounts.get(key) || 0;
+                            others.push({ y, c });
+                        }
+                        // sort ascending by count (least frequent first), tie-breaker by numeric
+                        others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                        const pick = others.slice(0, n).map(o => String(o.y)).join(',');
+                        html += `<tr><td>${xnum}</td><td>${pick}</td></tr>`;
+                    }
+                    html += "</tbody></table></div>";
+                    try { wrap.innerHTML = html; } catch (e) { }
+                    try {
+                        // Attach drag handlers to each unpair table row so users can drag
+                        // a row out to add its `dontmatch` numbers into the trash popup.
+                        const tbl = wrap.querySelector('table');
+                        if (tbl) {
+                            const tbody = tbl.querySelector('tbody');
+                            if (tbody) {
+                                Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+                                    try {
+                                        tr.draggable = true;
+                                        tr.addEventListener('dragstart', (e) => {
+                                            try {
+                                                const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                                                const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                                // compute a stable key for this row (sorted unique numbers)
+                                                const key = Array.from(new Set(nums.map(n => Number(n)).filter(Number.isFinite))).sort((a, b) => a - b).join(',');
+                                                // support toggle: consult persistent set rather than transient DOM class
+                                                try { window.__draggedUnpairRowKeys = window.__draggedUnpairRowKeys || new Set(); } catch (e) { window.__draggedUnpairRowKeys = new Set(); }
+                                                const action = window.__draggedUnpairRowKeys.has(key) ? 'restore' : 'add';
+                                                window.__draggingUnpair = { nums: nums.slice(), tr: tr, handled: false, action, key };
+                                                // visually mark the row as being dragged out
+                                                try { tr.classList.add('dragging-out'); } catch (er) { }
+                                                try { e.dataTransfer.setData('application/x-nums', JSON.stringify(nums)); } catch (err) { e.dataTransfer.setData('text/plain', (nums || []).join(',')); }
+                                                try { e.dataTransfer.setData('source', 'cell6_5_unpair'); } catch (err) { }
+                                                try { e.dataTransfer.effectAllowed = 'copyMove'; } catch (err) { }
+                                            } catch (err) { }
+                                        });
+
+                                        tr.addEventListener('dragend', (e) => {
+                                            try {
+                                                const tt = document.getElementById('trashToggle');
+                                                const trashIsOn = tt && String((tt.textContent || '').trim()).toLowerCase() === 'on';
+                                                const state = window.__draggingUnpair || null;
+                                                let addedToTrash = false;
+                                                let restoredFromTrash = false;
+
+                                                if (state && Array.isArray(state.nums) && state.nums.length) {
+                                                    const uniq = Array.from(new Set(state.nums.map(n => Number(n)).filter(Number.isFinite)));
+                                                    if (state.action === 'restore') {
+                                                        // restore each number from trash (toggle off)
+                                                        try {
+                                                            document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: uniq }, bubbles: true, composed: true }));
+                                                            restoredFromTrash = true;
+                                                            // remove persistent key tracking so future drags act as add
+                                                            try { if (state.key) window.__draggedUnpairRowKeys.delete(state.key); } catch (e) { }
+                                                            // remove dragged-out class from any matching rows in DOM
+                                                            try { toggleDraggedOutForKey(state.key, false); } catch (e) { }
+                                                        } catch (err) { }
+                                                    } else {
+                                                        // default behavior: if not handled by a drop target and trash is on,
+                                                        // add numbers to trash (union semantics)
+                                                        if (!state.handled && trashIsOn && uniq.length) {
+                                                            try {
+                                                                document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true }));
+                                                                addedToTrash = true;
+                                                                // mark row key as dragged-out so subsequent drags toggle
+                                                                try { if (state.key) window.__draggedUnpairRowKeys.add(state.key); } catch (e) { }
+                                                                try { toggleDraggedOutForKey(state.key, true); } catch (e) { }
+                                                            } catch (err) { }
+                                                        }
+                                                    }
+                                                }
+
+                                                // remove transient dragging class
+                                                try { tr.classList.remove('dragging-out'); } catch (er) { }
+
+                                                // if the drop was handled (or we added via fallback) mark row dragged-out
+                                                if ((state && state.handled) || addedToTrash) {
+                                                    try { tr.classList.add('dragged-out'); } catch (er) { }
+                                                }
+
+                                                // if we restored from trash, remove the dragged-out marker
+                                                if (restoredFromTrash) {
+                                                    try { tr.classList.remove('dragged-out'); } catch (er) { }
+                                                }
+
+                                                try { window.__draggingUnpair = null; } catch (e) { }
+                                            } catch (err) { }
+                                        });
+                                    } catch (e) { }
+                                });
+                            }
+                        }
+                    } catch (e) { }
+
+                    // --- Optimization: compute which unpair row when dragged-out (its dontmatch numbers
+                    // added to trash) would maximize the number of rows whose `dontmatch` lists are
+                    // fully present in the trash (i.e., rows that become green). When the user
+                    // checks the `optChk` checkbox we perform the computation and dispatch
+                    // a `moveMultipleToTrash` for the chosen row's numbers. Unchecking restores.
+                    function clearOptimizeUI() {
+                        try {
+                            // remove any inline styling/attributes applied by optimizer
+                            const prev = wrap.querySelectorAll('[data-optimal]');
+                            prev.forEach(el => {
+                                try { el.removeAttribute('data-optimal'); el.style.boxShadow = ''; el.style.outline = ''; } catch (e) { }
+                            });
+                            const prevTd = wrap.querySelectorAll('.optimal-dontmatch');
+                            prevTd.forEach(td => { try { td.classList.remove('optimal-dontmatch'); td.style.background = ''; td.style.borderColor = ''; } catch (e) { } });
+                            try { window.__optCandidateNums = null; } catch (e) { }
+                        } catch (e) { }
+                    }
+
+                    async function computeOptimize(force = false) {
+                        try {
+                            clearOptimizeUI();
+                            if (!force && (!optChk || !optChk.checked)) return;
+                            // get current trash items
+                            const currentTrash = (typeof window.getTrashItems === 'function') ? (window.getTrashItems() || []) : (window.__trashItems || []);
+                            const baseSet = new Set((currentTrash || []).map(n => Number(n)));
+                            const tbl = wrap.querySelector('table');
+                            if (!tbl) return;
+                            const rowsDom = Array.from(tbl.querySelectorAll('tbody tr'));
+                            if (!rowsDom.length) return;
+                            // parse dontmatch lists for each row
+                            const parsed = rowsDom.map(tr => {
+                                try {
+                                    const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                                    const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                                    const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                    return { tr, nums };
+                                } catch (e) { return { tr, nums: [] }; }
+                            });
+
+                            let best = null;
+                            let bestCount = -1;
+                            // For each candidate row, simulate adding its dontmatch numbers to trash
+                            for (const cand of parsed) {
+                                try {
+                                    const candSet = new Set(baseSet);
+                                    cand.nums.forEach(n => { if (Number.isFinite(n)) candSet.add(Number(n)); });
+                                    // determine optimization mode (green/red)
+                                    const optMode = (typeof optSel !== 'undefined' && optSel && optSel.value) ? String(optSel.value) : 'green';
+                                    let cnt = 0;
+                                    if (optMode === 'green') {
+                                        // count rows that would be green: all dontmatch present AND main num not trashed
+                                        for (const p of parsed) {
+                                            try {
+                                                const others = p.nums || [];
+                                                if (!others || others.length === 0) continue;
+                                                // determine this row's main number (first cell)
+                                                let mainNum = null;
+                                                try {
+                                                    const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
+                                                    const rawNum = numTd ? (numTd.textContent || '').trim() : '';
+                                                    mainNum = Number(rawNum);
+                                                } catch (e) { mainNum = null; }
+                                                if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) continue;
+                                                let ok = true;
+                                                for (const o of others) if (!candSet.has(Number(o))) { ok = false; break; }
+                                                if (ok) cnt++;
+                                            } catch (e) { }
+                                        }
+                                    } else if (optMode === 'red') {
+                                        // count rows that would become red: their main number would be present in candSet
+                                        for (const p of parsed) {
+                                            try {
+                                                let mainNum = null;
+                                                try {
+                                                    const numTd = p.tr.children && p.tr.children[0] ? p.tr.children[0] : null;
+                                                    const rawNum = numTd ? (numTd.textContent || '').trim() : '';
+                                                    mainNum = Number(rawNum);
+                                                } catch (e) { mainNum = null; }
+                                                if (Number.isFinite(mainNum) && candSet.has(Number(mainNum))) cnt++;
+                                            } catch (e) { }
+                                        }
+                                    }
+                                    if (cnt > bestCount) { bestCount = cnt; best = cand; }
+                                } catch (e) { }
+                            }
+
+                            if (best && best.nums && best.nums.length) {
+                                // compute a stable key for this candidate (sorted unique numbers)
+                                try {
+                                    const uniq = Array.from(new Set(best.nums.map(n => Number(n)).filter(n => Number.isFinite(n)))).sort((a, b) => a - b);
+                                    if (uniq.length) {
+                                        // persist choice so we can apply styling after the table re-renders
+                                        try { window.__optAddedToTrash = uniq.slice(); } catch (e) { window.__optAddedToTrash = uniq.slice(); }
+                                        try { window.__optCandidateNums = uniq.slice(); } catch (e) { window.__optCandidateNums = uniq.slice(); }
+
+                                        // When we add to trash this will usually cause the table to re-render.
+                                        // Apply visual styling only after the popup/table has updated so
+                                        // DOM nodes are stable (avoids styling elements that get replaced).
+                                        const applyStylingAfterTrash = () => {
+                                            try {
+                                                clearOptimizeUI();
+                                                const tblNow = wrap.querySelector('table');
+                                                if (!tblNow) return;
+                                                const rowsNow = Array.from(tblNow.querySelectorAll('tbody tr'));
+                                                // find the row whose dontmatch numbers set equals the chosen candidate
+                                                const targetSet = new Set((window.__optCandidateNums || []).map(n => Number(n)));
+                                                for (const tr of rowsNow) {
+                                                    try {
+                                                        const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                        const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                                                        const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                                        const s = new Set(nums.map(n => Number(n)));
+                                                        if (s.size === targetSet.size) {
+                                                            let eq = true;
+                                                            for (const v of s) if (!targetSet.has(v)) { eq = false; break; }
+                                                            if (eq) {
+                                                                try { tr.setAttribute('data-optimal', '1'); tr.style.outline = '3px solid rgba(102,126,234,0.25)'; tr.style.boxShadow = '0 6px 18px rgba(102,126,234,0.12)'; }
+                                                                catch (e) { }
+                                                                const dontTdNow = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                                if (dontTdNow) { try { dontTdNow.classList.add('optimal-dontmatch'); dontTdNow.style.background = 'rgba(102,126,234,0.06)'; dontTdNow.style.borderColor = 'var(--accent-2)'; } catch (e) { } }
+                                                                break;
+                                                            }
+                                                        }
+                                                    } catch (e) { }
+                                                }
+                                            } catch (e) { }
+                                        };
+
+                                        // listen once for the trash update, then apply styling
+                                        const once = () => { try { applyStylingAfterTrash(); } catch (e) { } finally { try { document.removeEventListener('trashupdated', once); } catch (er) { } } };
+                                        try { document.addEventListener('trashupdated', once); } catch (e) { setTimeout(() => { try { applyStylingAfterTrash(); } catch (er) { } }, 120); }
+
+                                        // dispatch the event to add numbers to trash (union semantics)
+                                        try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); }
+                                        catch (e) { }
+                                    }
+                                } catch (e) { }
+                            }
+                        } catch (e) { }
+                    }
+
+                    // wire checkbox change to computeOptimize (also recompute when trash updates)
+                    try {
+                        if (optChk) {
+                            optChk.addEventListener('change', (e) => {
+                                try {
+                                    // enable/disable the select only when checkbox is checked
+                                    try { if (typeof optSel !== 'undefined') optSel.disabled = !optChk.checked; } catch (e) { }
+                                    if (!optChk.checked) {
+                                        // on uncheck, clear the trash popup (remove all trashed numbers)
+                                        try {
+                                            document.dispatchEvent(new CustomEvent('clearTrashPopup', { bubbles: true, composed: true }));
+                                        } catch (er) { }
+                                        try { window.__optAddedToTrash = null; } catch (er) { }
+                                        clearOptimizeUI();
+                                    } else {
+                                        computeOptimize();
+                                    }
+                                } catch (err) { }
+                            });
+
+                            // recompute when mode dropdown changes while checkbox is active
+                            try {
+                                if (typeof optSel !== 'undefined') {
+                                    // store previous mode to detect transitions (green -> red)
+                                    try { optSel._prevMode = String(optSel.value || 'green'); } catch (e) { optSel._prevMode = 'green'; }
+                                    optSel.addEventListener('change', () => {
+                                        try {
+                                            const prev = String(optSel._prevMode || 'green');
+                                            const curr = String(optSel.value || 'green');
+                                            // If mode changed in either direction, clear the trash popup first
+                                            // so the compute runs against a fresh popup state.
+                                            if (prev !== curr) {
+                                                try { document.dispatchEvent(new CustomEvent('clearTrashPopup', { bubbles: true, composed: true })); } catch (ee) { }
+                                                const once = () => { try { computeOptimize(true); } catch (e) { } finally { try { document.removeEventListener('trashupdated', once); } catch (er) { } } };
+                                                try { document.addEventListener('trashupdated', once); } catch (e) { setTimeout(() => { try { computeOptimize(true); } catch (er) { } }, 80); }
+                                            } else {
+                                                try { computeOptimize(true); } catch (e) { }
+                                            }
+                                            optSel._prevMode = curr;
+                                        } catch (e) { }
+                                    });
+                                }
+                            } catch (e) { }
+
+                            // recompute if trash changes while checkbox is on
+                            try { document.addEventListener('trashupdated', () => { try { if (optChk && optChk.checked) computeOptimize(); } catch (e) { } }); } catch (e) { }
+                        }
+                    } catch (e) { }
+
+                    isComputing = false;
+                    // don't continue normal flow
                     return;
                 }
 
@@ -11523,6 +12069,7 @@
             function setTrashButtonState() {
                 trashBtn.classList.toggle('disabled', !trashEnabled);
                 trashToggle.textContent = trashEnabled ? 'On' : 'Off';
+                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
             }
 
             trashToggle.addEventListener('click', (ev) => {
@@ -11545,6 +12092,7 @@
                         } catch (innerErr) { /* ignore */ }
                         // re-render the (now-empty) trash popup
                         renderTrash();
+                        try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                     }
                 } catch (e) { /* ignore */ }
             });
@@ -11650,6 +12198,7 @@
                 adjustTrashPosition();
                 // After rendering trash cells update their tooltips (x<>y)
                 try { updateTrashTooltips(); } catch (e) { /* ignore */ }
+                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
             }
 
             // Helper: read current average k (try header span, fallback to visible rows)
@@ -11851,6 +12400,51 @@
             // Also recalc when trash content changes
             try { (document.getElementById('trashPopup') || document.body).addEventListener('trashchange', () => { try { updateTrashTooltips(); } catch (e) { } }); } catch (e) { }
 
+            // Update Cell6.5 unpair rows highlighting when trash changes.
+            function updateCell6_5Highlights() {
+                try {
+                    const t = (Array.isArray(trashItems) ? trashItems.slice() : (window.getTrashItems ? window.getTrashItems() : []));
+                    const set = new Set((t || []).map(n => Number(n)));
+                    const rows = Array.from(document.querySelectorAll('#cell6_5 table tbody tr'));
+                    for (const r of rows) {
+                        try {
+                            const numTd = r.children && r.children[0] ? r.children[0] : null;
+                            const dontTd = r.children && r.children[1] ? r.children[1] : null;
+                            if (!numTd || !dontTd) continue;
+                            const raw = (dontTd.textContent || '').trim();
+                            const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                            // compute row's main number value
+                            const rawNum = (numTd.textContent || '').trim();
+                            const rowNum = rawNum === '' ? NaN : Number(rawNum);
+                            const rowInTrash = Number.isFinite(rowNum) && set.has(Number(rowNum));
+                            // highlight only when ALL dontmatch numbers are present in trash
+                            const allInTrash = nums.length > 0 && nums.every(v => set.has(Number(v)));
+
+                            // precedence: if the row's own num is in trash, show yellow->red gradient
+                            if (rowInTrash) {
+                                numTd.classList.add('cell6-num-in-trash');
+                                numTd.classList.remove('cell6-num-highlight');
+                            } else {
+                                numTd.classList.remove('cell6-num-in-trash');
+                                if (allInTrash) numTd.classList.add('cell6-num-highlight'); else numTd.classList.remove('cell6-num-highlight');
+                            }
+                        } catch (e) { }
+                    }
+                } catch (e) { }
+            }
+
+            try { (trashPopup || document.body).addEventListener('trashupdated', () => { try { updateCell6_5Highlights(); } catch (e) { } }); } catch (e) { }
+
+            // Also update highlights whenever Cell6.5 content rerenders
+            try {
+                const cell65 = document.getElementById('cell6_5');
+                if (cell65 && !cell65.__cell6_5HighlighterObserver) {
+                    const mo65 = new MutationObserver(() => { try { updateCell6_5Highlights(); } catch (e) { } });
+                    mo65.observe(cell65, { childList: true, subtree: true });
+                    cell65.__cell6_5HighlighterObserver = mo65;
+                }
+            } catch (e) { }
+
             // Create floating tooltip element and delegated handlers as a robust fallback
             try {
                 function ensureTrashAggTooltip() {
@@ -12028,8 +12622,10 @@
                 if (cell) cell.classList.add('in-trash');
                 trashItems.push(n);
                 renderTrash();
+                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
                 // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
                 try {
                     const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
@@ -12045,6 +12641,46 @@
                 } catch (e) { }
             }
 
+            // Allow other parts of the app to request adding multiple numbers into trash
+            // Dispatch event: `moveMultipleToTrash` with detail { nums: [1,2,3] }
+            try {
+                document.addEventListener('moveMultipleToTrash', (ev) => {
+                    try {
+                        if (!trashEnabled) return; // only when trash is enabled
+                        const nums = (ev && ev.detail && Array.isArray(ev.detail.nums)) ? ev.detail.nums : [];
+                        for (const v of nums) {
+                            try { moveToTrash(Number(v)); } catch (e) { }
+                        }
+                    } catch (e) { }
+                });
+                // Allow other parts of the app to request restoring multiple numbers from trash
+                // Dispatch event: `restoreMultipleFromTrash` with detail { nums: [1,2,3] }
+                document.addEventListener('restoreMultipleFromTrash', (ev) => {
+                    try {
+                        const nums = (ev && ev.detail && Array.isArray(ev.detail.nums)) ? ev.detail.nums : [];
+                        for (const v of nums) {
+                            try { restoreFromTrash(Number(v)); } catch (e) { }
+                        }
+                    } catch (e) { }
+                });
+                // Allow clearing the entire trash popup (empty it and re-render)
+                document.addEventListener('clearTrashPopup', (ev) => {
+                    try {
+                        // remove in-trash marker from popup cells
+                        try {
+                            for (const old of (trashItems || []).slice()) {
+                                const c = numberPickerTable.querySelector('td[data-number="' + old + '"]');
+                                if (c) c.classList.remove('in-trash');
+                            }
+                        } catch (inner) { }
+                        // clear internal array and re-render
+                        try { trashItems.length = 0; renderTrash(); try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { } } catch (inner) { }
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                    } catch (e) { }
+                });
+            } catch (e) { }
+
             function restoreFromTrash(n) {
                 n = Number(n);
                 const idx = trashItems.indexOf(n);
@@ -12053,8 +12689,10 @@
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.remove('in-trash');
                 renderTrash();
+                try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
+                try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
                 // Only notify/listeners and trigger recompute when effective trash mode is 'exclude'.
                 try {
                     const tEl = (document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel'));
@@ -12111,6 +12749,17 @@
 
                     if (dropOnTrash) {
                         if (source === 'popup') moveToTrash(num);
+                        // allow dropping an entire Cell6.5 Unpair row (multiple numbers)
+                        if (source === 'cell6_5_unpair') {
+                            try {
+                                const raw = e.dataTransfer.getData('application/x-nums') || e.dataTransfer.getData('text/plain');
+                                const arr = (raw && raw.trim().startsWith('[')) ? JSON.parse(raw) : String(raw || '').split(',').map(s => Number(s)).filter(n => Number.isFinite(n));
+                                if (Array.isArray(arr) && arr.length) {
+                                    for (const n of arr) try { moveToTrash(Number(n)); } catch (err) { }
+                                }
+                                try { if (window.__draggingUnpair) window.__draggingUnpair.handled = true; } catch (e) { }
+                            } catch (err) { /* ignore JSON/parse errors */ }
+                        }
                         return;
                     }
 
@@ -12162,6 +12811,7 @@
             // initial state
             setTrashButtonState();
             renderTrash();
+            try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
 
             // helper: get unique numbers present in the popup table
             function getPopupNumbers() {
@@ -12170,6 +12820,26 @@
                     const nums = nodes.map(n => Number(n.dataset.number)).filter(n => Number.isInteger(n) && n >= 1 && n <= 45);
                     return Array.from(new Set(nums)).sort((a, b) => a - b);
                 } catch (e) { return []; }
+            }
+
+            // Helper: toggle dragged-out class for all unpair rows matching a stable key
+            function toggleDraggedOutForKey(key, add) {
+                try {
+                    if (!key) return;
+                    // find any rows in the document that look like unpair rows (two columns: num and dontmatch)
+                    const candidates = Array.from(document.querySelectorAll('#cell6_5 table tbody tr'));
+                    for (const r of candidates) {
+                        try {
+                            const dont = r.children && r.children[1] ? (r.children[1].textContent || '').trim() : '';
+                            const nums = dont ? dont.split(',').map(s => Number(s.trim())).filter(Number.isFinite) : [];
+                            const k = Array.from(new Set(nums)).sort((a, b) => a - b).join(',');
+                            if (!k) continue;
+                            if (k === key) {
+                                if (add) r.classList.add('dragged-out'); else r.classList.remove('dragged-out');
+                            }
+                        } catch (e) { }
+                    }
+                } catch (e) { }
             }
 
             // compute best k-number removal (exact when combos small, greedy otherwise)
@@ -12439,6 +13109,32 @@
             });
             // expose current trash items via a safe global getter for other sections (Cell5.5 uses this)
             try { window.getTrashItems = function () { return trashItems.slice(); }; window.__trashItems = trashItems; } catch (e) { /* ignore */ }
+
+            // Create/update a small circular corner badge on the trash button
+            function ensureTrashBadge() {
+                try {
+                    let b = document.getElementById('trashBadge');
+                    if (!b) {
+                        b = document.createElement('span');
+                        b.id = 'trashBadge';
+                        b.className = 'trash-badge hidden';
+                        b.setAttribute('aria-hidden', 'true');
+                        try { if (trashBtn && trashBtn.style) trashBtn.style.position = trashBtn.style.position || 'relative'; } catch (e) { }
+                        try { if (trashBtn) trashBtn.appendChild(b); } catch (e) { }
+                    }
+                    return b;
+                } catch (e) { return null; }
+            }
+
+            function updateTrashBadge() {
+                try {
+                    const b = ensureTrashBadge();
+                    if (!b) return;
+                    const count = Array.isArray(trashItems) ? trashItems.length : ((window.getTrashItems && window.getTrashItems().length) || 0);
+                    if (!count) { b.classList.add('hidden'); b.textContent = ''; }
+                    else { b.classList.remove('hidden'); b.textContent = (count > 99 ? '99+' : String(count)); }
+                } catch (e) { /* ignore */ }
+            }
 
             // Shift-key toggle: when the main number picker popup is open, pressing
             // and releasing the Shift key will toggle the visibility of the trash popup.
