@@ -838,6 +838,35 @@
             box-shadow: 0 6px 18px rgba(255, 106, 106, 0.14) !important;
         }
 
+        /* Ensure the main `num` cell in Cell6.5 has the same
+           padding/height whether or not highlight classes are applied.
+           This keeps record row heights consistent in unpair mode. */
+        #cell6_5 table td:first-child {
+            /* Fixed width for the `num` column so it doesn't shrink
+               when the `dontmatch` string grows. Keep same padding/height. */
+            width: 80px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
+            padding: 6px 8px !important;
+            vertical-align: middle !important;
+            line-height: 1.2 !important;
+            box-sizing: border-box !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            text-align: center !important;
+        }
+
+        /* Allow the second column (dontmatch) to expand to the right
+           instead of compressing the num column. Make its text left-aligned
+           and allow normal wrapping/overflow so long strings grow rightward. */
+        #cell6_5 table td:nth-child(2) {
+            text-align: left !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            padding-left: 12px !important;
+        }
+
         /* Remove right margin caused by inner child of the 6th control in Cell6.6 */
         #cell6_6>div>div.controls>div:nth-child(6)>* {
             margin-right: 0 !important;
