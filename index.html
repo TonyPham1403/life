@@ -6772,6 +6772,86 @@
                                             } catch (err) { }
                                         });
 
+                                        // Hover behavior: when number-picker popup is hovered and
+                                        // we're in Unpair mode, temporarily replace trash with
+                                        // this row's `dontmatch` numbers. Restore on leave.
+                                        tr.addEventListener('mouseenter', (ev) => {
+                                            try {
+                                                const popup = document.getElementById('numberPickerPopup');
+                                                if (!popup) return;
+                                                // active when the popup is visible (open) or hovered
+                                                const popupVisible = popup && (popup.style.display === 'block' || popup.classList.contains('show'));
+                                                if (!popupVisible && !popup.matches(':hover')) return;
+                                                // Respect quick-place mode: only act when user selected 'hover'
+                                                const quickPlaceMode = (window.getQuickPlaceMode && typeof window.getQuickPlaceMode === 'function') ? window.getQuickPlaceMode() : (localStorage.getItem('quickPlaceMode') || 'normal');
+                                                if (quickPlaceMode !== 'hover') return;
+                                                // only in unpair mode controls
+                                                if (!(controls && controls.classList && controls.classList.contains('unpair-mode'))) return;
+                                                const dontTd = tr.children && tr.children[1] ? tr.children[1] : null;
+                                                const raw = dontTd ? (dontTd.textContent || '').trim() : '';
+                                                const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                                const uniq = Array.from(new Set(nums.map(n => Number(n)).filter(Number.isFinite)));
+
+                                                // save previous trash once per hover session (use shared global array when available)
+                                                try {
+                                                    const gTrash = (window.__trashItems && Array.isArray(window.__trashItems)) ? window.__trashItems : null;
+                                                    if (!window.__hoverPrevTrash) {
+                                                        try { window.__hoverPrevTrash = Array.isArray(gTrash) ? gTrash.slice() : (window.getTrashItems ? window.getTrashItems() : []); } catch (e) { window.__hoverPrevTrash = []; }
+                                                    }
+                                                    window.__hoverActive = true;
+
+                                                    // Replace current trash with the hovered set (clear then add)
+                                                    // Clear tracked trash items and popup visuals first (same approach as optimizer)
+                                                    try {
+                                                        if (window && Array.isArray(window.__trashItems)) {
+                                                            window.__trashItems.length = 0;
+                                                        } else if (typeof trashItems !== 'undefined' && Array.isArray(trashItems)) {
+                                                            trashItems.length = 0;
+                                                        } else {
+                                                            try { window.__trashItems = []; } catch (e) { }
+                                                        }
+                                                    } catch (e) { }
+                                                    try { const inTrashCells = document.getElementById('numberPickerTable').querySelectorAll('td.in-trash'); inTrashCells.forEach(c => { try { c.classList.remove('in-trash'); } catch (e) { } }); } catch (e) { }
+                                                    try { renderTrash(); } catch (e) { }
+                                                    try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                                                    try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                                                    // Now add hovered numbers into trash via documented event
+                                                    try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); } catch (e) { }
+                                                } catch (e) { }
+
+                                                // update in-popup cell visuals
+                                                try {
+                                                    const pickerTable = document.getElementById('numberPickerTable');
+                                                    if (pickerTable) {
+                                                        const prev = pickerTable.querySelectorAll('td.in-trash');
+                                                        prev.forEach(c => { try { c.classList.remove('in-trash'); } catch (e) { } });
+                                                        uniq.forEach(n => {
+                                                            try { const src = pickerTable.querySelector('td[data-number="' + n + '"]'); if (src) src.classList.add('in-trash'); } catch (e) { }
+                                                        });
+                                                    }
+                                                } catch (e) { }
+
+                                                try { renderTrash(); } catch (e) { }
+                                                try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                                            } catch (e) { }
+                                        });
+
+                                        tr.addEventListener('mouseleave', (ev) => {
+                                            try {
+                                                if (!window.__hoverActive) return;
+                                                const related = ev.relatedTarget;
+                                                // if moving to another row in same table, don't restore yet
+                                                if (related && related.closest && related.closest('#cell6_5 table tbody')) return;
+
+                                                // If moving out to empty space (not another row), keep the
+                                                // last-hovered numbers in trash instead of restoring the old set.
+                                                // We simply mark hover as inactive and leave the current trash state.
+                                                try { window.__hoverActive = false; } catch (e) { }
+                                                // NOTE: `window.__hoverPrevTrash` intentionally preserved so
+                                                // the original pre-hover state remains available if needed.
+                                            } catch (e) { }
+                                        });
+
                                         tr.addEventListener('dragend', (e) => {
                                             try {
                                                 const tt = document.getElementById('trashToggle');
