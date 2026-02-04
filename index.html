@@ -785,6 +785,16 @@
             margin-bottom: 14px;
         }
 
+        /* By default, numtrash-related wrappers are hidden; they only
+           become visible when the parent controls container is in
+           `.unpair-mode`. This prevents leftover inline styles from
+           showing unpair UI when switching modes. */
+        #cell6_5 .numtrash-wrapper {
+            display: none !important;
+            pointer-events: none;
+            visibility: hidden !important;
+        }
+
         /* When unpair mode is active inside Cell6.5, show only the numtrash field */
         #cell6_5 .controls.unpair-mode>* {
             display: none !important;
@@ -792,6 +802,8 @@
 
         #cell6_5 .controls.unpair-mode>.numtrash-wrapper {
             display: flex !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
         }
 
         /* Highlight a row while it's being dragged out from Cell6.5 (unpair)
@@ -6186,6 +6198,10 @@
                                 try {
                                     if (el.classList && el.classList.contains('numtrash-wrapper')) {
                                         el.style.display = isUnpair ? 'flex' : '';
+                                        // also restore visibility/pointer events when showing
+                                        el.style.visibility = isUnpair ? 'visible' : '';
+                                        el.style.pointerEvents = isUnpair ? 'auto' : '';
+                                        try { Array.from(el.querySelectorAll('input,select,button')).forEach(i => { try { i.disabled = !isUnpair; } catch (e) { } }); } catch (e) { }
                                     } else {
                                         el.style.display = isUnpair ? 'none' : '';
                                     }
@@ -6196,6 +6212,11 @@
                             if (isUnpair) {
                                 try { controls.style.display = ''; } catch (e) { }
                             }
+
+                            // enable/disable optimizer checkbox/select and numTrash input
+                            try { if (typeof optChk !== 'undefined' && optChk) optChk.disabled = !isUnpair; } catch (e) { }
+                            try { if (typeof numTrashInput !== 'undefined' && numTrashInput) numTrashInput.disabled = !isUnpair; } catch (e) { }
+                            try { if (typeof optSel !== 'undefined' && optSel) optSel.disabled = !(isUnpair && optChk && optChk.checked); } catch (e) { }
 
                             const lk = (body && body.__lkControls) ? body.__lkControls : null;
                             const modeSelect = (body && body.__modeSel) ? body.__modeSel : null;
