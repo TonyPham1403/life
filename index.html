@@ -857,14 +857,34 @@
             text-align: center !important;
         }
 
-        /* Allow the second column (dontmatch) to expand to the right
-           instead of compressing the num column. Make its text left-aligned
-           and allow normal wrapping/overflow so long strings grow rightward. */
+        /* Second column (KQ) should not wrap — keep results on one line.
+           Longer KQ content will overflow horizontally instead. */
         #cell6_5 table td:nth-child(2) {
             text-align: left !important;
-            white-space: normal !important;
+            white-space: nowrap !important;
             overflow: visible !important;
             padding-left: 12px !important;
+        }
+
+        /* Prevent the "kết quả" (result) column in Cell6.5 (truy x) from
+           wrapping to a new line when the content is long. Allow it to overflow
+           visually instead of forcing a line-break inside the table cell. */
+        #cell6_5 table th:last-child,
+        #cell6_5 table td:last-child {
+            white-space: nowrap !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            max-width: none !important;
+        }
+
+        /* Ensure the table and surrounding card allow visible overflow so
+           long result strings can extend outside the table instead of wrapping. */
+        #cell6_5 .card,
+        #cell6_5 .card .card-inner-child,
+        #cell6_5 table {
+            overflow: visible !important;
+            table-layout: auto !important;
+            width: auto !important;
         }
 
         /* Remove right margin caused by inner child of the 6th control in Cell6.6 */
@@ -1143,6 +1163,22 @@
             font-family: monospace;
             min-width: 20px;
             text-align: center;
+        }
+
+        /* For Cell6.5: ensure Euclid pill (last column) never wraps and
+           is allowed to overflow outside the table visually. */
+        #cell6_5 table th:last-child,
+        #cell6_5 table td:last-child {
+            overflow: visible !important;
+            white-space: nowrap !important;
+        }
+
+        #cell6_5 table th:last-child .euclid-pill,
+        #cell6_5 table td:last-child .euclid-pill {
+            display: inline-block !important;
+            white-space: nowrap !important;
+            overflow: visible !important;
+            max-width: none !important;
         }
 
         .euclid-pill.empty {
