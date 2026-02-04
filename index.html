@@ -13530,6 +13530,28 @@
         })();
     </script>
     </script>
+    <script>
+        // Keyboard helper: in Cell6.5 unpair mode, let `w` / `s` adjust the numtrash value
+        (function () {
+            document.addEventListener('keydown', (e) => {
+                try {
+                    const key = (e.key || '').toLowerCase();
+                    if (key !== 'w' && key !== 's') return;
+                    const active = document.activeElement;
+                    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+                    const controls = document.querySelector('#cell6_5 .controls.unpair-mode');
+                    if (!controls) return; // only when cell6_5 is in unpair-mode
+                    const upBtn = document.querySelector('#cell6_5 .numtrash-wrapper .arrow-up');
+                    const downBtn = document.querySelector('#cell6_5 .numtrash-wrapper .arrow-down');
+                    if (key === 'w') {
+                        if (upBtn) { upBtn.click(); e.preventDefault(); }
+                    } else if (key === 's') {
+                        if (downBtn) { downBtn.click(); e.preventDefault(); }
+                    }
+                } catch (err) { /* ignore errors */ }
+            }, true);
+        })();
+    </script>
     <!-- Instant floating tooltip for Cell5.5 / Cell6.5 / Cell6.6 rows: appears immediately and follows the cursor -->
     <script>
         (function () {
