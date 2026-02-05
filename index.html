@@ -2216,15 +2216,17 @@
             box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
         }
 
-        /* Hide all visible content (rank badges and main number) inside
-           trashed cells when rendered in the popup. This keeps the cell
-           visually flagged red but removes readable text/rank. */
+        /* Hide visible content (rank badges and main number) inside
+           trashed cells when rendered in the popup, but preserve layout
+           so the table row height does not collapse. Use visibility +
+           opacity instead of display:none to keep cell box size. */
         #numberPickerPopup #numberPickerTable td.in-trash .rank-in-cell,
         #numberPickerPopup #numberPickerTable td.in-trash .pill,
         #numberPickerPopup #numberPickerTable td.in-trash .number-main,
         #numberPickerPopup #numberPickerTable td.in-trash>span:not(.rank-in-cell):not(.pill) {
-            display: none !important;
             visibility: hidden !important;
+            opacity: 0 !important;
+            color: transparent !important;
         }
 
         /* Keep trashed cells visibly red for direct hover/selection/inline-style.
@@ -2241,13 +2243,12 @@
         }
 
         /* Additional hard override: ensure no descendant text or inline styles
-           inside popup trashed cells can show green/black text. This forces
-           children to be hidden and text to be transparent even under hover,
-           highlight, selection, or inline-style overrides applied by JS. */
+           inside popup trashed cells can show green/black text. Use
+           visibility/opacity instead of removing layout to avoid collapsing
+           the row height. Keep pointer-events disabled. */
         #numberPickerPopup #numberPickerTable td.in-trash *,
         #numberPickerPopup.number-picker-popup.show #numberPickerTable td.in-trash *,
         .number-picker-popup #numberPickerTable td.in-trash * {
-            display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
             color: transparent !important;
@@ -3514,12 +3515,24 @@
             infoBtn.style.fontSize = '12px';
             infoBtn.style.marginLeft = '6px';
 
-            // Trash filter selector (compact): include | exclude
-            const trashSel = document.createElement('select');
-            [["include", "include"], ["exclude", "exclude"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; trashSel.appendChild(o); });
+            // Trash filter toggle (click to toggle include|exclude)
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell5_5_trashSel'; trashSel.className = 'trash-mode trash-toggle'; } catch (e) { }
+            trashSel.type = 'button';
             trashSel.value = 'include';
-            // stable id so external listeners can find current selector after re-renders
-            try { trashSel.id = 'cell5_5_trashSel'; trashSel.className = 'trash-mode'; } catch (e) { }
+            trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.style.padding = '6px 10px';
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    // emit change so code that assigns .onchange will run
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { if (typeof draw === 'function') draw(); } catch (e) { }
+                } catch (e) { }
+            });
 
             controls.append(sortSel, "Năm:", yearSel, "Tháng:", monthSel, "Trash:", trashSel, infoBtn);
             body.appendChild(controls);
@@ -5114,19 +5127,23 @@
                 controls.append(container);
             });
 
-            // trash selector for Cell6.6 — kept in sync with Cell6.5
-            const trashSel = document.createElement('select');
-            ['include', 'exclude'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; trashSel.appendChild(o); });
+            // trash toggle for Cell6.6 — kept in sync with Cell6.5
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell6_6_trashSel'; trashSel.className = 'trash-mode trash-toggle'; trashSel.style.cssText = 'width:100px;margin-left:4px;height:28px;vertical-align:middle;'; } catch (e) { }
+            trashSel.type = 'button';
             trashSel.value = 'include';
-            try { trashSel.id = 'cell6_6_trashSel'; trashSel.className = 'trash-mode'; trashSel.style.cssText = 'width:100px;margin-left:4px;height:28px;vertical-align:middle;'; } catch (e) { }
-            trashSel.title = 'Trash mode (include/exclude)';
-            trashSel.addEventListener('change', () => {
+            trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.addEventListener('click', () => {
                 try {
-                    const other = document.getElementById('cell6_5_trashSel');
-                    if (other) other.value = trashSel.value;
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    // sync other selector if present
+                    try { const other = document.getElementById('cell6_5_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { draw(); } catch (e) { }
                 } catch (e) { }
-                try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                try { draw(); } catch (e) { }
             });
 
             // keep this selector in sync when popup or Cell6.5 updates trash
@@ -6148,14 +6165,23 @@
             // initial build
             rebuildComboExtras();
 
-            // Trash selector (copied from Cell5.5): compact include/exclude toggle
-            const trashSel = document.createElement('select');
-            ['include', 'exclude'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; trashSel.appendChild(o); });
+            // Trash toggle (copied from Cell5.5): compact include/exclude toggle button
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell6_5_trashSel'; trashSel.className = 'trash-mode trash-toggle'; } catch (e) { }
+            trashSel.type = 'button';
             trashSel.value = 'include';
-            trashSel.title = 'Trash mode (include/exclude)';
+            trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
             trashSel.style.cssText = 'width:120px;';
-            // stable id so external listeners can find current selector after re-renders
-            try { trashSel.id = 'cell6_5_trashSel'; trashSel.className = 'trash-mode'; } catch (e) { }
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    try { const other = document.getElementById('cell6_6_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                } catch (e) { }
+            });
 
             // Special input for Unpair mode: only one numeric field 'numtrash' (1..44)
             // Remove any previously-created wrappers to avoid duplicate labels after re-renders
@@ -13039,8 +13065,14 @@
                     e.dataTransfer.effectAllowed = 'move';
                     // track dragged number and whether it originated in the trash
                     draggingNumber = parsed;
-                    if (source === 'trash') draggingFromTrash = parsed;
-                    else draggingFromTrash = null;
+                    // track both a boolean/origin and an explicit source string for fallbacks
+                    if (source === 'trash') {
+                        draggingFromTrash = parsed;
+                    } else {
+                        draggingFromTrash = null;
+                    }
+                    // store explicit source for dragend fallback handling
+                    try { window.__lastDragSource = source; } catch (e) { }
                 } catch (err) { }
             }, true);
 
@@ -13105,18 +13137,39 @@
             // restore the item when drag ends outside the trash popup (fixes intermittent "stuck" behavior)
             document.addEventListener('dragend', (e) => {
                 try {
-                    if (!draggingFromTrash) return;
-                    // prefer last known dragover coords, fallback to dragend client coords
-                    const x = lastDragClientX || e.clientX || 0;
-                    const y = lastDragClientY || e.clientY || 0;
-                    const el = document.elementFromPoint(x, y);
-                    const endedOverTrash = el && el.closest && el.closest('#trashPopup');
-                    if (!endedOverTrash) {
-                        // restore the item if drag ended outside the trash popup
-                        restoreFromTrash(draggingFromTrash);
+                    // If the drag started from the trash and didn't end over the trash, restore it.
+                    if (draggingFromTrash) {
+                        // prefer last known dragover coords, fallback to dragend client coords
+                        const x = lastDragClientX || e.clientX || 0;
+                        const y = lastDragClientY || e.clientY || 0;
+                        const el = document.elementFromPoint(x, y);
+                        const endedOverTrash = el && el.closest && el.closest('#trashPopup');
+                        if (!endedOverTrash) {
+                            // restore the item if drag ended outside the trash popup
+                            restoreFromTrash(draggingFromTrash);
+                        }
+                    } else {
+                        // Fallback: if the drag started from the popup and ended outside the popup,
+                        // treat it as move-to-trash to cover cases where a native `drop` event
+                        // did not fire reliably on the target.
+                        try {
+                            const source = (window && window.__lastDragSource) ? window.__lastDragSource : null;
+                            if (source === 'popup' && typeof draggingNumber !== 'undefined' && draggingNumber !== null && draggingNumber !== 0 && trashEnabled) {
+                                const x = lastDragClientX || e.clientX || 0;
+                                const y = lastDragClientY || e.clientY || 0;
+                                const el = document.elementFromPoint(x, y);
+                                const endedOverPicker = el && el.closest && el.closest('#numberPickerPopup');
+                                const endedOverTrash = el && el.closest && el.closest('#trashPopup');
+                                // only move to trash when drag ended outside the picker and not over the trash (in which case drop handler handled it)
+                                if (!endedOverPicker && !endedOverTrash) {
+                                    try { moveToTrash(draggingNumber); } catch (err) { }
+                                }
+                            }
+                        } catch (err) { }
                     }
                 } catch (err) { }
                 draggingFromTrash = null;
+                try { window.__lastDragSource = null; } catch (e) { }
             }, true);
 
             // When popup content regenerates, ensure positioning updates
