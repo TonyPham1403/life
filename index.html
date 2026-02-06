@@ -1148,6 +1148,15 @@
             font-family: monospace;
         }
 
+        /* Ensure fav-marked pills keep their yellow background even when the row/card is hovered */
+        #cell5_5 table tr:hover .pill.in-fav,
+        #cell5_5 table tr.popup-number-highlight .pill.in-fav,
+        #cell5_5 .card .card-body tr:hover .pill.in-fav {
+            background: #f8f333 !important;
+            color: #000 !important;
+            box-shadow: 0 6px 18px rgba(248, 243, 51, 0.12) !important;
+        }
+
         /* Euclid small framed pills (default style copied from day.html) */
         .euclid-pill {
             display: inline-block;
@@ -2108,10 +2117,144 @@
 
         #trashPopup td {
             padding: 6px;
+
+        }
+
+        /* Favorite popup styles: reuse and mirror trash popup visuals */
+        #favPopup .clear-btn {
+            display: inline-block !important;
+            color: var(--text) !important;
+            background: var(--card) !important;
+            border: 1px solid var(--border) !important;
+            padding: 6px 10px !important;
+            height: 32px !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            z-index: 10005 !important;
+        }
+
+        #favPopup {
+            /* match trash popup positioning and transform behaviour */
+            z-index: 10001;
+            position: absolute;
+            left: calc(-1 * (var(--trash-width, 420px) + 12px));
+            top: 8px;
+            display: none;
+            background: var(--card);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            overflow-y: auto;
+            overflow-x: hidden;
+            transform-origin: top right;
+            will-change: transform, width, height, left, top;
+        }
+
+        /* keep table behaviour identical so scaling/resizing is consistent */
+        #favPopup table {
+            width: 100%;
+            max-width: var(--trash-width);
+            border-collapse: collapse;
+            table-layout: fixed;
+            transform: none !important;
+        }
+
+        /* Use same 3-column, aspect-ratio layout as trash popup */
+        #favPopup td,
+        #favPopup td.fav-number {
+            width: calc(100% / 3);
+            max-width: calc(100% / 3);
+            aspect-ratio: 1 / 1.732;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            padding: 6px;
+            box-sizing: border-box;
             text-align: center;
             vertical-align: middle;
             cursor: grab;
+            background: var(--cell-bg-color, #fffbea);
+            color: #000000;
+            font-weight: 700;
+            border: 2px solid var(--connection-line-color);
+            box-shadow: 0 2px 8px rgba(255, 251, 234, 0.4);
+        }
+
+        /* inner flex wrapper inside each fav cell to position rank and number like trash */
+        #favPopup td.fav-number>.trash-inner {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            height: 100%;
             box-sizing: border-box;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        /* position rank/pill left of main number and preserve same ordering as trash */
+        #favPopup td.fav-number .rank-in-cell,
+        #favPopup td.fav-number .pill {
+            margin-right: 6px;
+            order: 0;
+        }
+
+        #favPopup td.fav-number .number-main,
+        #favPopup td.fav-number span:not(.pill):not(.rank-in-cell) {
+            order: 1;
+        }
+
+        #favPopup td.fav-number:active {
+            cursor: grabbing;
+        }
+
+        /* Scale handle for fav popup (mirror trash popup bottom-left handle) */
+        #favPopup .trash-scale-handle {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 18px;
+            height: 18px;
+            background: transparent;
+            border-radius: 4px;
+            cursor: nesw-resize;
+            z-index: 10002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.9;
+            pointer-events: auto;
+        }
+
+        #favPopup .trash-scale-handle:after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid var(--border);
+            border-bottom: 2px solid var(--border);
+            transform: rotate(45deg);
+            opacity: 0.9;
+        }
+
+        /* Favorite marker: highlight numbers inside the main number-picker popup when marked fav */
+        #numberPickerPopup #numberPickerTable td.in-fav {
+            background: #f8f333 !important;
+            color: #000 !important;
+            font-weight: 800 !important;
+            box-shadow: 0 2px 8px rgba(248, 243, 51, 0.28);
+        }
+
+        /* Empty fav slot: render as visually blank (no background/border/shadow) */
+        #favPopup td:empty {
+            background: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
+            cursor: default !important;
+            pointer-events: none;
+            min-height: 40px;
+            /* keep layout height consistent */
         }
 
         /* Each trash cell: 3 columns, responsive and keep aspect ratio */
@@ -2255,6 +2398,23 @@
             pointer-events: none !important;
         }
 
+        /* Make the injected restore handle visible and interactive despite
+           the global hiding of trashed cell descendants. */
+        #numberPickerPopup #numberPickerTable td.in-trash .restore-handle {
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: inherit !important;
+            pointer-events: auto !important;
+            position: absolute;
+            right: 6px;
+            top: 6px;
+            z-index: 2100;
+            touch-action: manipulation;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Extra overlay: create an absolutely positioned red layer that fully
            covers the trashed cell. This prevents other styling (outline,
            box-shadow, or pseudo-elements) from visually overriding the red
@@ -2273,6 +2433,37 @@
             background: #ff1744 !important;
             border-radius: inherit !important;
             box-shadow: inset 0 2px 8px rgba(229, 27, 59, 0.12) !important;
+            z-index: 2001 !important;
+            pointer-events: none !important;
+        }
+
+        /* Fav overlay: show split (dark-green / yellow) only when the
+           popup highlights the cell (hover) or when it's explicitly selected.
+           This mirrors the 'in-trash.popup-number-highlight' behavior so the
+           fav overlay appears only during hover/selection. */
+        #numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight,
+        .number-picker-popup#numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight,
+        #numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight[style],
+        .number-picker-popup #numberPickerTable td.in-fav.popup-number-highlight[style],
+        #numberPickerPopup #numberPickerTable td.in-fav.selected-number,
+        .number-picker-popup #numberPickerTable td.in-fav[style].selected-number {
+            position: relative !important;
+            z-index: 2000 !important;
+        }
+
+        #numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight::before,
+        .number-picker-popup#numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight::before,
+        #numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight[style]::before,
+        .number-picker-popup #numberPickerTable td.in-fav.popup-number-highlight[style]::before,
+        #numberPickerPopup #numberPickerTable td.in-fav.selected-number::before,
+        .number-picker-popup #numberPickerTable td.in-fav[style].selected-number::before {
+            content: '' !important;
+            position: absolute !important;
+            inset: 0 !important;
+            /* left half: dark green; right half: yellow (semi-transparent) */
+            background: linear-gradient(90deg, rgba(0, 70, 255, 0.56) 0%, rgba(0, 255, 255, 0.56) 100%) !important;
+            border-radius: inherit !important;
+            box-shadow: inset 0 2px 8px rgba(34, 139, 34, 0.08) !important;
             z-index: 2001 !important;
             pointer-events: none !important;
         }
@@ -2377,25 +2568,41 @@
             box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28) !important;
         }
 
-        /* Small visual for the trash button when active */
+        /* Small visual for the trash and fav buttons when active */
         /* allow badge to overflow without being clipped by ancestors */
         #modeRowRank>div,
         #modeRowRank,
-        #trashBtn {
+        #trashBtn,
+        #favBtn {
             overflow: visible;
         }
 
-        #trashBtn {
+        /* Ensure fav button uses the same base styling as trash so their
+           badges render identically and sit in the same corner. Make
+           icon sizing explicit so emoji vs glyphs render at the same size. */
+        #trashBtn,
+        #favBtn {
             position: relative;
             /* allow corner badge positioning */
             background: transparent;
             border: 1px solid var(--border);
-            padding: 6px 8px;
+            /* normalize layout so both icons match visually */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            padding: 6px;
+            min-width: 40px;
+            min-height: 40px;
             border-radius: 6px;
             cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            font-family: "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
         }
 
-        #trashBtn.disabled {
+        #trashBtn.disabled,
+        #favBtn.disabled {
             opacity: 0.45;
             cursor: not-allowed;
         }
@@ -2428,13 +2635,14 @@
             display: none;
         }
 
-        #trashToggle {
-            background: var(--card);
-            border: 1px solid var(--border);
-            padding: 6px 8px;
-            border-radius: 6px;
-            cursor: pointer;
+        /* Fav badge should use a darker green accent while trash remains red */
+        #favBadge {
+            background: #2e7d32;
+            border-color: #1b5e20;
+            color: #ffffff;
         }
+
+        /* `#trashToggle` removed: trash is always enabled by default. */
 
         /* Stronger enforcement: ensure the split (50% dark / 50% red)
            gradient appears for trashed popup cells when they are highlighted.
@@ -2652,6 +2860,33 @@
             display: inline-block;
             align-self: center;
         }
+
+        /* ===== Fav visual adjustments =====
+           Move the prominent yellow border from the main popup cells
+           to the favorite-popup cells themselves. Keep the main popup
+           `in-fav` marker minimal so selection/hover visuals remain stable. */
+        #numberPickerPopup #numberPickerTable td.in-fav {
+            /* Keep fav numbers prominent in the main popup: yellow background */
+            background: #f8f333 !important;
+            color: #000 !important;
+            font-weight: 800 !important;
+            box-shadow: 0 6px 18px rgba(248, 243, 51, 0.12) !important;
+            outline: none !important;
+        }
+
+        /* Apply thin yellow border to favorite numbers inside the fav popup */
+        #favPopup td.fav-number {
+            border: 2px solid #f8f333 !important;
+            box-shadow: 0 6px 18px rgba(248, 243, 51, 0.12) !important;
+        }
+
+        /* Highlight fav numbers inside Cell5.5 result pills */
+        #cell5_5 .pill.in-fav {
+            background: #2e7d32 !important;
+            /* green */
+            color: #fff !important;
+            box-shadow: 0 2px 6px rgba(46, 125, 50, 0.18);
+        }
     </style>
 </head>
 
@@ -2686,7 +2921,7 @@
                     <div style="display:flex;align-items:center;gap:8px;">
                         <button id="trashBtn" title="Thùng rác" aria-label="Thùng rác">🗑️<span id="trashBadge"
                                 class="trash-badge hidden" aria-hidden="true"></span></button>
-                        <button id="trashToggle" title="Bật thùng rác">Off</button>
+                        <button id="favBtn" title="Yêu thích" aria-label="Yêu thích">⭐</button>
                     </div>
                     <div id="rankSummary"
                         style="font-size:14px;font-weight:700;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 auto;">
@@ -2991,6 +3226,48 @@
                 } catch (e) { /* ignore */ }
             });
         }
+
+        // Sync favorite markers from fav list/popup into the main number picker table
+        function syncFavHighlights() {
+            try {
+                const numberPickerTable = document.getElementById('numberPickerTable');
+                if (!numberPickerTable) return;
+                // clear previous fav markers
+                numberPickerTable.querySelectorAll('td.in-fav').forEach(td => td.classList.remove('in-fav'));
+
+                let favs = [];
+                if (window.getFavItems && typeof window.getFavItems === 'function') {
+                    favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                } else if (typeof favItems !== 'undefined' && Array.isArray(favItems) && favItems.length) {
+                    favs = favItems.slice().map(n => Number(n)).filter(n => Number.isFinite(n));
+                } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                    favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                } else {
+                    const f = document.getElementById('favPopup');
+                    if (f) {
+                        favs = Array.from(f.querySelectorAll('td.fav-number')).map(td => {
+                            try {
+                                const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                if (dn) return Number(dn);
+                                const txt = String(td.textContent || '');
+                                const m = txt.match(/(\d+)/);
+                                return m ? Number(m[1]) : null;
+                            } catch (e) { return null; }
+                        }).filter(n => Number.isFinite(n));
+                    }
+                }
+
+                favs.forEach(n => {
+                    try {
+                        const cell = numberPickerTable.querySelector(`td[data-number="${n}"]`);
+                        if (cell) cell.classList.add('in-fav');
+                    } catch (e) { /* ignore */ }
+                });
+            } catch (e) { /* ignore */ }
+        }
+
+        // Listen for fav changes and resync
+        try { document.addEventListener('favchange', () => { try { syncFavHighlights(); } catch (e) { } }, true); } catch (e) { }
 
         // Debounce helper to prevent excessive function calls
         const createDebounce = (fn, delay = 100) => {
@@ -3534,7 +3811,26 @@
                 } catch (e) { }
             });
 
-            controls.append(sortSel, "Năm:", yearSel, "Tháng:", monthSel, "Trash:", trashSel, infoBtn);
+            // Fav filter toggle (click to toggle include|exclude) - default exclude
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell5_5_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button';
+            favSel.value = 'exclude';
+            favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px';
+            favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { if (typeof draw === 'function') draw(); } catch (e) { }
+                } catch (e) { }
+            });
+
+            controls.append(sortSel, "Năm:", yearSel, "Tháng:", monthSel, "Trash:", trashSel, "Fav:", favSel, infoBtn);
             body.appendChild(controls);
 
             // Ensure Cell5.5 redraws when the popup trash changes (only add listener once)
@@ -3559,6 +3855,26 @@
                         } catch (e) { }
                     });
                     window.__cell5_5_trash_listener_added = true;
+                }
+            } catch (e) { /* ignore */ }
+
+            // Ensure Cell5.5 redraws when the fav popup changes (only add listener once)
+            try {
+                if (!window.__cell5_5_fav_listener_added) {
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell5_5_favSel');
+                            const other = document.getElementById('cell6_6_favSel');
+                            const isInclude = (cur && String(cur.value) === 'include') || (other && String(other.value) === 'include');
+                            if (isInclude) {
+                                try { groupCache = null; } catch (e) { }
+                                try { cacheKey = null; } catch (e) { }
+                                try { baselineArrAll = null; baselineArrGlobal = null; baselineCountsMap = null; baselineAllKeys = null; baselineGlobalKeys = null; } catch (e) { }
+                                try { if (typeof draw === 'function') draw(); else if (typeof group === 'function') group(); } catch (err) { /* ignore */ }
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell5_5_fav_listener_added = true;
                 }
             } catch (e) { /* ignore */ }
 
@@ -3949,6 +4265,85 @@
                         }
                     }
                 } catch (e) { /* ignore trash filter errors */ }
+
+                // Apply fav-include filter when requested: if favSel is set to 'include',
+                // keep only records that contain at least one number currently in the fav popup.
+                try {
+                    if (typeof favSel !== 'undefined' && favSel.value === 'include') {
+                        let favs = [];
+                        try {
+                            if (window.getFavItems && typeof window.getFavItems === 'function') {
+                                favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                            } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                                favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                            } else {
+                                // try to read favPopup cells (prefer dataset.number)
+                                const f = document.getElementById('favPopup');
+                                if (f) {
+                                    favs = Array.from(f.querySelectorAll('td.fav-number')).map(td => {
+                                        try {
+                                            const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                            if (dn) return Number(dn);
+                                            const txt = String(td.textContent || '');
+                                            const m = txt.match(/(\d+)/);
+                                            return m ? Number(m[1]) : null;
+                                        } catch (e) { return null; }
+                                    }).filter(n => Number.isFinite(n));
+                                }
+                            }
+                        } catch (e) { favs = []; }
+                        if (favs) {
+                            const fset = new Set((favs || []).map(n => Number(n)));
+                            // read filter operator/count from favPopup controls (fallbacks provided)
+                            let op = '>=';
+                            let req = 1;
+                            try {
+                                const fpop = document.getElementById('favPopup');
+                                if (fpop) {
+                                    const opEl = fpop.querySelector('#favFilterOp');
+                                    const cntEl = fpop.querySelector('#favFilterCount');
+                                    if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value;
+                                    if (cntEl) {
+                                        const v = Number(cntEl.value);
+                                        if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v)));
+                                    }
+                                }
+                            } catch (e) { }
+
+                            data = data.filter(d => {
+                                const nums = d.nums || [];
+                                let matchCount = 0;
+                                for (const n of nums) if (fset.has(Number(n))) matchCount++;
+                                if (op === '>=') return matchCount >= req;
+                                if (op === '=') return matchCount === req;
+                                if (op === '<=') return matchCount <= req;
+                                return matchCount >= req;
+                            });
+                        }
+                    }
+                } catch (e) { /* ignore fav filter errors */ }
+                // Build favSet for highlighting numbers in the rendered result pills
+                let __cell5_5_favSet = new Set();
+                try {
+                    let favsForMark = [];
+                    if (window.getFavItems && typeof window.getFavItems === 'function') favsForMark = (window.getFavItems() || []).slice();
+                    else if (Array.isArray(window.__favItems) && window.__favItems.length) favsForMark = (window.__favItems || []).slice();
+                    else {
+                        const fpop = document.getElementById('favPopup');
+                        if (fpop) {
+                            favsForMark = Array.from(fpop.querySelectorAll('td.fav-number')).map(td => {
+                                try {
+                                    const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                    if (dn) return Number(dn);
+                                    const txt = String(td.textContent || '');
+                                    const m = txt.match(/(\d+)/);
+                                    return m ? Number(m[1]) : null;
+                                } catch (e) { return null; }
+                            }).filter(n => Number.isFinite(n));
+                        }
+                    }
+                    __cell5_5_favSet = new Set((favsForMark || []).map(n => Number(n)).filter(n => Number.isFinite(n)));
+                } catch (e) { __cell5_5_favSet = new Set(); }
                 // Helper: parse common dd/mm/yyyy or dd/mm/yy or digit-only forms into timestamp
                 function parseDateSortable(s) {
                     if (!s) return 0;
@@ -4076,7 +4471,11 @@
                     try {
                         const rowsData = page.map((row) => {
                             const result = (row.nums || []).join(',');
-                            const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            const numsHtml = (row.nums || []).map(v => {
+                                const inFav = __cell5_5_favSet.has(Number(v));
+                                const cls = inFav ? 'pill in-fav' : 'pill';
+                                return `<span class='${cls}' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`;
+                            }).join(" ");
                             let t = 0;
                             try {
                                 if (typeof window.getRowTrashK === 'function') {
@@ -4131,7 +4530,11 @@
                         // fallback: render without tooltip
                         page.forEach((row, j) => {
                             const result = (row.nums || []).join(',');
-                            const numsHtml = (row.nums || []).map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            const numsHtml = (row.nums || []).map(v => {
+                                const inFav = __cell5_5_favSet.has(Number(v));
+                                const cls = inFav ? 'pill in-fav' : 'pill';
+                                return `<span class='${cls}' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`;
+                            }).join(" ");
                             // fallback: try to compute k via global helper if available
                             let tFallback = '';
                             try { if (typeof getRowTrashK === 'function') tFallback = getRowTrashK(row); else if (typeof window.getRowTrashK === 'function') tFallback = window.getRowTrashK(row); } catch (e) { tFallback = ''; }
@@ -6966,8 +7369,8 @@
 
                                         tr.addEventListener('dragend', (e) => {
                                             try {
-                                                const tt = document.getElementById('trashToggle');
-                                                const trashIsOn = tt && String((tt.textContent || '').trim()).toLowerCase() === 'on';
+                                                // `trashToggle` element removed; trash is always on.
+                                                const trashIsOn = true;
                                                 const state = window.__draggingUnpair || null;
                                                 let addedToTrash = false;
                                                 let restoredFromTrash = false;
@@ -10721,6 +11124,9 @@
                     }
                 } catch (e) { /* ignore */ }
 
+                // Ensure favorite markers are synced after regeneration
+                try { syncFavHighlights(); } catch (e) { /* ignore */ }
+
                 // Draw connections after table is rendered
                 requestAnimationFrame(() => drawConnections());
             }
@@ -11624,8 +12030,9 @@
                 setTimeout(() => {
                     numberPickerPopup.style.display = 'none';
                 }, 300);
-                // also hide trash popup when picker closes
+                // also hide trash and fav popups when picker closes
                 try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
+                try { const f = document.getElementById('favPopup'); if (f) f.style.display = 'none'; } catch (e) { }
                 // Hide scale handle
                 const handle = document.querySelector('.popup-scale-handle');
                 if (handle) {
@@ -11665,8 +12072,9 @@
                     setTimeout(() => {
                         numberPickerPopup.style.display = 'none';
                     }, 300);
-                    // hide trash popup when picker is programmatically hidden via toggle
+                    // hide trash and fav popups when picker is programmatically hidden via toggle
                     try { const t = document.getElementById('trashPopup'); if (t) t.style.display = 'none'; } catch (e) { }
+                    try { const f = document.getElementById('favPopup'); if (f) f.style.display = 'none'; } catch (e) { }
                 }
 
                 // Show/hide scale handle
@@ -11741,13 +12149,14 @@
                         setTimeout(() => {
                             numberPickerPopup.style.display = 'none';
                         }, 300);
-                        // hide trash popup when picker is programmatically hidden via Ctrl toggle
+                        // hide trash and fav popups when picker is programmatically hidden via Ctrl toggle
                         try {
                             const t = document.getElementById('trashPopup');
                             // record previous visible state so we can restore when opening again
                             window.__prevTrashVisible = !!(t && (getComputedStyle(t).display !== 'none'));
                             if (t) t.style.display = 'none';
                         } catch (e) { }
+                        try { const f = document.getElementById('favPopup'); if (f) f.style.display = 'none'; } catch (e) { }
                     }
 
                     // Show/hide scale handle
@@ -11808,9 +12217,25 @@
                             }
                             t.style.left = (curLeft + dx) + 'px';
                             t.style.top = (curTop + dy) + 'px';
+                            // Also move fav popup by same delta if it's shown separately
+                            try {
+                                const f = document.getElementById('favPopup');
+                                if (f && f.style.display === 'block' && f.parentElement === document.body) {
+                                    let fLeft = parseFloat(f.style.left);
+                                    let fTop = parseFloat(f.style.top);
+                                    if (isNaN(fLeft) || isNaN(fTop)) {
+                                        if (typeof adjustFavPosition === 'function') adjustFavPosition();
+                                        fLeft = parseFloat(f.style.left) || 0;
+                                        fTop = parseFloat(f.style.top) || 0;
+                                    }
+                                    f.style.left = (fLeft + dx) + 'px';
+                                    f.style.top = (fTop + dy) + 'px';
+                                }
+                            } catch (e) { /* ignore fav move errors */ }
                         } else {
                             // fallback: if trash is child of popup or not visible, keep regular adjust behavior
                             if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
+                            try { if (typeof adjustFavPosition === 'function') adjustFavPosition(); } catch (e) { }
                         }
                     } catch (err) { /* ignore */ }
                     // update last drag mouse pos for next delta
@@ -12109,6 +12534,123 @@
         });
     </script>
     <script>
+        // Enable drag-and-drop from number picker into fav slots.
+        (function enableFavDragDrop() {
+            const numberTableSelector = '#numberPickerTable';
+            // make number cells draggable and attach dragstart events
+            function setDraggableOnNumbers(root = document) {
+                const table = root.querySelector(numberTableSelector);
+                if (!table) return;
+                table.querySelectorAll('td').forEach(td => {
+                    if (td.dataset.dragInit) return;
+                    // prefer a numeric data-number attribute when present
+                    const dsNum = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                    const textFallback = td.textContent ? td.textContent.trim() : '';
+                    const numeric = dsNum || (textFallback.match && (textFallback.match(/\d+/) || [])[0]) || textFallback;
+                    if (!numeric) return;
+                    td.setAttribute('draggable', 'true');
+                    td.addEventListener('dragstart', (ev) => {
+                        try {
+                            // ensure favPopup receives a plain numeric string so Number(...) works
+                            ev.dataTransfer.setData('text/plain', String(numeric));
+                            ev.dataTransfer.setData('application/x-number-src', String(numeric));
+                            ev.dataTransfer.setData('source', 'popup');
+                            ev.dataTransfer.effectAllowed = 'copy';
+                        } catch (e) { }
+                        td.classList.add('dragging-number');
+                    });
+                    td.addEventListener('dragend', () => td.classList.remove('dragging-number'));
+                    td.dataset.dragInit = '1';
+                });
+            }
+
+            // Initial attempt to enable draggables and observe future changes
+            setDraggableOnNumbers();
+            const table = document.querySelector(numberTableSelector);
+            if (table) {
+                const mo = new MutationObserver(() => setDraggableOnNumbers());
+                mo.observe(table, { childList: true, subtree: true });
+            } else {
+                const mo2 = new MutationObserver(() => {
+                    if (document.querySelector(numberTableSelector)) {
+                        setDraggableOnNumbers();
+                        mo2.disconnect();
+                    }
+                });
+                mo2.observe(document.body, { childList: true, subtree: true });
+            }
+
+            // Helper to find fav slot cell (td.fav-number) from event target
+            function findFavSlot(el) {
+                return el && el.closest && el.closest('#favPopup td.fav-number');
+            }
+
+            document.addEventListener('dragover', (ev) => {
+                const slot = findFavSlot(ev.target);
+                if (slot) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; slot.classList.add('fav-drop-target'); }
+            }, true);
+
+            document.addEventListener('dragleave', (ev) => {
+                const slot = findFavSlot(ev.target);
+                if (slot) slot.classList.remove('fav-drop-target');
+            }, true);
+
+            document.addEventListener('drop', (ev) => {
+                const slot = findFavSlot(ev.target);
+                if (!slot) return;
+                ev.preventDefault();
+                slot.classList.remove('fav-drop-target');
+                const numberText = ev.dataTransfer.getData('text/plain') || ev.dataTransfer.getData('application/x-number-src');
+                if (!numberText) return;
+                // Try to reuse existing dblclick -> fav logic by finding the source cell and dispatching dblclick
+                const table = document.querySelector(numberTableSelector);
+                let srcCell = null;
+                if (table) {
+                    const t = numberText.trim();
+                    srcCell = Array.from(table.querySelectorAll('td')).find(td => {
+                        const txt = td.textContent.trim();
+                        return txt === t || new RegExp('\\b' + t + '\\b').test(txt);
+                    });
+                }
+                if (srcCell) {
+                    const ev2 = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window });
+                    srcCell.dispatchEvent(ev2);
+                    // After existing handler runs, attempt to move created fav into the specific drop slot
+                    setTimeout(() => {
+                        const favPopup = document.querySelector('#favPopup');
+                        if (!favPopup) return;
+                        const favCell = Array.from(favPopup.querySelectorAll('td.fav-number')).find(td => td.textContent.includes(numberText));
+                        if (favCell && favCell !== slot) { slot.innerHTML = favCell.innerHTML; favCell.innerHTML = ''; }
+                        else if (!favCell) { slot.textContent = numberText; }
+                    }, 150);
+                } else {
+                    // fallback: directly insert number text into drop slot
+                    slot.textContent = numberText;
+                }
+            }, true);
+        })();
+    </script>
+    <script>
+        // Observe changes inside favPopup and notify listeners (favchange)
+        (function observeFavPopupChanges() {
+            try {
+                const fav = function () { return document.getElementById('favPopup'); };
+                const mo = new MutationObserver((records) => {
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                });
+                // attempt to attach when favPopup appears
+                const attach = () => {
+                    const f = fav();
+                    if (f) mo.observe(f, { childList: true, subtree: true, characterData: true });
+                };
+                // try now and also watch for future additions
+                attach();
+                const mo2 = new MutationObserver(() => { try { attach(); } catch (e) { } });
+                mo2.observe(document.body, { childList: true, subtree: true });
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
+    <script>
         // JS shim: add a compatibility class for `td:has(.pill)` so older editors/linters
         // won't complain and dynamic tables get the same behavior.
         (function markTdHasPill() {
@@ -12321,11 +12863,12 @@
         // Trash / drag-drop helper for the number-picker popup
         (function () {
             const trashBtn = document.getElementById('trashBtn');
-            const trashToggle = document.getElementById('trashToggle');
             const numberPickerPopup = document.getElementById('numberPickerPopup');
             const numberPickerTable = document.getElementById('numberPickerTable');
 
-            if (!numberPickerPopup || !numberPickerTable || !trashBtn || !trashToggle) return;
+            // Require the popup/table and trash button. The manual toggle element has been removed;
+            // trash is always enabled by design (see `trashEnabled` below).
+            if (!numberPickerPopup || !numberPickerTable || !trashBtn) return;
 
             // create trash popup element and attach to document.body so it's not clipped
             const trashPopup = document.createElement('div');
@@ -12351,8 +12894,59 @@
             document.body.appendChild(trashPopup);
             // start hidden by default
             try { trashPopup.style.display = 'none'; } catch (e) { }
+            // create favorite popup element (favpopup) and attach
+            const favPopup = document.createElement('div');
+            favPopup.id = 'favPopup';
+            favPopup.style.position = 'fixed';
+            favPopup.style.zIndex = '10001';
+            favPopup.innerHTML = `
+                <div style="padding:8px;display:flex;gap:8px;align-items:center;">
+                    <label id="favLabel" style="font-weight:700;color:var(--text);display:inline-flex;align-items:center;height:32px;padding:0 4px 0 0;">Favs:</label>
+                    <button id="favClearBtn" class="clear-btn" title="Xóa yêu thích" style="height:32px;padding:6px 10px;">Xóa</button>
+                    <div style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;">
+                        <label style="font-size:12px;color:var(--muted);">f</label>
+                        <select id="favFilterOp" style="height:28px;padding:4px;">
+                            <option value=">=">&gt;=</option>
+                            <option value="=">=</option>
+                            <option value="<=">&lt;=</option>
+                        </select>
+                        <input id="favFilterCount" type="number" min="0" max="6" value="2" style="width:56px;height:28px;padding:4px;text-align:center;" title="Số lượng khớp với fav (0-6)">
+                    </div>
+                </div>
+                <div style="padding:6px 8px;max-height:calc(var(--trash-row-height,36px) * 15);overflow:auto;">
+                    <table><tbody></tbody></table>
+                </div>
+                <div class="trash-scale-handle" aria-hidden="true" style="position:absolute;left:0;bottom:0;width:18px;height:18px;pointer-events:auto;"></div>`;
+            document.body.appendChild(favPopup);
+            try { favPopup.style.display = 'none'; } catch (e) { }
+            // wire fav filter controls to notify listeners
+            try {
+                const op = favPopup.querySelector('#favFilterOp');
+                const cnt = favPopup.querySelector('#favFilterCount');
+                const notify = () => { try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { } };
+                if (op) op.addEventListener('change', notify);
+                if (cnt) cnt.addEventListener('change', notify);
+            } catch (e) { }
             // expose helper for restoring position from other scopes
             try { window.__adjustTrashPosition = adjustTrashPosition; } catch (e) { }
+
+            // Observe popup position/style changes and keep trash (and fav) aligned.
+            try {
+                const popupPosObserver = new MutationObserver((mutations) => {
+                    // while user is actively dragging the popup, avoid calling adjust
+                    // handlers because we move trash/fav manually during drag.
+                    try { if (typeof isDraggingPopup !== 'undefined' && isDraggingPopup) return; } catch (e) { }
+                    for (const m of mutations) {
+                        if (m.type === 'attributes' && m.attributeName === 'style') {
+                            try { if (typeof adjustTrashPosition === 'function') adjustTrashPosition(); } catch (e) { }
+                            break;
+                        }
+                    }
+                });
+                popupPosObserver.observe(numberPickerPopup, { attributes: true, attributeFilter: ['style'] });
+                // store observer so it can be disconnected later if needed
+                try { window.__popupPosObserver = popupPosObserver; } catch (e) { }
+            } catch (e) { }
 
             // drag state for trash -> fallback restore when dragend occurs without drop
             let draggingFromTrash = null;
@@ -12362,35 +12956,20 @@
 
             let trashEnabled = true;
             let trashItems = [];
+            // favorites list
+            let favItems = [];
+
+            // Enforce exclusivity at startup: if a number is both in fav and trash,
+            // prefer `fav` and remove it from `trashItems` so a number belongs to at most one list.
+            try {
+                const favSet = new Set((favItems || []).map(n => Number(n)));
+                if (Array.isArray(trashItems) && favSet.size) trashItems = (trashItems || []).filter(n => !favSet.has(Number(n)));
+            } catch (e) { }
 
             function setTrashButtonState() {
                 trashBtn.classList.toggle('disabled', !trashEnabled);
-                trashToggle.textContent = trashEnabled ? 'On' : 'Off';
             }
-
-            trashToggle.addEventListener('click', (ev) => {
-                trashEnabled = !trashEnabled;
-                setTrashButtonState();
-                // When trash is turned off, hide the trash popup and clear all trashed numbers.
-                try {
-                    if (!trashEnabled) {
-                        // hide popup
-                        trashPopup.style.display = 'none';
-                        window.__prevTrashVisible = false;
-                        // clear tracked trash items
-                        trashItems.length = 0;
-                        // notify listeners that trash changed
-                        try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                        // remove in-trash class from any table cells
-                        try {
-                            const inTrashCells = numberPickerTable.querySelectorAll('td.in-trash');
-                            inTrashCells.forEach(c => c.classList.remove('in-trash'));
-                        } catch (innerErr) { /* ignore */ }
-                        // re-render the (now-empty) trash popup
-                        renderTrash();
-                    }
-                } catch (e) { /* ignore */ }
-            });
+            // Manual toggle removed; trashEnabled remains controlled programmatically and defaults to true.
 
             trashBtn.addEventListener('click', (ev) => {
                 if (!trashEnabled) return; // only clickable when enabled
@@ -12398,6 +12977,262 @@
                 // remember the user's explicit toggle state
                 window.__prevTrashVisible = (trashPopup.style.display === 'block');
                 adjustTrashPosition();
+            });
+
+            // Favorite button toggle
+            const favBtn = document.getElementById('favBtn');
+            function adjustFavPosition() {
+                try {
+                    // Ensure fav uses fixed positioning for predictable viewport coords
+                    favPopup.style.position = 'fixed';
+                    const trRect = trashPopup.getBoundingClientRect();
+                    const pickerRect = numberPickerPopup.getBoundingClientRect();
+
+                    // detect whether trash is visible (display not none and has size)
+                    const trashStyle = getComputedStyle(trashPopup);
+                    const trashVisible = trashStyle.display !== 'none' && trRect.width > 0 && trRect.height > 0;
+
+                    // prefer trash dimensions when available, otherwise fallback to defaults
+                    const trashW = (trRect.width && trRect.width > 0) ? trRect.width : (parseFloat(trashStyle.width) || 360);
+                    const trashH = (trRect.height && trRect.height > 0) ? trRect.height : (parseFloat(trashStyle.height) || 220);
+
+                    const favW = Math.round(trashW);
+                    const favH = Math.round(trashH);
+                    favPopup.style.width = favW + 'px';
+                    // set fav initial height to match the trash height so visuals align
+                    favPopup.style.height = favH + 'px';
+                    // also cap its max height to the computed trash height (scrollbars will appear when needed)
+                    favPopup.style.maxHeight = favH + 'px';
+                    // allow scrollbars when content exceeds capped max-height (match trash behavior)
+                    favPopup.style.overflow = 'auto';
+
+                    // vertical gap between picker/trash and fav
+                    const favGap = 14; // vertical gap
+                    const favHorzGap = 8; // horizontal gap to place fav just outside picker
+
+                    // compute top: always offset by the trash height so fav remains
+                    // visually at the same vertical position whether trash is visible or not
+                    let top = Math.round(pickerRect.top + trashH + favGap);
+
+                    // compute left: align with trash left when trash visible; otherwise place left of picker
+                    let left;
+                    if (trashVisible) {
+                        left = Math.round(trRect.left);
+                    } else {
+                        // place fav outside (to the left) of the picker, similar to trash
+                        left = Math.round(pickerRect.left - favW - favHorzGap);
+                    }
+
+                    // constrain horizontally to viewport
+                    left = Math.max(4, Math.min(left, window.innerWidth - favW - 4));
+
+                    // if not enough vertical space below, place above the picker
+                    if (top + favH > window.innerHeight - 8) {
+                        top = Math.max(8, Math.round(pickerRect.top - favH - favGap));
+                    }
+
+                    favPopup.style.left = left + 'px';
+                    favPopup.style.top = top + 'px';
+                } catch (e) { }
+            }
+
+            if (favBtn) {
+                favBtn.addEventListener('click', () => {
+                    favPopup.style.display = (favPopup.style.display === 'block') ? 'none' : 'block';
+                    if (favPopup.style.display === 'block') {
+                        adjustFavPosition();
+                    }
+                });
+                // Allow dropping numbers onto the fav button (or its container) to add to favorites
+                const favDropHandler = (e) => {
+                    try {
+                        e.preventDefault();
+                        try { e.stopImmediatePropagation(); } catch (xx) { }
+                        // mark handled so global fallback ignores
+                        try { window.__favDropHandled = true; setTimeout(() => window.__favDropHandled = false, 120); } catch (xx) { }
+                        // try to read from dataTransfer first
+                        let n = Number(e.dataTransfer.getData('text/plain'));
+                        // fallback to delegated draggedNumber var if available
+                        if (!Number.isFinite(n) && typeof draggedNumber !== 'undefined' && draggedNumber) {
+                            n = Number(draggedNumber);
+                        }
+                        if (Number.isFinite(n)) addToFav(n);
+                    } catch (err) { }
+                };
+
+                const favDragOver = (e) => { e.preventDefault(); try { e.stopImmediatePropagation(); e.dataTransfer.dropEffect = 'move'; } catch (err) { } };
+                const favDragEnter = (e) => { try { e.stopImmediatePropagation(); favBtn.classList.add('fav-drag-over'); } catch (err) { } };
+                const favDragLeave = (e) => { try { e.stopImmediatePropagation(); favBtn.classList.remove('fav-drag-over'); } catch (err) { } };
+
+                favBtn.addEventListener('dragover', favDragOver);
+                favBtn.addEventListener('dragenter', favDragEnter);
+                favBtn.addEventListener('dragleave', favDragLeave);
+                favBtn.addEventListener('drop', (e) => { favDragLeave(e); favDropHandler(e); });
+
+                // also allow dropping onto the small container holding trash/fav buttons
+                try {
+                    const favContainer = favBtn.parentElement;
+                    if (favContainer) {
+                        favContainer.addEventListener('dragover', favDragOver);
+                        favContainer.addEventListener('drop', favDropHandler);
+                        favContainer.addEventListener('dragenter', favDragEnter);
+                        favContainer.addEventListener('dragleave', favDragLeave);
+                    }
+                } catch (err) { }
+            }
+
+            function renderFav() {
+                try {
+                    const tbody = favPopup.querySelector('tbody');
+                    tbody.innerHTML = '';
+                    for (let i = 0; i < favItems.length; i += 3) {
+                        const tr = document.createElement('tr');
+                        for (let j = 0; j < 3; j++) {
+                            const idx = i + j;
+                            const td = document.createElement('td');
+                            if (idx < favItems.length) {
+                                const n = favItems[idx];
+                                td.dataset.number = String(n);
+                                // mark this td so fav-specific visuals apply
+                                td.classList.add('fav-number');
+                                const src = numberPickerTable.querySelector('td[data-number="' + n + '"]');
+                                if (src) {
+                                    // preserve nested markup (rank pills, spans) similar to trash clone
+                                    const inner = document.createElement('div');
+                                    inner.className = 'trash-inner';
+                                    inner.innerHTML = src.innerHTML;
+                                    // remove any injected restore handles from the cloned markup
+                                    try {
+                                        const bad = Array.from(inner.querySelectorAll('.restore-handle, .restore-handle-test'));
+                                        for (const b of bad) try { b.remove(); } catch (e) { }
+                                    } catch (e) { }
+                                    // copy relevant attributes/classes from source td to fav td
+                                    try {
+                                        for (const cls of Array.from(src.classList || [])) {
+                                            // don't copy transient markers into the fav popup
+                                            if (cls === 'in-fav' || cls === 'in-trash') continue;
+                                            if (!td.classList.contains(cls)) td.classList.add(cls);
+                                        }
+                                        // copy inline style if present, but strip visual properties so source highlights
+                                        // don't override fav popup visuals
+                                        const s = src.getAttribute('style');
+                                        if (s) {
+                                            try {
+                                                let sanitized = String(s)
+                                                    .replace(/background[^;]*;?/gi, '')
+                                                    .replace(/color[^;]*;?/gi, '')
+                                                    .replace(/box-shadow[^;]*;?/gi, '')
+                                                    .replace(/outline[^;]*;?/gi, '')
+                                                    .replace(/border-color[^;]*;?/gi, '');
+                                                if (sanitized.trim()) {
+                                                    td.setAttribute('style', (td.getAttribute('style') || '') + ';' + sanitized);
+                                                }
+                                            } catch (err) { /* ignore sanitize errors */ }
+                                        }
+                                    } catch (err) { /* ignore */ }
+                                    td.appendChild(inner);
+                                } else {
+                                    const inner = document.createElement('div');
+                                    inner.className = 'trash-inner';
+                                    inner.textContent = String(n);
+                                    td.appendChild(inner);
+                                }
+                                td.draggable = true;
+                                td.addEventListener('dragstart', (e) => {
+                                    e.dataTransfer.setData('text/plain', String(n));
+                                    e.dataTransfer.setData('source', 'fav');
+                                    e.dataTransfer.effectAllowed = 'move';
+                                });
+                                td.addEventListener('dblclick', () => { removeFromFav(n); });
+                            }
+                            tr.appendChild(td);
+                        }
+                        tbody.appendChild(tr);
+                    }
+                    adjustFavPosition();
+                    try { updateFavBadge(); } catch (e) { }
+                } catch (e) { }
+            }
+
+            function addToFav(n) {
+                try {
+                    n = Number(n);
+                    if (!Number.isFinite(n)) return;
+                    // Ensure exclusivity: remove from trash if present
+                    try {
+                        if (Array.isArray(trashItems) && trashItems.includes(n)) {
+                            trashItems = trashItems.filter(v => v !== n);
+                            try { const c = numberPickerTable.querySelector('td[data-number="' + n + '"]'); if (c) c.classList.remove('in-trash'); } catch (e) { }
+                            try { renderTrash(); } catch (e) { }
+                            try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                        }
+                    } catch (e) { }
+
+                    if (!favItems.includes(n)) favItems.push(n);
+                    renderFav();
+                    try { updateFavBadge(); } catch (e) { }
+                    // mark popup cell as fav and ensure trash marker removed
+                    try {
+                        const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
+                        if (cell) {
+                            cell.classList.remove('in-trash');
+                            cell.classList.add('in-fav');
+                        }
+                    } catch (e) { }
+                } catch (e) { }
+            }
+
+            function removeFromFav(n) {
+                try {
+                    n = Number(n);
+                    favItems = favItems.filter(v => v !== n);
+                    renderFav();
+                    try { updateFavBadge(); } catch (e) { }
+                    try { const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]'); if (cell) cell.classList.remove('in-fav'); } catch (e) { }
+                } catch (e) { }
+            }
+
+            // clear favs
+            try { const favClear = favPopup.querySelector('#favClearBtn'); if (favClear) favClear.addEventListener('click', () => { favItems = []; renderFav(); try { updateFavBadge(); } catch (e) { } const ins = numberPickerTable.querySelectorAll('td.in-fav'); ins.forEach(i => i.classList.remove('in-fav')); }); } catch (e) { }
+
+            // allow dropping numbers into favPopup (robust: stop propagation, set dropEffect, mark handled)
+            favPopup.addEventListener('dragover', (e) => { try { e.preventDefault(); e.stopImmediatePropagation(); e.dataTransfer.dropEffect = 'move'; } catch (err) { } });
+            favPopup.addEventListener('dragenter', (e) => { try { e.stopImmediatePropagation(); favPopup.classList && favPopup.classList.add('fav-drag-over'); } catch (err) { } });
+            favPopup.addEventListener('dragleave', (e) => { try { e.stopImmediatePropagation(); favPopup.classList && favPopup.classList.remove('fav-drag-over'); } catch (err) { } });
+            favPopup.addEventListener('drop', (e) => {
+                try {
+                    e.preventDefault();
+                    try { e.stopImmediatePropagation(); } catch (xx) { }
+                    try { window.__favDropHandled = true; setTimeout(() => window.__favDropHandled = false, 120); } catch (xx) { }
+                    favPopup.classList && favPopup.classList.remove('fav-drag-over');
+                    const n = Number(e.dataTransfer.getData('text/plain'));
+                    if (!Number.isFinite(n)) return;
+                    addToFav(n);
+                } catch (err) { }
+            });
+
+            // allow dropping from fav back to popup: accept drops on numberPickerTable to remove
+            numberPickerTable.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+            numberPickerTable.addEventListener('drop', (e) => {
+                try {
+                    e.preventDefault();
+                    const src = e.dataTransfer.getData('source');
+                    const n = Number(e.dataTransfer.getData('text/plain'));
+                    if (src === 'fav' && Number.isFinite(n)) {
+                        removeFromFav(n);
+                    }
+                } catch (err) { }
+            });
+
+            // dblclick on a popup number toggles fav state
+            numberPickerTable.addEventListener('dblclick', (e) => {
+                try {
+                    const td = e.target.closest('td');
+                    if (!td) return;
+                    const n = Number(td.dataset.number || td.getAttribute('data-number'));
+                    if (!Number.isFinite(n)) return;
+                    if (favItems.includes(n)) removeFromFav(n); else addToFav(n);
+                } catch (err) { }
             });
 
             function adjustTrashPosition() {
@@ -12425,6 +13260,7 @@
                 if (top + trashH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - trashH - 8);
                 trashPopup.style.left = left + 'px';
                 trashPopup.style.top = top + 'px';
+                try { if (typeof adjustFavPosition === 'function') adjustFavPosition(); } catch (e) { }
             }
 
             function renderTrash() {
@@ -12447,6 +13283,11 @@
                                 inner.className = 'trash-inner';
                                 // copy innerHTML so the nested spans and pills keep their classes
                                 inner.innerHTML = src.innerHTML;
+                                // remove any injected restore handles from the cloned markup
+                                try {
+                                    const bad = Array.from(inner.querySelectorAll('.restore-handle, .restore-handle-test'));
+                                    for (const b of bad) try { b.remove(); } catch (e) { }
+                                } catch (e) { }
                                 // copy relevant attributes from source td to trash td (except id)
                                 try {
                                     for (const cls of Array.from(src.classList || [])) {
@@ -12498,6 +13339,8 @@
                 try { updateTrashTooltips(); } catch (e) { /* ignore */ }
                 // update the visual badge on the trash button so users see count
                 try { if (typeof updateTrashBadge === 'function') updateTrashBadge(); } catch (e) { }
+                // ensure restore handles exist for any in-popup trashed cells
+                try { if (typeof ensureRestoreHandles === 'function') ensureRestoreHandles(); } catch (e) { }
             }
 
             function ensureTrashBadge() {
@@ -12515,6 +13358,33 @@
                     }
                     return b;
                 } catch (e) { return null; }
+            }
+
+            function ensureFavBadge() {
+                try {
+                    let b = document.getElementById('favBadge');
+                    const btn = document.getElementById('favBtn');
+                    if (!btn) return null;
+                    if (!b) {
+                        b = document.createElement('span');
+                        b.id = 'favBadge';
+                        b.className = 'trash-badge hidden';
+                        b.setAttribute('aria-hidden', 'true');
+                        try { if (btn && btn.style) btn.style.position = btn.style.position || 'relative'; } catch (e) { }
+                        try { btn.appendChild(b); } catch (e) { }
+                    }
+                    return b;
+                } catch (e) { return null; }
+            }
+
+            function updateFavBadge() {
+                try {
+                    const b = ensureFavBadge();
+                    if (!b) return;
+                    const count = Array.isArray(favItems) ? favItems.length : 0;
+                    if (!count) { b.classList.add('hidden'); b.textContent = ''; }
+                    else { b.classList.remove('hidden'); b.textContent = (count > 99 ? '99+' : String(count)); }
+                } catch (e) { /* ignore */ }
             }
 
             function updateTrashBadge() {
@@ -12960,10 +13830,25 @@
                 n = Number(n);
                 try { if (window && window.__trashClearing) return; } catch (e) { }
                 if (!n || trashItems.includes(n)) return;
+                // Ensure exclusivity: remove from fav if present
+                try {
+                    if (Array.isArray(favItems) && favItems.includes(n)) {
+                        favItems = favItems.filter(v => v !== n);
+                        try { const c2 = numberPickerTable.querySelector('td[data-number="' + n + '"]'); if (c2) c2.classList.remove('in-fav'); } catch (e) { }
+                        try { renderFav(); } catch (e) { }
+                        try { updateFavBadge(); } catch (e) { }
+                    }
+                } catch (e) { }
+
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
-                if (cell) cell.classList.add('in-trash');
+                if (cell) {
+                    cell.classList.remove('in-fav');
+                    cell.classList.add('in-trash');
+                }
                 trashItems.push(n);
                 renderTrash();
+                // ensure trashed popup cells expose a small draggable restore handle
+                try { ensureRestoreHandles(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
@@ -13025,6 +13910,7 @@
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) cell.classList.remove('in-trash');
                 renderTrash();
+                try { ensureRestoreHandles(); } catch (e) { }
                 // update trash popup tooltips immediately
                 try { updateTrashTooltips(); } catch (e) { }
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
@@ -13059,13 +13945,17 @@
                     const num = td.dataset && td.dataset.number ? td.dataset.number : (td.textContent || '').trim();
                     const parsed = parseInt(num);
                     if (!parsed) return;
-                    const source = td.closest('#trashPopup') ? 'trash' : (td.closest('#numberPickerTable') ? 'popup' : 'other');
+                    // determine logical source: prefer explicit trash origin when the cell
+                    // has been marked as `in-trash` (even if it's still rendered inside the popup).
+                    let source = td.closest('#trashPopup') ? 'trash' : (td.closest('#numberPickerTable') ? 'popup' : 'other');
+                    try {
+                        if (td.classList && td.classList.contains('in-trash')) source = 'trash';
+                    } catch (inner) { }
                     e.dataTransfer.setData('text/plain', String(parsed));
                     e.dataTransfer.setData('source', source);
                     e.dataTransfer.effectAllowed = 'move';
                     // track dragged number and whether it originated in the trash
                     draggingNumber = parsed;
-                    // track both a boolean/origin and an explicit source string for fallbacks
                     if (source === 'trash') {
                         draggingFromTrash = parsed;
                     } else {
@@ -13095,9 +13985,18 @@
                     const dropOnTrash = !!e.target.closest('#trashPopup');
                     const dropOnNumberTable = !!e.target.closest('#numberPickerTable');
                     const dropInsidePopup = !!e.target.closest('#numberPickerPopup');
+                    // handle drops targeted at fav UI (fav button or fav popup)
+                    // prefer the fav-specific handlers, but if they weren't attached
+                    // (e.g. favBtn missing), fall back to calling `addToFav` directly
+                    const dropOnFav = !!e.target.closest('#favPopup') || !!e.target.closest('#favBtn');
+                    if (dropOnFav) {
+                        try { if (typeof addToFav === 'function') { addToFav(num); return; } } catch (e) { }
+                        return;
+                    }
 
                     if (dropOnTrash) {
-                        if (source === 'popup') moveToTrash(num);
+                        // allow dropping from popup or fav into trash
+                        if (source === 'popup' || source === 'fav') moveToTrash(num);
                         // allow dropping an entire Cell6.5 Unpair row (multiple numbers)
                         if (source === 'cell6_5_unpair') {
                             try {
@@ -13113,7 +14012,23 @@
                     }
 
                     if (dropOnNumberTable) {
-                        if (source === 'trash') restoreFromTrash(num);
+                        if (source === 'trash') {
+                            // Require the drop point to be outside the original trashed-cell
+                            // bounding rectangle before restoring. This avoids tiny pointer
+                            // nudges inside the same red cell from triggering a restore.
+                            try {
+                                const originCell = numberPickerTable.querySelector('td[data-number="' + num + '"]');
+                                const px = (e.clientX || lastDragClientX || 0);
+                                const py = (e.clientY || lastDragClientY || 0);
+                                let doRestore = true;
+                                if (originCell) {
+                                    const rect = originCell.getBoundingClientRect();
+                                    const inside = (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom);
+                                    doRestore = !inside; // only restore when drop point is outside
+                                }
+                                if (doRestore) restoreFromTrash(num);
+                            } catch (err) { try { restoreFromTrash(num); } catch (e) { } }
+                        }
                         return;
                     }
 
@@ -13122,8 +14037,23 @@
                     // - if dragged FROM popup and dropped outside the popup, treat as move-to-trash (existing behavior)
                     if (!dropInsidePopup) {
                         if (source === 'trash') {
-                            restoreFromTrash(num);
-                            return;
+                            // When dropping outside the popup, only restore when the
+                            // drop point is truly outside the original trashed cell.
+                            try {
+                                const originCell = numberPickerTable.querySelector('td[data-number="' + num + '"]');
+                                const px = (e.clientX || lastDragClientX || 0);
+                                const py = (e.clientY || lastDragClientY || 0);
+                                let doRestore = true;
+                                if (originCell) {
+                                    const rect = originCell.getBoundingClientRect();
+                                    const inside = (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom);
+                                    doRestore = !inside;
+                                }
+                                if (doRestore) {
+                                    restoreFromTrash(num);
+                                    return;
+                                }
+                            } catch (err) { try { restoreFromTrash(num); return; } catch (e) { } }
                         }
                         if (trashEnabled && source === 'popup') {
                             moveToTrash(num);
@@ -13137,16 +14067,24 @@
             // restore the item when drag ends outside the trash popup (fixes intermittent "stuck" behavior)
             document.addEventListener('dragend', (e) => {
                 try {
-                    // If the drag started from the trash and didn't end over the trash, restore it.
+                    // If the drag started from the trash and didn't end over the trash,
+                    // restore it — but only when the pointer ended outside the original
+                    // trashed cell rectangle (prevents tiny pointer movements from toggling).
                     if (draggingFromTrash) {
                         // prefer last known dragover coords, fallback to dragend client coords
                         const x = lastDragClientX || e.clientX || 0;
                         const y = lastDragClientY || e.clientY || 0;
-                        const el = document.elementFromPoint(x, y);
-                        const endedOverTrash = el && el.closest && el.closest('#trashPopup');
-                        if (!endedOverTrash) {
-                            // restore the item if drag ended outside the trash popup
-                            restoreFromTrash(draggingFromTrash);
+                        try {
+                            const originCell = numberPickerTable.querySelector('td[data-number="' + draggingFromTrash + '"]');
+                            let doRestore = true;
+                            if (originCell) {
+                                const rect = originCell.getBoundingClientRect();
+                                const inside = (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+                                doRestore = !inside;
+                            }
+                            if (doRestore) restoreFromTrash(draggingFromTrash);
+                        } catch (innerErr) {
+                            try { restoreFromTrash(draggingFromTrash); } catch (e) { }
                         }
                     } else {
                         // Fallback: if the drag started from the popup and ended outside the popup,
@@ -13160,8 +14098,9 @@
                                 const el = document.elementFromPoint(x, y);
                                 const endedOverPicker = el && el.closest && el.closest('#numberPickerPopup');
                                 const endedOverTrash = el && el.closest && el.closest('#trashPopup');
-                                // only move to trash when drag ended outside the picker and not over the trash (in which case drop handler handled it)
-                                if (!endedOverPicker && !endedOverTrash) {
+                                const endedOverFav = el && el.closest && el.closest('#favPopup, #favBtn');
+                                // only move to trash when drag ended outside the picker and not over the trash or fav
+                                if (!endedOverPicker && !endedOverTrash && !endedOverFav) {
                                     try { moveToTrash(draggingNumber); } catch (err) { }
                                 }
                             }
@@ -13181,6 +14120,7 @@
             // initial state
             setTrashButtonState();
             renderTrash();
+            try { updateFavBadge(); } catch (e) { }
 
             // helper: get unique numbers present in the popup table
             function getPopupNumbers() {
@@ -13190,6 +14130,95 @@
                     return Array.from(new Set(nums)).sort((a, b) => a - b);
                 } catch (e) { return []; }
             }
+
+            // Inject a small draggable restore handle into any popup cell marked `.in-trash`.
+            // The handle has pointer-events enabled and starts a drag with source='trash'
+            // so users can drag the red cell area to restore it even when the main
+            // cell contents are hidden/disabled.
+            function ensureRestoreHandles() {
+                try {
+                    if (!numberPickerTable) return;
+                    // add handles for current in-trash cells
+                    const tds = Array.from(numberPickerTable.querySelectorAll('td.in-trash'));
+                    for (const td of tds) {
+                        try {
+                            if (td.querySelector && td.querySelector('.restore-handle')) continue;
+                            const handle = document.createElement('span');
+                            handle.className = 'restore-handle';
+                            handle.setAttribute('title', 'Kéo để khôi phục');
+                            // make the handle cover the entire cell (transparent overlay)
+                            handle.textContent = '';
+                            Object.assign(handle.style, {
+                                position: 'absolute',
+                                left: '0',
+                                top: '0',
+                                right: '0',
+                                bottom: '0',
+                                width: '100%',
+                                height: '100%',
+                                display: 'block',
+                                background: 'transparent',
+                                color: 'transparent',
+                                borderRadius: 'inherit',
+                                cursor: 'grab',
+                                zIndex: 999999,
+                                pointerEvents: 'auto',
+                                userSelect: 'none',
+                                visibility: 'visible',
+                                opacity: '1',
+                                touchAction: 'none'
+                            });
+                            handle.draggable = true;
+                            // Ensure visibility/pointer-events override any global hiding rules
+                            try {
+                                handle.style.setProperty('visibility', 'visible', 'important');
+                                handle.style.setProperty('pointer-events', 'auto', 'important');
+                                handle.style.setProperty('opacity', '1', 'important');
+                                handle.style.setProperty('left', '0', 'important');
+                                handle.style.setProperty('top', '0', 'important');
+                                handle.style.setProperty('right', '0', 'important');
+                                handle.style.setProperty('bottom', '0', 'important');
+                                handle.style.setProperty('width', '100%', 'important');
+                                handle.style.setProperty('height', '100%', 'important');
+                                handle.style.zIndex = '999999';
+                            } catch (e) { }
+                            handle.addEventListener('dragstart', (e) => {
+                                try {
+                                    const num = td.dataset && td.dataset.number ? td.dataset.number : (td.textContent || '').trim();
+                                    const parsed = parseInt(num);
+                                    if (!parsed) return;
+                                    e.dataTransfer.setData('text/plain', String(parsed));
+                                    e.dataTransfer.setData('source', 'trash');
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    draggingNumber = parsed;
+                                    draggingFromTrash = parsed;
+                                    try { window.__lastDragSource = 'trash'; } catch (e) { }
+                                } catch (ee) { }
+                            }, true);
+                            // click/tap on handle restores immediately
+                            handle.addEventListener('click', (ev) => {
+                                try { ev.stopPropagation(); ev.preventDefault(); } catch (e) { }
+                                try { const num = td.dataset && td.dataset.number ? Number(td.dataset.number) : Number((td.textContent || '').trim()); if (num) restoreFromTrash(num); } catch (e) { }
+                            }, true);
+                            td.appendChild(handle);
+                        } catch (e) { }
+                    }
+                    // remove orphan handles from non-in-trash cells
+                    try {
+                        const orphans = Array.from(numberPickerTable.querySelectorAll('span.restore-handle'));
+                        for (const h of orphans) {
+                            const p = h.parentElement;
+                            if (!p || !p.classList.contains('in-trash')) try { h.remove(); } catch (e) { }
+                        }
+                    } catch (e) { }
+                } catch (e) { }
+            }
+
+            // keep handles in sync with popup DOM changes
+            try {
+                const moHandles = new MutationObserver(() => { try { ensureRestoreHandles(); } catch (e) { } });
+                if (numberPickerTable) moHandles.observe(numberPickerTable, { childList: true, subtree: true, attributes: true });
+            } catch (e) { }
 
             // Helper: toggle dragged-out class for all unpair rows matching a stable key
             function toggleDraggedOutForKey(key, add) {
@@ -13760,6 +14789,40 @@
                 });
                 mo.observe(c, { childList: true, subtree: true });
             }
+        })();
+    </script>
+    <script>
+        // Intercept drops on fav UI and prevent global trash-move fallback.
+        (function () {
+            window.__favDropHandled = false;
+
+            // If a drop lands on the fav button or fav popup, swallow it early
+            // so existing global handlers won't also treat it as a trash-drop.
+            document.addEventListener('drop', function (e) {
+                try {
+                    const el = e.target && e.target.closest ? e.target.closest('#favPopup, #favBtn') : null;
+                    if (el) {
+                        e.stopImmediatePropagation();
+                        e.preventDefault();
+                        // mark that we handled a fav drop so dragend fallback won't run
+                        window.__favDropHandled = true;
+                        // clear soon after to avoid affecting unrelated drags
+                        setTimeout(() => window.__favDropHandled = false, 100);
+                    }
+                } catch (err) { /* ignore */ }
+            }, true);
+
+            // Prevent dragend-based fallback from moving items to trash if the
+            // last drop was handled by the fav UI.
+            document.addEventListener('dragend', function (e) {
+                try {
+                    if (window.__favDropHandled) {
+                        e.stopImmediatePropagation();
+                        e.preventDefault();
+                        window.__favDropHandled = false;
+                    }
+                } catch (err) { /* ignore */ }
+            }, true);
         })();
     </script>
 </body>
