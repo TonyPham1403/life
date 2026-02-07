@@ -4892,6 +4892,7 @@
                     rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
                     const labels = Object.keys(labelRows).sort();
                     let groups = [];
+                    const canonicalLabel = (lbl) => (lbl || '').split('').sort().join('');
 
                     // Bước 1: Khi 'Liền kề' được chọn, giữ lại logic hiện tại (lọc theo số vị trí khác nhau
                     // và nhóm lỏng nhất), còn nếu không được chọn thì nhóm theo tổ hợp (combination) của
@@ -4937,7 +4938,7 @@
                             }
                             if (gRows.length >= 2) {
                                 gLabels.sort();
-                                groups.push({ base: gLabels[0], labels: gLabels.slice(), rows: gRows });
+                                groups.push({ base: canonicalLabel(gLabels[0]), labels: gLabels.slice(), rows: gRows });
                             }
                         }
                     } else {
@@ -4957,7 +4958,7 @@
                                 if (pos.length > parseInt(diffSel.value, 10)) continue;
                                 used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
                             }
-                            if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
+                            if (gRows.length >= 2) groups.push({ base: base, labels: gLabels, rows: gRows });
                         });
                     }
 
