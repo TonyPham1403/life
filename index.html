@@ -4981,6 +4981,18 @@
                         }).filter(g => g.rows.length >= 2); // Chỉ giữ nhóm ≥2 kỳ
                     }
 
+                    // Ensure rows inside each group are sorted by date (old -> new)
+                    const parseDateDMY = (s) => {
+                        if (!s || typeof s !== 'string') return 0;
+                        const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                        if (!m) return 0;
+                        const d = Number(m[1]), mo = Number(m[2]) - 1, y = Number(m[3]);
+                        return new Date(y, mo, d).getTime();
+                    };
+                    groups.forEach(g => {
+                        g.rows.sort((a, b) => (parseDateDMY(a.date) || 0) - (parseDateDMY(b.date) || 0));
+                    });
+
                     groups.sort((a, b) => b.rows.length - a.rows.length);
                     groupCache = groups;
                     cacheKey = newCacheKey;
