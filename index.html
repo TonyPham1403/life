@@ -6,6 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Life Notebook → Web</title>
     <style>
+        /* Reduce width of the specific "giảm dần số kỳ" dropdown in Cell6.5 */
+        #cell6_5>div:nth-child(4)>div.controls>select:nth-child(13) {
+            width: 90px;
+            max-width: 140px;
+            min-width: 80px;
+        }
+
+        /* Also reduce width of the adjacent "mới-cũ" sort order dropdown in Cell6.5 */
+        #cell6_5>div:nth-child(4)>div.controls>select:nth-child(11) {
+            width: 110px;
+            max-width: 110px;
+            min-width: 63px;
+        }
+
+        /* Reduce width of the visible "Bộ" custom-select button in Cell6.5 (bộ 1,2,...) */
+        #cell6_5>div>div.controls .custom-select .nav-btn {
+            width: 80px;
+            min-width: 60px;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Stronger, id-targeted override for the specific Cell6.5 "Bộ" button */
+        #cell6_5 .controls #cell6_5_xSelBtn {
+            width: 70px !important;
+            min-width: 50px !important;
+            max-width: 110px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
         :root {
             --bg: #0f172a;
             --panel: #111827;
@@ -14,6 +46,7 @@
             --accent-2: #667eea;
             --border: #1e293b;
             --card: #0b1220;
+            --trash-width: 520px;
             --text: #e2e8f0;
             --text-strong: #fff;
             --highlight-bg: #4CAF50;
@@ -5318,7 +5351,7 @@
             });
 
             // create select controls
-            const combSel = document.createElement('select');[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = `Bộ ${v}`; combSel.appendChild(o); }); combSel.value = '3';
+            const combSel = document.createElement('select');[1, 2, 3, 4, 5, 6].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = `Bộ ${v}`; combSel.appendChild(o); }); combSel.value = '2';
             const sortSel = document.createElement('select');[["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             // recency selector (Mới → Cũ / Cũ → Mới) — mirror Cell6.5 behavior
             const recencySel = document.createElement('select');
@@ -5560,7 +5593,44 @@
                 });
             } catch (e) { }
 
-            controls.append('Kích thước:', combSel, consecLabel, orderLabel, 'Trash:', trashSel, sortSel, recencySel);
+            // Fav toggle (mirror Cell6.5): include|exclude
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell6_6_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button';
+            favSel.value = 'exclude';
+            favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px';
+            favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { draw(); } catch (e) { }
+                } catch (e) { }
+            });
+
+            // Ensure Cell6.6 redraws when the fav popup changes (only add listener once)
+            try {
+                const secEl = document.getElementById('cell6_6');
+                if (secEl && !secEl.__favListenerAdded) {
+                    secEl.__favListenerAdded = true;
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell6_6_favSel');
+                            const other = document.getElementById('cell6_5_favSel');
+                            const isInclude = (cur && String(cur.value) === 'include') || (other && String(other.value) === 'include');
+                            if (isInclude) {
+                                try { draw(); } catch (err) { /* ignore */ }
+                            }
+                        } catch (e) { }
+                    });
+                }
+            } catch (e) { /* ignore */ }
+
+            controls.append(combSel, consecLabel, orderLabel, 'Trash:', trashSel, 'Fav:', favSel, sortSel, recencySel);
             body.appendChild(controls);
 
             const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
@@ -5670,6 +5740,64 @@
                 // build array of [key, list] for user's combos
                 // include combos with no records (empty list) so every user combo is shown
                 let arrGroups = results.map(r => [r.key, groups.get(r.key) || []]);
+
+                // Apply fav-include filter when requested: mirror Cell6.5 behavior
+                try {
+                    const favEl = document.getElementById('cell6_6_favSel');
+                    if (typeof favEl !== 'undefined' && favEl && String(favEl.value) === 'include') {
+                        let favs = [];
+                        try {
+                            if (window.getFavItems && typeof window.getFavItems === 'function') {
+                                favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                            } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                                favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                            } else {
+                                const f = document.getElementById('favPopup');
+                                if (f) {
+                                    favs = Array.from(f.querySelectorAll('td.fav-number')).map(td => {
+                                        try {
+                                            const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                            if (dn) return Number(dn);
+                                            const txt = String(td.textContent || '');
+                                            const m = txt.match(/(\d+)/);
+                                            return m ? Number(m[1]) : null;
+                                        } catch (e) { return null; }
+                                    }).filter(n => Number.isFinite(n));
+                                }
+                            }
+                        } catch (e) { favs = []; }
+                        if (favs && favs.length) {
+                            const fset = new Set((favs || []).map(n => Number(n)));
+                            // read filter operator/count from favPopup controls (fallbacks provided)
+                            let op = '>=';
+                            let req = 1;
+                            try {
+                                const fpop = document.getElementById('favPopup');
+                                if (fpop) {
+                                    const opEl = fpop.querySelector('#favFilterOp');
+                                    const cntEl = fpop.querySelector('#favFilterCount');
+                                    if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value;
+                                    if (cntEl) {
+                                        const v = Number(cntEl.value);
+                                        if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v)));
+                                    }
+                                }
+                            } catch (e) { }
+
+                            arrGroups = arrGroups.filter(([key, list]) => {
+                                try {
+                                    const nums = key.split('-').map(Number);
+                                    let matchCount = 0;
+                                    for (const n of nums) if (fset.has(Number(n))) matchCount++;
+                                    if (op === '>=') return matchCount >= req;
+                                    if (op === '=') return matchCount === req;
+                                    if (op === '<=') return matchCount <= req;
+                                    return matchCount >= req;
+                                } catch (e) { return false; }
+                            });
+                        }
+                    }
+                } catch (e) { /* ignore fav filter errors */ }
 
                 // build baseline over all global combos for ranking (same baseline sort logic)
                 const globalArrFull = Object.keys(globalCounts).map(k => [k, []]);
@@ -6093,7 +6221,6 @@
                     // append inputs (no explicit button — auto-update on change)
                     lkControls.appendChild(document.createTextNode('Top:'));
                     lkControls.appendChild(topLabel);
-                    lkControls.appendChild(document.createTextNode('Bộ:'));
                     lkControls.appendChild(lkSetSel);
                     // place the lkControls below the header by inserting into the DOM
                     // (insert before the original next sibling of h2)
@@ -6125,8 +6252,9 @@
                 const xSelBtn = document.createElement('button');
                 xSelBtn.type = 'button';
                 xSelBtn.className = 'nav-btn';
+                xSelBtn.id = 'cell6_5_xSelBtn';
                 xSelBtn.textContent = `Bộ ${xSel.value}`;
-                xSelBtn.style.minWidth = '96px';
+                xSelBtn.style.minWidth = '64px';
 
                 const optionsDiv = document.createElement('div');
                 optionsDiv.className = 'custom-select-options';
@@ -6753,7 +6881,46 @@
                 });
             } catch (e) { }
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, "Bộ số:", (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, numTrashLabel, optLabel, sortSel, recencySel);
+            // Fav filter toggle (click to toggle include|exclude) - default exclude
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell6_5_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button';
+            favSel.value = 'exclude';
+            favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px';
+            favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { if (typeof group === 'function') group(); } catch (e) { }
+                } catch (e) { }
+            });
+
+            // Ensure Cell6.5 redraws when the fav popup changes (only add listener once)
+            try {
+                if (!window.__cell6_5_fav_listener_added) {
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell6_5_favSel');
+                            const other = document.getElementById('cell6_6_favSel');
+                            const isInclude = (cur && String(cur.value) === 'include') || (other && String(other.value) === 'include');
+                            if (isInclude) {
+                                try { groupCache = null; } catch (e) { }
+                                try { cacheKey = null; } catch (e) { }
+                                try { baselineArrAll = null; baselineArrGlobal = null; baselineCountsMap = null; baselineAllKeys = null; baselineGlobalKeys = null; } catch (e) { }
+                                try { if (typeof draw === 'function') draw(); else if (typeof group === 'function') group(); } catch (err) { /* ignore */ }
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell6_5_fav_listener_added = true;
+                }
+            } catch (e) { /* ignore */ }
+
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, "Fav:", favSel, numTrashLabel, optLabel, sortSel, recencySel);
             // wire numTrash input to trigger recompute when changed
             try { numTrashInput.addEventListener('input', () => { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); }); } catch (e) { }
             body.appendChild(controls);
@@ -7590,6 +7757,64 @@
                         }
                     } catch (e) { /* ignore */ }
 
+                    // Apply fav-include filter when requested: mirror Cell5.5 behavior
+                    try {
+                        const favEl = document.getElementById('cell6_5_favSel');
+                        if (typeof favEl !== 'undefined' && favEl && String(favEl.value) === 'include') {
+                            let favs = [];
+                            try {
+                                if (window.getFavItems && typeof window.getFavItems === 'function') {
+                                    favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                                } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                                    favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                                } else {
+                                    const f = document.getElementById('favPopup');
+                                    if (f) {
+                                        favs = Array.from(f.querySelectorAll('td.fav-number')).map(td => {
+                                            try {
+                                                const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                                if (dn) return Number(dn);
+                                                const txt = String(td.textContent || '');
+                                                const m = txt.match(/(\d+)/);
+                                                return m ? Number(m[1]) : null;
+                                            } catch (e) { return null; }
+                                        }).filter(n => Number.isFinite(n));
+                                    }
+                                }
+                            } catch (e) { favs = []; }
+                            if (favs && favs.length) {
+                                const fset = new Set((favs || []).map(n => Number(n)));
+                                // read filter operator/count from favPopup controls (fallbacks provided)
+                                let op = '>=';
+                                let req = 1;
+                                try {
+                                    const fpop = document.getElementById('favPopup');
+                                    if (fpop) {
+                                        const opEl = fpop.querySelector('#favFilterOp');
+                                        const cntEl = fpop.querySelector('#favFilterCount');
+                                        if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value;
+                                        if (cntEl) {
+                                            const v = Number(cntEl.value);
+                                            if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v)));
+                                        }
+                                    }
+                                } catch (e) { }
+
+                                arr = arr.filter(([key, list]) => {
+                                    try {
+                                        // count matches of fav numbers inside the combo key
+                                        const nums = key.split('-').map(Number);
+                                        let matchCount = 0;
+                                        for (const n of nums) if (fset.has(Number(n))) matchCount++;
+                                        if (op === '>=') return matchCount >= req;
+                                        if (op === '=') return matchCount === req;
+                                        if (op === '<=') return matchCount <= req;
+                                        return matchCount >= req;
+                                    } catch (e) { return false; }
+                                });
+                            }
+                        }
+                    } catch (e) { /* ignore fav filter errors */ }
                     const sort = sortSel.value;
                     if (sort === "value_asc") arr.sort((a, b) => compareKey(a[0], b[0]));
                     else if (sort === "value_desc") arr.sort((a, b) => compareKey(b[0], a[0]));
@@ -7676,6 +7901,62 @@
                                 });
                             }
                         } catch (e) { /* ignore */ }
+
+                        // Apply fav-include filter when requested (worker path)
+                        try {
+                            const favElW = document.getElementById('cell6_5_favSel');
+                            if (typeof favElW !== 'undefined' && favElW && String(favElW.value) === 'include') {
+                                let favsW = [];
+                                try {
+                                    if (window.getFavItems && typeof window.getFavItems === 'function') {
+                                        favsW = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                                    } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                                        favsW = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                                    } else {
+                                        const f = document.getElementById('favPopup');
+                                        if (f) {
+                                            favsW = Array.from(f.querySelectorAll('td.fav-number')).map(td => {
+                                                try {
+                                                    const dn = td.dataset && td.dataset.number ? td.dataset.number : (td.getAttribute && td.getAttribute('data-number'));
+                                                    if (dn) return Number(dn);
+                                                    const txt = String(td.textContent || '');
+                                                    const m = txt.match(/(\d+)/);
+                                                    return m ? Number(m[1]) : null;
+                                                } catch (e) { return null; }
+                                            }).filter(n => Number.isFinite(n));
+                                        }
+                                    }
+                                } catch (e) { favsW = []; }
+                                if (favsW && favsW.length) {
+                                    const fsetW = new Set((favsW || []).map(n => Number(n)));
+                                    let opW = '>='; let reqW = 1;
+                                    try {
+                                        const fpop = document.getElementById('favPopup');
+                                        if (fpop) {
+                                            const opEl = fpop.querySelector('#favFilterOp');
+                                            const cntEl = fpop.querySelector('#favFilterCount');
+                                            if (opEl && ['>=', '<=', '='].includes(opEl.value)) opW = opEl.value;
+                                            if (cntEl) {
+                                                const v = Number(cntEl.value);
+                                                if (Number.isFinite(v)) reqW = Math.max(0, Math.min(6, Math.floor(v)));
+                                            }
+                                        }
+                                    } catch (e) { }
+
+                                    arr = arr.filter(([key, list]) => {
+                                        try {
+                                            const nums = key.split('-').map(Number);
+                                            let matchCount = 0;
+                                            for (const n of nums) if (fsetW.has(Number(n))) matchCount++;
+                                            if (opW === '>=') return matchCount >= reqW;
+                                            if (opW === '=') return matchCount === reqW;
+                                            if (opW === '<=') return matchCount <= reqW;
+                                            return matchCount >= reqW;
+                                        } catch (e) { return false; }
+                                    });
+                                }
+                            }
+                        } catch (e) { /* ignore fav filter errors */ }
 
                         groupCache = arr;
                         cacheKey = newCacheKey;
@@ -12144,6 +12425,16 @@
                                 }
                             }
                         } catch (e) { }
+                        // restore fav popup to previous state if it was visible before the Ctrl-hide
+                        try {
+                            const f = document.getElementById('favPopup');
+                            if (f && window.__prevFavVisible) {
+                                f.style.display = 'block';
+                                if (typeof adjustFavPosition === 'function') {
+                                    try { adjustFavPosition(); } catch (e) { }
+                                }
+                            }
+                        } catch (e) { }
                     } else {
                         numberPickerPopup.style.opacity = '0';
                         setTimeout(() => {
@@ -12156,7 +12447,12 @@
                             window.__prevTrashVisible = !!(t && (getComputedStyle(t).display !== 'none'));
                             if (t) t.style.display = 'none';
                         } catch (e) { }
-                        try { const f = document.getElementById('favPopup'); if (f) f.style.display = 'none'; } catch (e) { }
+                        try {
+                            const f = document.getElementById('favPopup');
+                            // record previous visible state so we can restore when opening again
+                            window.__prevFavVisible = !!(f && (getComputedStyle(f).display !== 'none'));
+                            if (f) f.style.display = 'none';
+                        } catch (e) { }
                     }
 
                     // Show/hide scale handle
@@ -12900,17 +13196,27 @@
             favPopup.style.position = 'fixed';
             favPopup.style.zIndex = '10001';
             favPopup.innerHTML = `
-                <div style="padding:8px;display:flex;gap:8px;align-items:center;">
-                    <label id="favLabel" style="font-weight:700;color:var(--text);display:inline-flex;align-items:center;height:32px;padding:0 4px 0 0;">Favs:</label>
-                    <button id="favClearBtn" class="clear-btn" title="Xóa yêu thích" style="height:32px;padding:6px 10px;">Xóa</button>
-                    <div style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;">
+                <div style="padding:6px;display:flex;gap:6px;align-items:center;">
+                    <!-- fneed: compute N numbers to add to fav so 'include' filter matches maximum distinct periods -->
+                    <div style="display:inline-flex;align-items:center;gap:4px;">
+                        <label style="font-size:12px;color:var(--muted);">fneed</label>
+                        <div style="position:relative;display:inline-block;vertical-align:middle;">
+                            <input id="favFneedInput" type="number" min="1" max="39" value="3" style="width:48px;padding:4px 18px 4px 8px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);box-sizing:border-box;text-align:center;" title="Số lượng số cần thêm tự động (1-39)">
+                            <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;z-index:3;pointer-events:auto;width:18px;align-items:center;">
+                                <button type="button" class="fav-k-up" title="Tăng 1" style="width:16px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:9px;line-height:10px;text-align:center;font-weight:700;">▲</button>
+                                <button type="button" class="fav-k-down" title="Giảm 1" style="width:16px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:9px;line-height:10px;text-align:center;font-weight:700;">▼</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="favClearBtn" class="clear-btn" title="Xóa yêu thích" style="height:26px;padding:4px 8px;font-size:13px;line-height:1;">Xóa</button>
+                    <div style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;">
                         <label style="font-size:12px;color:var(--muted);">f</label>
                         <select id="favFilterOp" style="height:28px;padding:4px;">
                             <option value=">=">&gt;=</option>
                             <option value="=">=</option>
                             <option value="<=">&lt;=</option>
                         </select>
-                        <input id="favFilterCount" type="number" min="0" max="6" value="2" style="width:56px;height:28px;padding:4px;text-align:center;" title="Số lượng khớp với fav (0-6)">
+                        <input id="favFilterCount" type="number" min="0" max="6" value="2" style="width:36px;height:28px;padding:4px;text-align:center;" title="Số lượng khớp với fav (0-6)">
                     </div>
                 </div>
                 <div style="padding:6px 8px;max-height:calc(var(--trash-row-height,36px) * 15);overflow:auto;">
@@ -12923,9 +13229,61 @@
             try {
                 const op = favPopup.querySelector('#favFilterOp');
                 const cnt = favPopup.querySelector('#favFilterCount');
+                const fneedInput = favPopup.querySelector('#favFneedInput');
                 const notify = () => { try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { } };
                 if (op) op.addEventListener('change', notify);
                 if (cnt) cnt.addEventListener('change', notify);
+                if (fneedInput) {
+                    const computeAndAdd = createDebounce(async () => {
+                        try {
+                            let v = Number(fneedInput.value) || 0;
+                            if (!Number.isInteger(v) || v < 1) { v = 1; fneedInput.value = '1'; }
+                            if (v > 39) { v = 39; fneedInput.value = '39'; }
+                            const res = (typeof computeBestFav === 'function') ? computeBestFav(v) : null;
+                            if (res && Array.isArray(res.chosen)) {
+                                try {
+                                    // replace entire fav list with computed numbers
+                                    favItems = [];
+                                    try { renderFav(); } catch (e) { }
+                                    try { const ins = numberPickerTable.querySelectorAll('td.in-fav'); ins.forEach(i => i.classList.remove('in-fav')); } catch (e) { }
+                                } catch (e) { }
+                                if (res.chosen.length) {
+                                    for (const num of res.chosen) {
+                                        try { addToFav(num); } catch (e) { }
+                                    }
+                                }
+                                try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                                try { renderFav(); } catch (e) { }
+                                try { updateFavBadge(); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    }, 300);
+                    fneedInput.addEventListener('input', computeAndAdd);
+                    // wire spinner buttons for fav fneed (wrap between 1 and 39)
+                    try {
+                        const up = favPopup.querySelector('.fav-k-up');
+                        const down = favPopup.querySelector('.fav-k-down');
+                        const MIN_K = 1, MAX_K = 39;
+                        if (up) up.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            let v = parseInt(fneedInput.value, 10);
+                            if (!Number.isInteger(v)) v = 0;
+                            v = v + 1;
+                            if (v > MAX_K) v = MIN_K;
+                            fneedInput.value = String(v);
+                            try { computeAndAdd(); } catch (e) { fneedInput.dispatchEvent(new Event('input', { bubbles: true })); }
+                        });
+                        if (down) down.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            let v = parseInt(fneedInput.value, 10);
+                            if (!Number.isInteger(v)) v = 0;
+                            v = v - 1;
+                            if (v < MIN_K) v = MAX_K;
+                            fneedInput.value = String(v);
+                            try { computeAndAdd(); } catch (e) { fneedInput.dispatchEvent(new Event('input', { bubbles: true })); }
+                        });
+                    } catch (err) { /* ignore spinner wiring errors */ }
+                }
             } catch (e) { }
             // expose helper for restoring position from other scopes
             try { window.__adjustTrashPosition = adjustTrashPosition; } catch (e) { }
@@ -14314,6 +14672,80 @@
                 return { total, remaining: best.remaining, pages: Math.ceil(best.remaining / 20), chosen: best.chosen, excludedCount: best.excludedCount };
             }
 
+            // compute best N numbers to ADD to fav (maximize distinct periods matched)
+            function computeBestFav(n) {
+                n = Number(n) || 0; if (n < 1) return null;
+                const filtered = rows.slice();
+                const total = filtered.length;
+                if (!total) return { total: 0, included: 0, pages: 0, chosen: [], includedCount: 0 };
+
+                // build number -> set(rowIndex)
+                const pool = getPopupNumbers();
+                const poolSet = new Set(pool);
+                const numToRows = new Map();
+                filtered.forEach((r, idx) => {
+                    const nums = r.nums || [];
+                    for (let t = 0; t < nums.length; t++) {
+                        const v = Number(nums[t]);
+                        if (!poolSet.has(v)) continue;
+                        if (!numToRows.has(v)) numToRows.set(v, new Set());
+                        numToRows.get(v).add(idx);
+                    }
+                });
+
+                if (pool.length <= n) {
+                    const union = new Set();
+                    pool.forEach(p => { const s = numToRows.get(p); if (s) for (const i of s) union.add(i); });
+                    const included = union.size;
+                    return { total, included, pages: Math.ceil(included / 20), chosen: pool.slice(), includedCount: included };
+                }
+
+                const comb = (N, r) => { if (r > N) return 0; let res = 1; for (let i = 1; i <= r; i++) { res = res * (N - (r - i)) / i; } return Math.round(res); };
+                const combos = comb(pool.length, n);
+                const MAX_EXACT = 200000;
+                let best = { included: -1, chosen: [], includedCount: 0 };
+
+                if (combos <= MAX_EXACT) {
+                    // exact backtrack (maximize union size)
+                    const idxPool = pool;
+                    const stack = [];
+                    function backtrack(start) {
+                        if (stack.length === n) {
+                            const union = new Set();
+                            for (const p of stack) {
+                                const s = numToRows.get(p);
+                                if (s) for (const i of s) union.add(i);
+                            }
+                            const included = union.size;
+                            if (included > best.included) best = { included, chosen: stack.slice(), includedCount: included };
+                            return;
+                        }
+                        for (let i = start; i < idxPool.length; i++) { stack.push(idxPool[i]); backtrack(i + 1); stack.pop(); }
+                    }
+                    backtrack(0);
+                } else {
+                    // greedy approximate: pick candidates that cover most new rows
+                    const available = new Set(pool);
+                    const chosen = [];
+                    const includedSet = new Set();
+                    for (let step = 0; step < n; step++) {
+                        let bestChoice = null, bestMarginal = -Infinity;
+                        for (const candidate of Array.from(available)) {
+                            const s = numToRows.get(candidate);
+                            if (!s || s.size === 0) { bestChoice = candidate; bestMarginal = 0; break; }
+                            let marginal = 0; for (const idx of s) if (!includedSet.has(idx)) marginal++;
+                            if (marginal > bestMarginal) { bestMarginal = marginal; bestChoice = candidate; }
+                        }
+                        if (bestChoice === null) break;
+                        const s2 = numToRows.get(bestChoice); if (s2) for (const i of s2) includedSet.add(i);
+                        chosen.push(bestChoice); available.delete(bestChoice);
+                    }
+                    best = { included: includedSet.size, chosen, includedCount: includedSet.size };
+                }
+
+                return { total, included: best.included, pages: Math.ceil(best.included / 20), chosen: best.chosen, includedCount: best.includedCount };
+            }
+
             // wire input: when user enters k and presses Enter or blurs, compute and move chosen numbers to trash
             (function wireTrashInput() {
                 try {
@@ -14633,14 +15065,33 @@
 
             function onShiftKeyUp(e) {
                 try {
-                    if (e.key !== 'Shift') return;
-                    if (!isPickerOpen()) return; // only when main popup is open
-                    if (!trashEnabled) return; // respect trash enabled state
-                    // toggle
-                    const wasVisible = trashPopup.style.display === 'block';
-                    const nowVisible = wasVisible ? 'none' : 'block';
-                    trashPopup.style.display = nowVisible;
-                    if (nowVisible === 'block') adjustTrashPosition();
+                    // Toggle trash on Shift release
+                    if (e.key === 'Shift') {
+                        if (!isPickerOpen()) return; // only when main popup is open
+                        if (!trashEnabled) return; // respect trash enabled state
+                        // toggle
+                        const wasVisible = trashPopup.style.display === 'block';
+                        const nowVisible = wasVisible ? 'none' : 'block';
+                        trashPopup.style.display = nowVisible;
+                        if (nowVisible === 'block') adjustTrashPosition();
+                        // Copy numbers when closing handled below (existing logic)
+                    }
+                    // Toggle fav on Alt release (mirror Shift->trash behavior)
+                    else if (e.key === 'Alt') {
+                        try {
+                            // Prevent browser default Alt behavior (menu focus) when
+                            // number-picker is open so our Alt-toggle takes precedence.
+                            try { e.preventDefault(); } catch (pe) { }
+                            if (!isPickerOpen()) return; // only when main popup is open
+                            // toggle fav popup
+                            const wasFavVisible = favPopup.style.display === 'block';
+                            const nowFavVisible = wasFavVisible ? 'none' : 'block';
+                            favPopup.style.display = nowFavVisible;
+                            // record last explicit fav state so Ctrl-toggle can restore it
+                            try { window.__prevFavVisible = nowFavVisible === 'block'; } catch (e) { }
+                            if (nowFavVisible === 'block') try { adjustFavPosition(); } catch (ee) { }
+                        } catch (favErr) { /* ignore fav toggle errors */ }
+                    } else return;
 
                     // Copy numbers in the trash popup to clipboard in form a,b,c,...
                     // Only copy when Shift action closed the trash popup (nowVisible === 'none')
@@ -14674,6 +15125,17 @@
                 } catch (err) { /* ignore */ }
             }
             window.addEventListener('keyup', onShiftKeyUp, true);
+            // Prevent Chrome's Alt menu from opening while our number-picker
+            // is active by intercepting the Alt key on keydown (capture phase).
+            window.addEventListener('keydown', function (e) {
+                try {
+                    if ((e.key === 'Alt' || e.key === 'AltGraph') && isPickerOpen()) {
+                        try { e.preventDefault(); } catch (pe) { }
+                        try { e.stopImmediatePropagation(); } catch (se) { }
+                        return;
+                    }
+                } catch (err) { /* ignore */ }
+            }, true);
         })();
     </script>
     </script>
