@@ -1837,12 +1837,13 @@
             z-index: 0;
         }
 
-        /* Make controls inside Cell8/9/10/11 stick under the header when scrolling.
-           Keep them in normal flow so they match other sections visually.
-        */
+        /* Make controls inside Cell7/8/9/10/11 stick under the header when scrolling.
+              Keep them in normal flow so they match other sections visually.
+          */
         #cell5_5 .controls,
         #cell6_5 .controls,
         #cell6_6 .controls,
+        #cell7 .controls,
         #cell8 .controls,
         #cell9 .controls,
         #cell10 .controls,
@@ -1866,6 +1867,7 @@
         #cell5_5,
         #cell6_5,
         #cell6_6,
+        #cell7,
         #cell8,
         #cell9,
         #cell10,
@@ -4853,7 +4855,7 @@
             const controls = document.createElement("div");
             controls.className = "controls";
             const diffSel = document.createElement("select");
-            for (let i = 0; i <= 6; i++) { const o = document.createElement("option"); o.value = i; o.textContent = `Sai khác ${i}`; diffSel.appendChild(o); } diffSel.value = "1";
+            for (let i = 0; i <= 6; i++) { const o = document.createElement("option"); o.value = i; o.textContent = `Sai khác ${i}`; diffSel.appendChild(o); } diffSel.value = "0";
             const consec = document.createElement("input"); consec.type = "checkbox"; const consecLabel = document.createElement("label"); consecLabel.className = "flex"; consecLabel.append(consec, document.createTextNode("Liền kề"));
             const sortSel = document.createElement("select");
             [["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
@@ -4889,26 +4891,75 @@
                     const labelRows = {};
                     rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
                     const labels = Object.keys(labelRows).sort();
-                    const used = new Set();
                     let groups = [];
 
-                    // Bước 1: Luôn nhóm theo điều kiện lỏng nhất (không liền kề)
-                    labels.forEach(base => {
-                        if (used.has(base)) return;
-                        used.add(base);
-                        const gLabels = [base];
-                        let gRows = [...labelRows[base]];
+                    // Bước 1: Khi 'Liền kề' được chọn, giữ lại logic hiện tại (lọc theo số vị trí khác nhau
+                    // và nhóm lỏng nhất), còn nếu không được chọn thì nhóm theo tổ hợp (combination) của
+                    // các ký tự label (sắp xếp không giảm: a<=b<=...<=f) — tức là ghép các label có cùng
+                    // multiset ký tự vào một nhóm.
+                    if (!consec.checked) {
+                        // Non-consec (base-centric) mode: for each label (base) collect
+                        // other labels whose multiset distance to the base is <= maxDiff.
+                        // This avoids transitive merging (connected-component closure)
+                        // which can create overly large groups when labels chain.
+                        const maxDiff = parseInt(diffSel.value, 10);
+                        const countsMap = new Map();
+                        labels.forEach(lbl => {
+                            const cnt = [0, 0, 0, 0, 0, 0];
+                            for (let i = 0; i < lbl.length; i++) {
+                                const d = parseInt(lbl[i], 10);
+                                if (Number.isFinite(d) && d >= 1 && d <= 6) cnt[d - 1]++;
+                            }
+                            countsMap.set(lbl, cnt);
+                        });
 
-                        for (let j = 0; j < labels.length; j++) {
-                            const other = labels[j];
-                            if (used.has(other)) continue;
-                            const pos = diffPositions(base, other);
-                            // Chỉ kiểm tra số vị trí khác nhau, không kiểm tra liền kề
-                            if (pos.length > parseInt(diffSel.value, 10)) continue;
-                            used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
+                        const used = new Set();
+                        groups = [];
+                        for (let i = 0; i < labels.length; i++) {
+                            const base = labels[i];
+                            if (used.has(base)) continue;
+                            used.add(base);
+                            const gLabels = [base];
+                            const gRows = [...(labelRows[base] || [])];
+                            const ca = countsMap.get(base);
+                            for (let j = i + 1; j < labels.length; j++) {
+                                const other = labels[j];
+                                if (used.has(other)) continue;
+                                const cb = countsMap.get(other);
+                                let sumAbs = 0;
+                                for (let k = 0; k < 6; k++) sumAbs += Math.abs((ca[k] || 0) - (cb[k] || 0));
+                                const multisetDist = Math.floor(sumAbs / 2);
+                                if (multisetDist <= maxDiff) {
+                                    used.add(other);
+                                    gLabels.push(other);
+                                    gRows.push(...(labelRows[other] || []));
+                                }
+                            }
+                            if (gRows.length >= 2) {
+                                gLabels.sort();
+                                groups.push({ base: gLabels[0], labels: gLabels.slice(), rows: gRows });
+                            }
                         }
-                        if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
-                    });
+                    } else {
+                        const used = new Set();
+                        groups = [];
+                        labels.forEach(base => {
+                            if (used.has(base)) return;
+                            used.add(base);
+                            const gLabels = [base];
+                            let gRows = [...labelRows[base]];
+
+                            for (let j = 0; j < labels.length; j++) {
+                                const other = labels[j];
+                                if (used.has(other)) continue;
+                                const pos = diffPositions(base, other);
+                                // Chỉ kiểm tra số vị trí khác nhau, không kiểm tra liền kề
+                                if (pos.length > parseInt(diffSel.value, 10)) continue;
+                                used.add(other); gLabels.push(other); gRows.push(...labelRows[other]);
+                            }
+                            if (gRows.length >= 2) groups.push({ base, labels: gLabels, rows: gRows });
+                        });
+                    }
 
                     // Bước 2: Nếu tick "Liền kề", lọc các labels không thoả điều kiện trong mỗi nhóm
                     if (consec.checked) {
@@ -4934,13 +4985,21 @@
                     groupCache = groups;
                     cacheKey = newCacheKey;
                     renderGroups(groups);
+                    // Ensure controls sit under header after render by scrolling
+                    try { setTimeout(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }, 160); } catch (e) { }
                 }
             }
 
             function renderGroups(groups) {
                 // Apply sorting based on sortSel value
-                if (sortSel.value === 'count_desc') groups.sort((a, b) => b.rows.length - a.rows.length);
-                else if (sortSel.value === 'count_asc') groups.sort((a, b) => a.rows.length - b.rows.length);
+                if (sortSel.value === 'count_desc') groups.sort((a, b) => {
+                    const d = b.rows.length - a.rows.length;
+                    return d !== 0 ? d : compareKey(a.base, b.base);
+                });
+                else if (sortSel.value === 'count_asc') groups.sort((a, b) => {
+                    const d = a.rows.length - b.rows.length;
+                    return d !== 0 ? d : compareKey(a.base, b.base);
+                });
                 else if (sortSel.value === 'value_asc') groups.sort((a, b) => compareKey(a.base, b.base));
                 else if (sortSel.value === 'value_desc') groups.sort((a, b) => compareKey(b.base, a.base));
 
@@ -12770,7 +12829,7 @@
         // Run bootstrap then enable sticky fallback for multiple sections
         bootstrap().then(() => {
             (function enableStickyFallbackForSections() {
-                const SECTIONS = ['cell6_5', 'cell6_6', 'cell8', 'cell9', 'cell10', 'cell11'];
+                const SECTIONS = ['cell6_5', 'cell6_6', 'cell7', 'cell8', 'cell9', 'cell10', 'cell11'];
                 const HEADER_OFFSET = 64; // matches CSS top
 
                 SECTIONS.forEach(sectionId => {
