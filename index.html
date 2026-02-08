@@ -5062,9 +5062,21 @@
                         inner += "<table><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>Euclid</th></tr></thead><tbody>";
                         slice.forEach(r => {
                             const label = labelOf(r.nums);
-                            const labelHtml = label.split("").map((ch, i) => ch !== g.base[i]
-                                ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`
-                                : `<span>${ch}</span>`).join(" ");
+                            let labelHtml = "";
+                            if (!consec.checked) {
+                                const base = String(g.base || "");
+                                const baseCounts = {};
+                                for (const c of base) baseCounts[c] = (baseCounts[c] || 0) + 1;
+                                const counts = Object.assign({}, baseCounts);
+                                labelHtml = label.split("").map(ch => {
+                                    if (counts[ch] && counts[ch] > 0) { counts[ch]--; return `<span>${ch}</span>`; }
+                                    return `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`;
+                                }).join(" ");
+                            } else {
+                                labelHtml = label.split("").map((ch, i) => ch !== g.base[i]
+                                    ? `<span style='background:#ff4444;color:white;padding:2px 6px;border-radius:4px;font-weight:700'>${ch}</span>`
+                                    : `<span>${ch}</span>`).join(" ");
+                            }
                             const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             // compute euclidean distances between adjacent numbers (5 values) and total
                             let euclidPartsHtml = [];
