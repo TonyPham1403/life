@@ -13653,6 +13653,133 @@
                 } catch (err) { }
             });
 
+            // double-click on fav popup: read clipboard and append valid numbers to fav list
+            try {
+                favPopup.addEventListener('dblclick', async (ev) => {
+                    try {
+                        // Ignore dblclicks that originate from UI controls (buttons/inputs/selects)
+                        try {
+                            if (ev.target && (ev.target.closest('button') || ev.target.closest('input') || ev.target.closest('select'))) return;
+                        } catch (ee) { }
+
+                        const processText = (text) => {
+                            if (!text) return;
+                            const parts = String(text).split(/[^0-9]+/).filter(Boolean);
+                            if (parts.length === 0) return;
+                            const nums = parts.map(s => parseInt(s, 10)).filter(n => Number.isInteger(n) && n >= 1 && n <= 45);
+                            if (nums.length === 0) return;
+                            const unique = Array.from(new Set(nums));
+                            for (const n of unique) {
+                                try { addToFav(n); } catch (e) { }
+                            }
+                        };
+
+                        // try modern clipboard API first
+                        let text = '';
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.readText) {
+                                text = await navigator.clipboard.readText();
+                            }
+                        } catch (err) { text = ''; }
+
+                        if (text) {
+                            processText(text);
+                            return;
+                        }
+
+                        // Fallback: show a small overlay to paste manually
+                        const overlay = document.createElement('div');
+                        overlay.style.position = 'fixed';
+                        overlay.style.zIndex = 10002;
+                        overlay.style.left = '50%';
+                        overlay.style.top = '50%';
+                        overlay.style.transform = 'translate(-50%,-50%)';
+                        overlay.style.background = 'white';
+                        overlay.style.border = '2px solid #888';
+                        overlay.style.padding = '10px';
+                        overlay.style.borderRadius = '8px';
+                        overlay.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+                        overlay.setAttribute('role', 'dialog');
+
+                        const msg = document.createElement('div');
+                        msg.style.marginBottom = '8px';
+                        msg.style.color = '#111';
+                        msg.textContent = 'Paste numbers here (e.g. 1,2,3) or click "Use clipboard"';
+                        const ta = document.createElement('textarea');
+                        ta.style.width = '320px';
+                        ta.style.height = '80px';
+                        ta.style.fontSize = '14px';
+                        ta.style.padding = '6px';
+                        ta.placeholder = 'Paste (Ctrl+V) or type numbers then press Ctrl+Enter';
+
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.gap = '8px';
+                        row.style.marginTop = '8px';
+
+                        const useBtn = document.createElement('button');
+                        useBtn.textContent = 'Use clipboard';
+                        useBtn.className = 'ghost';
+                        const submitBtn = document.createElement('button');
+                        submitBtn.textContent = 'Submit';
+                        submitBtn.className = 'primary';
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.textContent = 'Cancel';
+                        cancelBtn.className = 'clear-btn';
+
+                        row.appendChild(useBtn);
+                        row.appendChild(submitBtn);
+                        row.appendChild(cancelBtn);
+
+                        overlay.appendChild(msg);
+                        overlay.appendChild(ta);
+                        overlay.appendChild(row);
+                        document.body.appendChild(overlay);
+                        ta.focus();
+
+                        let resolved = false;
+                        const clean = (v) => {
+                            if (resolved) return; resolved = true;
+                            try { overlay.remove(); } catch (e) { }
+                            if (v) processText(v);
+                        };
+
+                        useBtn.addEventListener('click', async () => {
+                            try {
+                                if (navigator.clipboard && navigator.clipboard.readText) {
+                                    const t = await navigator.clipboard.readText();
+                                    if (t) { clean(t); return; }
+                                    alert('Clipboard is empty or not available. Please paste manually.');
+                                } else {
+                                    alert('Clipboard API not available. Please paste manually.');
+                                }
+                            } catch (e) { alert('Cannot read clipboard. Please paste manually.'); }
+                        });
+
+                        submitBtn.addEventListener('click', () => { clean(ta.value || ''); });
+                        cancelBtn.addEventListener('click', () => { clean(''); });
+
+                        ta.addEventListener('paste', (e) => {
+                            try {
+                                e.preventDefault();
+                                const d = (e.clipboardData && e.clipboardData.getData) ? e.clipboardData.getData('text') : null;
+                                if (d) clean(String(d));
+                                else setTimeout(() => clean(ta.value || ''), 50);
+                            } catch (err) { clean(''); }
+                        }, { once: true });
+
+                        ta.addEventListener('keydown', (e) => {
+                            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                clean(ta.value || '');
+                            }
+                        });
+
+                        setTimeout(() => { clean(''); }, 12000);
+                    } catch (err) { }
+                });
+            } catch (e) { }
+
             // allow dropping from fav back to popup: accept drops on numberPickerTable to remove
             numberPickerTable.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
             numberPickerTable.addEventListener('drop', (e) => {
