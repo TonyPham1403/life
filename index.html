@@ -15158,54 +15158,75 @@
                         const nowVisible = wasVisible ? 'none' : 'block';
                         trashPopup.style.display = nowVisible;
                         if (nowVisible === 'block') adjustTrashPosition();
-                        // Copy numbers when closing handled below (existing logic)
-                    }
-                    // Toggle fav on Alt release (mirror Shift->trash behavior)
-                    else if (e.key === 'Alt') {
-                        try {
-                            // Prevent browser default Alt behavior (menu focus) when
-                            // number-picker is open so our Alt-toggle takes precedence.
-                            try { e.preventDefault(); } catch (pe) { }
-                            if (!isPickerOpen()) return; // only when main popup is open
-                            // toggle fav popup
-                            const wasFavVisible = favPopup.style.display === 'block';
-                            const nowFavVisible = wasFavVisible ? 'none' : 'block';
-                            favPopup.style.display = nowFavVisible;
-                            // record last explicit fav state so Ctrl-toggle can restore it
-                            try { window.__prevFavVisible = nowFavVisible === 'block'; } catch (e) { }
-                            if (nowFavVisible === 'block') try { adjustFavPosition(); } catch (ee) { }
-                        } catch (favErr) { /* ignore fav toggle errors */ }
-                    } else return;
 
-                    // Copy numbers in the trash popup to clipboard in form a,b,c,...
-                    // Only copy when Shift action closed the trash popup (nowVisible === 'none')
-                    try {
+                        // If we just closed the trash popup, copy trashed numbers to clipboard
                         if (nowVisible === 'none') {
-                            // Use the tracked trashItems (keeps original order)
-                            const nums = Array.isArray(trashItems) ? trashItems.slice() : [];
-                            const csv = nums.join(',');
-                            if (csv.length > 0) {
-                                if (navigator.clipboard && navigator.clipboard.writeText) {
-                                    navigator.clipboard.writeText(csv).catch(() => {
-                                        // fallback to execCommand
+                            try {
+                                const nums = Array.isArray(trashItems) ? trashItems.slice() : [];
+                                const csv = nums.join(',');
+                                if (csv.length > 0) {
+                                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                                        navigator.clipboard.writeText(csv).catch(() => {
+                                            const ta = document.createElement('textarea');
+                                            ta.value = csv;
+                                            document.body.appendChild(ta);
+                                            ta.select();
+                                            try { document.execCommand('copy'); } catch (e) { }
+                                            ta.remove();
+                                        });
+                                    } else {
                                         const ta = document.createElement('textarea');
                                         ta.value = csv;
                                         document.body.appendChild(ta);
                                         ta.select();
                                         try { document.execCommand('copy'); } catch (e) { }
                                         ta.remove();
-                                    });
-                                } else {
-                                    const ta = document.createElement('textarea');
-                                    ta.value = csv;
-                                    document.body.appendChild(ta);
-                                    ta.select();
-                                    try { document.execCommand('copy'); } catch (e) { }
-                                    ta.remove();
+                                    }
                                 }
-                            }
+                            } catch (copyErr) { /* ignore clipboard errors */ }
                         }
-                    } catch (copyErr) { /* ignore clipboard errors */ }
+                        return;
+                    }
+
+                    // Toggle fav on Alt release (mirror Shift->trash behavior)
+                    else if (e.key === 'Alt') {
+                        try {
+                            try { e.preventDefault(); } catch (pe) { }
+                            if (!isPickerOpen()) return; // only when main popup is open
+                            const wasFavVisible = favPopup.style.display === 'block';
+                            const nowFavVisible = wasFavVisible ? 'none' : 'block';
+                            favPopup.style.display = nowFavVisible;
+                            try { window.__prevFavVisible = nowFavVisible === 'block'; } catch (e) { }
+                            if (nowFavVisible === 'block') try { adjustFavPosition(); } catch (ee) { }
+
+                            // If we just closed the fav popup, copy fav numbers to clipboard
+                            if (nowFavVisible === 'none') {
+                                try {
+                                    const nums = Array.isArray(favItems) ? favItems.slice() : [];
+                                    const csv = nums.join(',');
+                                    if (csv.length > 0) {
+                                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                                            navigator.clipboard.writeText(csv).catch(() => {
+                                                const ta = document.createElement('textarea');
+                                                ta.value = csv;
+                                                document.body.appendChild(ta);
+                                                ta.select();
+                                                try { document.execCommand('copy'); } catch (e) { }
+                                                ta.remove();
+                                            });
+                                        } else {
+                                            const ta = document.createElement('textarea');
+                                            ta.value = csv;
+                                            document.body.appendChild(ta);
+                                            ta.select();
+                                            try { document.execCommand('copy'); } catch (e) { }
+                                            ta.remove();
+                                        }
+                                    }
+                                } catch (copyErr) { /* ignore clipboard errors */ }
+                            }
+                        } catch (favErr) { /* ignore fav toggle errors */ }
+                    } else return;
                 } catch (err) { /* ignore */ }
             }
             window.addEventListener('keyup', onShiftKeyUp, true);
