@@ -3429,26 +3429,80 @@
         }
 
         // ===== Renderers =====
-        // Fallback: capture Ctrl+clicks on rows inside section#cell11 (use capture so it runs before other handlers)
+        // Fallback: capture Ctrl+clicks on rows (and Shift-click) so it runs before other handlers
         document.addEventListener('click', (ev) => {
             try {
-                if (!ev || !ev.ctrlKey) return;
                 const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
                 if (!tr) return;
-                const section = tr.closest('section');
-                if (!section || section.id !== 'cell11') return;
-                ev.preventDefault();
-                const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
-                if (!result) return;
-                const nums = parseSixNumbersFromString(result);
-                if (!nums) return;
-                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
-                tr.classList.add('ctrl-selected');
-                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
-                try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
-                const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
-                if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
-                else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+
+                // Ctrl+click: navigate to Cell6.6 and apply numbers there (existing behavior)
+                if (ev && ev.ctrlKey) {
+                    const section = tr.closest('section');
+                    if (!section || section.id !== 'cell11') return;
+                    ev.preventDefault();
+                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                    if (!result) return;
+                    const nums = parseSixNumbersFromString(result);
+                    if (!nums) return;
+                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                    tr.classList.add('ctrl-selected');
+                    try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                    if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
+                    else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260); }
+                    return;
+                }
+
+                // Shift+click: navigate to Cell6.5, switch to 'unpair' mode and paste numbers into unpair inputs
+                if (ev && ev.shiftKey) {
+                    ev.preventDefault();
+                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                    if (!result) return;
+                    const nums = parseSixNumbersFromString(result);
+                    if (!nums) return;
+
+                    try { document.querySelectorAll('tr.shift-selected').forEach(r => r.classList.remove('shift-selected')); } catch (e) { }
+                    tr.classList.add('shift-selected');
+
+                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_5'); } catch (e) { }
+                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]');
+                    const applyToUnpair = () => {
+                        try {
+                            // set mode selector to unpair if available
+                            const sec = document.getElementById('cell6_5');
+                            const modeSel = (sec && sec.__modeSel) ? sec.__modeSel : (document.body && document.body.__modeSel) ? document.body.__modeSel : null;
+                            if (modeSel) {
+                                try { modeSel.value = 'unpair'; } catch (e) { }
+                                try { modeSel.dispatchEvent(new Event('change')); } catch (e) { }
+                            }
+
+                            // find unpair inputs and apply numbers
+                            for (let k = 0; k < 6; k++) {
+                                const id = `cell6_5_unpair_input_${k + 1}`;
+                                const inp = document.getElementById(id);
+                                if (inp) {
+                                    try { inp.value = String(nums[k]); } catch (e) { }
+                                    try { inp.dispatchEvent(new Event('input')); } catch (e) { }
+                                }
+                            }
+
+                            // also update place boxes so popup reflects the pasted numbers
+                            try { if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n))); } catch (e) { }
+                            try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                        } catch (e) { /* ignore */ }
+                    };
+
+                    if (navBtn) {
+                        setTimeout(() => {
+                            try { navBtn.click(); } catch (e) { }
+                            setTimeout(() => { try { applyToUnpair(); } catch (e) { } }, 220);
+                        }, 200);
+                    } else {
+                        setTimeout(() => { try { applyToUnpair(); } catch (e) { } }, 260);
+                    }
+                    return;
+                }
             } catch (e) { /* ignore */ }
         }, true);
         function sectionShell(id, title, lead = "") {
@@ -6874,6 +6928,449 @@
             optLabel.appendChild(optSel);
             optLabel.style.display = 'none';
 
+            // --- Unpair mode: six distinct number inputs (1..45) ---
+            const unpairInputs = document.createElement('div');
+            unpairInputs.className = 'numtrash-wrapper';
+            unpairInputs.style.display = 'none';
+            unpairInputs.style.alignItems = 'center';
+            unpairInputs.style.gap = '6px';
+            unpairInputs.style.marginLeft = '6px';
+            // informational field that shows computed candidate and its dontmatch set in Unpair mode
+            const unpairInfo = document.createElement('span');
+            unpairInfo.className = 'numtrash-wrapper';
+            unpairInfo.style.display = 'none';
+            unpairInfo.style.alignItems = 'center';
+            unpairInfo.style.gap = '6px';
+            unpairInfo.style.marginLeft = '6px';
+            unpairInfo.style.fontWeight = '700';
+            unpairInfo.style.minWidth = '180px';
+            unpairInfo.textContent = '';
+            unpairInfo.style.cursor = 'pointer';
+            unpairInfo.title = 'Click to recompute from the 6 inputs';
+            unpairInfo.addEventListener('click', (ev) => {
+                try {
+                    // If there's no displayed text, give a visual cue and exit
+                    const txt = (unpairInfo && String(unpairInfo.textContent || '').trim()) || '';
+                    if (!txt) {
+                        try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (e) { }
+                        return;
+                    }
+                    // Format for clipboard: remove spaces around '>' and append newline
+                    let formatted = txt.replace(/\s*>\s*/g, '>');
+                    // Ensure trailing newline
+                    if (!formatted.endsWith('\n')) formatted += '\n';
+                    // Try Clipboard API, fallback to textarea
+                    (async () => {
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                await navigator.clipboard.writeText(formatted);
+                            } else {
+                                const ta = document.createElement('textarea');
+                                ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.value = formatted; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) { }
+                                try { document.body.removeChild(ta); } catch (e) { }
+                            }
+                            try { ev.target.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 180 }); } catch (e) { }
+                        } catch (e) {
+                            try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (ee) { }
+                        }
+                    })();
+                } catch (e) { }
+            });
+            // create six inputs styled like Cell6.6 (drag-input-container + up/down buttons)
+            const unpairInputEls = [];
+            for (let i = 0; i < 6; i++) {
+                const inp = document.createElement('input');
+                inp.type = 'number'; inp.min = 1; inp.max = 45; inp.placeholder = `#${i + 1}`;
+                inp.id = `cell6_5_unpair_input_${i + 1}`;
+                inp.style.width = '70px'; inp.style.boxSizing = 'border-box';
+
+                const container = document.createElement('div');
+                container.className = 'drag-input-container';
+                container.style.cssText = 'position:relative;display:inline-block;margin-right:6px;vertical-align:middle;';
+
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
+
+                inp.style.position = 'relative'; inp.style.zIndex = '1'; inp.style.paddingRight = '40px'; inp.style.boxSizing = 'border-box';
+
+                const btnGroup = document.createElement('div');
+                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
+
+                const clampForNumber = () => {
+                    const raw = String(inp.value ?? '').trim();
+                    if (raw === '') return;
+                    let n = parseInt(raw, 10);
+                    if (!Number.isFinite(n)) { inp.value = ''; return; }
+                    if (n < 1) inp.value = '1';
+                    else if (n > 45) inp.value = '45';
+                    else inp.value = String(n);
+                };
+
+                up.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n + 1;
+                    if (n > 45) n = 1; // wrap
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                });
+                down.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let n = parseInt(String(inp.value ?? '').trim(), 10);
+                    if (!Number.isFinite(n)) n = 0;
+                    n = n - 1;
+                    if (n < 1) n = 45; // wrap
+                    inp.value = String(n);
+                    inp.dispatchEvent(new Event('input'));
+                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                });
+
+                btnGroup.appendChild(up); btnGroup.appendChild(down);
+                container.appendChild(inp); container.appendChild(btnGroup); container.appendChild(dragHandle);
+
+                // make container draggable when it has a value and expose visual state
+                container.__dropHandled = false;
+                container.__dragging = false;
+
+                const updateDraggable = () => {
+                    const v = String(inp.value ?? '').trim();
+                    const has = v !== '';
+                    container.draggable = has;
+                    try { dragHandle.style.pointerEvents = has ? 'auto' : 'none'; dragHandle.style.cursor = has ? 'grab' : 'default'; } catch (e) { }
+                    container.style.borderRadius = '10px';
+                    container.style.padding = '2px';
+                    container.style.border = has ? '2px solid var(--accent)' : '2px solid transparent';
+                    container.style.opacity = has ? '1' : '0.9';
+                };
+                // expose updater so external code (swap handlers) can refresh visuals without
+                // triggering input events / recompute. Call as `container.updateDraggable()`.
+                try { container.updateDraggable = updateDraggable; } catch (e) { }
+                updateDraggable();
+
+                // uniqueness visual + input events
+                inp.addEventListener('input', () => {
+                    try {
+                        clampForNumber();
+                        const vals = unpairInputEls.map(e => e.value).filter(s => s !== '');
+                        unpairInputEls.forEach(el => {
+                            if (el.value !== '' && vals.indexOf(el.value) !== vals.lastIndexOf(el.value)) el.style.borderColor = 'red'; else el.style.borderColor = '';
+                        });
+                        try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                        // If all 6 inputs are filled with distinct numbers, compute best numTrash and num
+                        try {
+                            const filled = unpairInputEls.map(e => (e.value || '').trim()).filter(s => s !== '');
+                            if (filled.length === 6) {
+                                const nums = filled.map(s => parseInt(s, 10));
+                                const uniq = Array.from(new Set(nums));
+                                if (uniq.length === 6) {
+                                    try { computeAndApplyUnpairBest(uniq); } catch (e) { }
+                                }
+                            } else {
+                                // clear the informational field when not all inputs provided
+                                try { if (typeof unpairInfo !== 'undefined' && unpairInfo) unpairInfo.textContent = ''; } catch (e) { }
+                            }
+                        } catch (e) { }
+                    } catch (e) { }
+                    try { updateDraggable(); } catch (e) { }
+                });
+
+                // drag/drop: support swapping with other dynamic inputs, accept place-index/place-set,
+                // and clear value on dragend if drop was not handled (matching Cell6.6 behavior)
+                container.addEventListener('dragstart', (e) => {
+                    container.__dragging = true;
+                    container.__dropHandled = false;
+                    container.style.opacity = '0.5';
+                    try { window.__draggingDynamic = { type: 'cell6_5_unpair', input: inp, container: container, value: String(inp.value ?? '') }; } catch (err) { }
+                    try { e.dataTransfer.effectAllowed = 'copyMove'; } catch (er) { }
+                    try { e.dataTransfer.setData('text/plain', String(inp.value ?? '')); } catch (er) { }
+                    try { e.dataTransfer.setData('application/x-place-set', JSON.stringify(window.getPlaceValues ? window.getPlaceValues() : [])); } catch (er) { }
+                });
+
+                container.addEventListener('dragend', (e) => {
+                    container.style.opacity = '';
+                    try { window.__draggingDynamic = null; } catch (err) { }
+                    if (!container.__dropHandled && container.__dragging && String(inp.value ?? '').trim() !== '') {
+                        inp.value = '';
+                        inp.dispatchEvent(new Event('input'));
+                        try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                    }
+                    container.__dragging = false;
+                    container.__dropHandled = false;
+                });
+
+                container.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (er) { } container.style.backgroundColor = 'rgba(56, 239, 125, 0.04)'; });
+                container.addEventListener('dragleave', () => { container.style.backgroundColor = ''; });
+                container.addEventListener('drop', (e) => {
+                    e.preventDefault(); container.style.backgroundColor = ''; container.__dropHandled = true;
+                    const txt = e.dataTransfer.getData('text/plain');
+                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                    const labelData = e.dataTransfer.getData('application/x-label');
+                    let value = null;
+                    // If dragging from another dynamic input, swap values instead of replacing
+                    try {
+                        if (window.__draggingDynamic && window.__draggingDynamic.input && window.__draggingDynamic.input !== inp) {
+                            const srcInput = window.__draggingDynamic.input;
+                            const srcVal = String(srcInput.value ?? '');
+                            const tgtVal = String(inp.value ?? '');
+                            // perform silent swap: set values but DO NOT dispatch 'input' events
+                            // to avoid triggering recompute or changing the current UI highlights.
+                            try { srcInput.value = tgtVal; } catch (e) { srcInput.value = tgtVal; }
+                            try { inp.value = srcVal; } catch (e) { inp.value = srcVal; }
+                            // update drag visuals (draggability / handle) without recomputing
+                            try { if (srcInput.parentElement && typeof srcInput.parentElement.updateDraggable === 'function') srcInput.parentElement.updateDraggable(); } catch (e) { }
+                            try { if (container && typeof container.updateDraggable === 'function') container.updateDraggable(); } catch (e) { }
+                            // mark both containers as handled to avoid clearing on dragend
+                            try { srcInput.parentElement.__dropHandled = true; } catch (e) { }
+                            container.__dropHandled = true;
+                            try { window.__draggingDynamic = null; } catch (err) { }
+                            return;
+                        }
+                    } catch (err) { }
+
+                    if (placeIndexData) {
+                        const idx = parseInt(placeIndexData, 10);
+                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                        if (!isNaN(idx) && placeVals && idx >= 0 && idx < 6) value = placeVals[idx];
+                    } else if (placeSetData) {
+                        try {
+                            const arr = JSON.parse(placeSetData);
+                            if (Array.isArray(arr) && arr.length === 6) {
+                                // if full set dropped, pick corresponding index if possible, else first non-empty
+                                try {
+                                    const placeIdx = parseInt(e.dataTransfer.getData('application/x-place-target-index') || '-1', 10);
+                                } catch (er) { }
+                                // fallback: pick first non-empty
+                                if (Array.isArray(arr) && arr.length) {
+                                    for (const v of arr) { if (v !== null && v !== undefined && String(v).trim() !== '') { value = v; break; } }
+                                }
+                            } else if (Array.isArray(arr) && arr.length) {
+                                for (const v of arr) { if (v !== null && v !== undefined && String(v).trim() !== '') { value = v; break; } }
+                            }
+                        } catch (err) { }
+                    } else if (txt && String(txt).trim() !== '' && !String(txt).trim().startsWith('[')) {
+                        value = txt;
+                    } else if (labelData) { value = labelData; }
+
+                    if (value !== null && value !== undefined) {
+                        let n = parseInt(String(value).trim(), 10);
+                        if (Number.isFinite(n)) {
+                            if (n < 1) n = 1;
+                            if (n > 45) n = 45;
+                            inp.value = String(n);
+                            inp.dispatchEvent(new Event('input'));
+                            try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                        }
+                    }
+                });
+
+                unpairInputs.appendChild(container);
+                unpairInputEls.push(inp);
+            }
+
+            // dblclick quickpaste for the unpair inputs: read clipboard or prompt and apply
+            unpairInputs.addEventListener('dblclick', async (ev) => {
+                try {
+                    const popup = document.getElementById('numberPickerPopup');
+                    if (popup && popup.contains(ev.target)) return;
+                } catch (e) { }
+                let text = null;
+                try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (e) { text = null; }
+                if (!text || String(text).trim() === '') {
+                    try { const res = window.prompt('Paste 6 numbers (comma or space separated), e.g. 29,3,35,24,18,30', ''); if (res && String(res).trim() !== '') text = res.trim(); } catch (e) { text = null; }
+                }
+                if (!text) return;
+                try {
+                    const nums = parseSixNumbersFromString(text);
+                    if (!nums) {
+                        try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (e) { }
+                        return;
+                    }
+                    for (let k = 0; k < 6; k++) {
+                        unpairInputEls[k].value = String(nums[k]);
+                        unpairInputEls[k].dispatchEvent(new Event('input'));
+                    }
+                    try { ev.target.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (e) { }
+                    // clear any lingering number-picker hover highlights (orange border)
+                    try {
+                        if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                        try { window.__popupHighlights = null; window.__popupHighlightSource = null; } catch (e) { }
+                    } catch (e) { }
+                } catch (err) { console.warn('unpair quickpaste failed', err); }
+            });
+
+            // Compute best numTrash and corresponding num for the provided 6 numbers,
+            // then update `numTrashInput`, set trash to the found dontmatch set and
+            // trigger UI updates (highlights + trash popup update).
+            function computeAndApplyUnpairBest(sixNums) {
+                try {
+                    if (!Array.isArray(sixNums) || sixNums.length !== 6) return;
+                    // ensure numeric
+                    const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n));
+                    if (userNums.length !== 6) return;
+                    // build pair counts across dataset
+                    const pairCounts = new Map();
+                    try {
+                        rows.forEach(r => {
+                            try {
+                                const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                for (let i = 0; i < nums.length; i++) {
+                                    for (let j = i + 1; j < nums.length; j++) {
+                                        const a = nums[i], b = nums[j];
+                                        const key = `${a}-${b}`;
+                                        pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+                                    }
+                                }
+                            } catch (e) { }
+                        });
+                    } catch (e) { }
+
+                    // try largest n down to 1
+                    const MAX_N = Math.min(44, 44);
+                    let found = null;
+                    for (let n = MAX_N; n >= 1; n--) {
+                        for (const cand of userNums) {
+                            // build least-frequent others for cand
+                            const others = [];
+                            for (let y = 1; y <= 45; y++) {
+                                if (y === cand) continue;
+                                const a = Math.min(cand, y), b = Math.max(cand, y);
+                                const key = `${a}-${b}`;
+                                const c = pairCounts.get(key) || 0;
+                                others.push({ y, c });
+                            }
+                            others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                            const pick = others.slice(0, n).map(o => o.y);
+                            // ensure pick does NOT contain any of the other five user numbers
+                            const otherFive = userNums.filter(x => x !== cand);
+                            const conflict = pick.some(v => otherFive.indexOf(v) !== -1);
+                            if (!conflict) {
+                                found = { n, cand, pick };
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+
+                    if (!found) {
+                        // fallback: n = 1 with first candidate's least-frequent
+                        const cand = userNums[0];
+                        const others = [];
+                        for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
+                        others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                        found = { n: 1, cand, pick: others.slice(0, 1).map(o => o.y) };
+                    }
+
+                    try {
+                        // 1) update numTrash input first so Cell6.5 can re-render using the new k
+                        if (typeof numTrashInput !== 'undefined' && numTrashInput) {
+                            numTrashInput.value = String(found.n);
+                            try { numTrashInput.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) { try { numTrashInput.dispatchEvent(new Event('input')); } catch (ee) { } }
+                            // update the unpair info display (show candidate > {dontmatch list})
+                            try {
+                                if (typeof unpairInfo !== 'undefined' && unpairInfo) {
+                                    // display candidate and the other five input numbers (remaining from the six)
+                                    try {
+                                        const remaining = (userNums || []).filter(x => Number(x) !== Number(found.cand)).map(n => Number(n)).filter(Number.isFinite);
+                                        if (remaining && remaining.length) {
+                                            remaining.sort((a, b) => a - b);
+                                            // append current numTrash value in brackets
+                                            const k = (typeof numTrashInput !== 'undefined' && numTrashInput) ? String(numTrashInput.value || '') : String(found.n || '');
+                                            unpairInfo.textContent = `${found.cand}>{${remaining.join(',')}}[${k}]`;
+                                        } else {
+                                            unpairInfo.textContent = '';
+                                        }
+                                    } catch (ee) { unpairInfo.textContent = '' }
+                                }
+                            } catch (e) { }
+                        }
+                    } catch (e) { }
+
+                    // 2) wait for the Cell6.5 table to reflect the new numTrash (if it rerenders),
+                    // then move dontmatch numbers into trash and finally apply styling.
+                    try {
+                        const runAfterTableUpdate = () => {
+                            try {
+                                const uniq = Array.from(new Set(found.pick.map(n => Number(n)).filter(Number.isFinite)));
+                                if (!uniq.length) return;
+
+                                // Replace previous dontmatch set (if any) with the new `uniq` set.
+                                try {
+                                    const prevSet = window.__cell6_5_lastDontmatch || new Set();
+                                    const prevArr = Array.from(prevSet);
+                                    const toRestore = prevArr.filter(x => uniq.indexOf(x) === -1);
+
+                                    // Handler that applies highlights/pulse AFTER the final trash update (move)
+                                    const onTrashUpdated = () => {
+                                        try {
+                                            // remember latest dontmatch set for next time
+                                            try { window.__cell6_5_lastDontmatch = new Set(uniq); } catch (e) { }
+                                            try { updateCell6_5Highlights(); } catch (e) { }
+                                            // visual pulse on matching row inside Cell6.5 (if present)
+                                            try {
+                                                const tbl = document.querySelector('#cell6_5 table');
+                                                if (tbl) {
+                                                    const rowsDom = Array.from(tbl.querySelectorAll('tbody tr'));
+                                                    for (const r of rowsDom) {
+                                                        try {
+                                                            const numTd = r.children && r.children[0] ? r.children[0] : null;
+                                                            if (!numTd) continue;
+                                                            const val = Number((numTd.textContent || '').trim());
+                                                            if (Number.isFinite(val) && val === Number(found.cand)) {
+                                                                try { r.animate([{ transform: 'scale(1.02)' }, { transform: 'scale(1)' }], { duration: 260 }); } catch (e) { }
+                                                            }
+                                                        } catch (e) { }
+                                                    }
+                                                }
+                                            } catch (e) { }
+                                        } catch (e) { }
+                                    };
+
+                                    // If we need to restore previous dontmatch numbers, do that first,
+                                    // then move the new set; attach listeners so onTrashUpdated fires after final move.
+                                    if (toRestore.length) {
+                                        const afterRestore = () => {
+                                            try { (document.getElementById('trashPopup') || document.body).removeEventListener('trashupdated', afterRestore); } catch (e) { }
+                                            try { (document.getElementById('trashPopup') || document.body).addEventListener('trashupdated', onTrashUpdated, { once: true }); } catch (e) { }
+                                            try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); } catch (e) { }
+                                        };
+                                        try { (document.getElementById('trashPopup') || document.body).addEventListener('trashupdated', afterRestore, { once: true }); } catch (e) { }
+                                        try { document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: toRestore }, bubbles: true, composed: true })); } catch (e) { }
+                                    } else {
+                                        try { (document.getElementById('trashPopup') || document.body).addEventListener('trashupdated', onTrashUpdated, { once: true }); } catch (e) { }
+                                        try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); } catch (e) { }
+                                    }
+                                } catch (e) { }
+                            } catch (e) { }
+                        };
+
+                        // If the table body exists, observe it for changes (re-render). Use a short timeout fallback.
+                        const tb = document.querySelector('#cell6_5 table tbody');
+                        if (tb) {
+                            let called = false;
+                            const mo = new MutationObserver(() => {
+                                if (called) return;
+                                called = true;
+                                try { mo.disconnect(); } catch (e) { }
+                                runAfterTableUpdate();
+                            });
+                            try { mo.observe(tb, { childList: true, subtree: true, characterData: true }); } catch (e) { runAfterTableUpdate(); }
+                            // fallback: if no mutation within 700ms, proceed anyway
+                            setTimeout(() => { if (!called) { try { mo.disconnect(); } catch (e) { } called = true; runAfterTableUpdate(); } }, 700);
+                        } else {
+                            // no table body found; proceed immediately
+                            runAfterTableUpdate();
+                        }
+                    } catch (e) { }
+                } catch (err) { console.warn('computeAndApplyUnpairBest failed', err); }
+            }
+
             // Mirror Cell6.6's selector syncing: when this selector changes,
             // propagate value to Cell6.6's selector, dispatch a global trashchange
             // and trigger a local recompute. Also listen for external trashchange
@@ -7004,7 +7501,118 @@
                 }
             } catch (e) { /* ignore */ }
 
-            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, "Fav:", favSel, numTrashLabel, optLabel, sortSel, recencySel);
+            // Download rules button: exports visible history rows as Excel (SpreadsheetML)
+            const ruleBtn = document.createElement('button');
+            ruleBtn.type = 'button';
+            ruleBtn.textContent = 'Download rules';
+            ruleBtn.title = 'Download visible history as rule.xlsx (full records)';
+            ruleBtn.style.marginLeft = '8px';
+            ruleBtn.style.padding = '6px 10px';
+            // show only when controls are in unpair-mode (numtrash-related controls)
+            ruleBtn.classList.add('numtrash-wrapper');
+            ruleBtn.addEventListener('click', async (ev) => {
+                try {
+                    // Load full dataset from data.json and process sequentially
+                    const resp = await fetch('data.json');
+                    if (!resp.ok) {
+                        try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (e) { }
+                        return;
+                    }
+                    const data = await resp.json();
+
+                    // parse results into arrays
+                    const parsedRows = (Array.isArray(data) ? data : []).map(obj => {
+                        const res = (obj && (obj.Result || obj.result)) || '';
+                        return (res || '').split(/\s*,\s*/).map(s => parseInt(s, 10)).filter(Number.isFinite);
+                    });
+
+                    // build global pair counts from full data.json
+                    const pairCounts = new Map();
+                    parsedRows.forEach(nums => {
+                        if (!Array.isArray(nums) || nums.length !== 6) return;
+                        const ns = nums.slice().sort((a, b) => a - b);
+                        for (let i = 0; i < ns.length; i++) {
+                            for (let j = i + 1; j < ns.length; j++) {
+                                const a = ns[i], b = ns[j];
+                                const key = `${a}-${b}`;
+                                pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+                            }
+                        }
+                    });
+
+                    // compute rule for a single 6-number array using pairCounts
+                    const computeRule = (sixNums) => {
+                        try {
+                            if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
+                            const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n));
+                            if (userNums.length !== 6) return '';
+                            const MAX_N = 44;
+                            let found = null;
+                            for (let n = MAX_N; n >= 1; n--) {
+                                for (const cand of userNums) {
+                                    const others = [];
+                                    for (let y = 1; y <= 45; y++) {
+                                        if (y === cand) continue;
+                                        const a = Math.min(cand, y), b = Math.max(cand, y);
+                                        const key = `${a}-${b}`;
+                                        const c = pairCounts.get(key) || 0;
+                                        others.push({ y, c });
+                                    }
+                                    others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                    const pick = others.slice(0, n).map(o => o.y);
+                                    const otherFive = userNums.filter(x => x !== cand);
+                                    const conflict = pick.some(v => otherFive.indexOf(v) !== -1);
+                                    if (!conflict) { found = { n, cand, pick }; break; }
+                                }
+                                if (found) break;
+                            }
+                            if (!found) {
+                                const cand = userNums[0];
+                                const others = [];
+                                for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
+                                others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                found = { n: 1, cand, pick: others.slice(0, 1).map(o => o.y) };
+                            }
+                            const remaining = userNums.filter(x => Number(x) !== Number(found.cand)).map(n => Number(n)).filter(Number.isFinite);
+                            remaining.sort((a, b) => a - b);
+                            return `${found.cand}>{${remaining.join(',')}}[${found.n}]`;
+                        } catch (e) { return ''; }
+                    };
+
+                    const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const headers = ['date', 'result', 'rule'];
+                    let xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
+                    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+                    xml += '<Worksheet ss:Name="Rules"><Table>';
+                    xml += '<Row>';
+                    headers.forEach(h => { xml += `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`; });
+                    xml += '</Row>';
+
+                    for (let i = 0; i < (Array.isArray(data) ? data.length : 0); i++) {
+                        try {
+                            const obj = data[i] || {};
+                            const dateVal = obj.date || obj.Date || '';
+                            const resultVal = obj.Result || obj.result || '';
+                            const nums = (resultVal || '').split(/\s*,\s*/).map(s => parseInt(s, 10)).filter(Number.isFinite);
+                            const rule = (nums.length === 6) ? computeRule(nums) : '';
+
+                            xml += '<Row>';
+                            xml += `<Cell><Data ss:Type="String">${esc(dateVal)}</Data></Cell>`;
+                            xml += `<Cell><Data ss:Type="String">${esc(resultVal)}</Data></Cell>`;
+                            xml += `<Cell><Data ss:Type="String">${esc(rule)}</Data></Cell>`;
+                            xml += '</Row>';
+                        } catch (e) { }
+                    }
+
+                    xml += '</Table></Worksheet></Workbook>';
+                    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = 'rule.xlsx'; document.body.appendChild(a); a.click(); try { document.body.removeChild(a); } catch (e) { }
+                    try { URL.revokeObjectURL(url); } catch (e) { }
+                } catch (e) { try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (er) { } }
+            });
+
+            controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, "Fav:", favSel, unpairInputs, unpairInfo, ruleBtn, numTrashLabel, optLabel, sortSel, recencySel);
             // wire numTrash input to trigger recompute when changed
             try { numTrashInput.addEventListener('input', () => { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); }); } catch (e) { }
             body.appendChild(controls);
@@ -12299,6 +12907,11 @@
                 setupNumberCellDragDrop();
                 setupLabelCellDragDrop();
                 updateLabelCellStyles();
+                // Ensure any lingering popup highlight state is cleared after paste
+                try {
+                    if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                    try { window.__popupHighlights = null; window.__popupHighlightSource = null; } catch (e) { }
+                } catch (e) { }
                 if (placeContainer) {
                     placeContainer.style.borderColor = 'var(--accent-2)';
                     placeContainer.style.backgroundColor = 'rgba(102, 126, 234, 0.2)';
@@ -12639,6 +13252,11 @@
                 generatePlaceBoxes();
                 setupNumberCellDragDrop();
                 setupLabelCellDragDrop();
+                // Reapply Cell6.5 highlights based on the new place values; run several times
+                try { if (typeof applyCell6_5HighlightSet === 'function') applyCell6_5HighlightSet(placeValues); } catch (e) { }
+                try { if (typeof updateCell6_5Highlights === 'function') updateCell6_5Highlights(); } catch (e) { }
+                setTimeout(() => { try { if (typeof applyCell6_5HighlightSet === 'function') applyCell6_5HighlightSet(placeValues); } catch (e) { } }, 180);
+                setTimeout(() => { try { if (typeof applyCell6_5HighlightSet === 'function') applyCell6_5HighlightSet(placeValues); } catch (e) { } }, 520);
             };
             window.applyPlaceValuesToInputs = (inputArray) => {
                 if (inputArray && inputArray.length >= 6) {
@@ -12912,6 +13530,69 @@
                 });
             })();
         });
+    </script>
+    <!-- Floating Shift Navigation button: appears while Shift is held and avoids text selection -->
+    <button id="shiftNavBtn" title="Shift navigation"
+        style="display:none;position:fixed;z-index:99999;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.2);">⇧
+        Nav</button>
+    <script>
+        (function () {
+            let lastX = 0, lastY = 0;
+            const btn = document.getElementById('shiftNavBtn');
+
+            // Track cursor so the floating button can appear near it
+            document.addEventListener('mousemove', (e) => {
+                lastX = e.clientX;
+                lastY = e.clientY;
+                if (btn.style.display !== 'none') {
+                    btn.style.left = (lastX + 12) + 'px';
+                    btn.style.top = (lastY + 12) + 'px';
+                }
+            }, true);
+
+            // Show the button while Shift is held; hide when released
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Shift') {
+                    btn.style.display = 'block';
+                    btn.style.left = (lastX + 12) + 'px';
+                    btn.style.top = (lastY + 12) + 'px';
+                }
+            }, true);
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'Shift') {
+                    btn.style.display = 'none';
+                }
+            }, true);
+
+            // Prevent native text-selection when user Shift+clicks (mousedown)
+            document.addEventListener('mousedown', (e) => {
+                try {
+                    if (e.shiftKey && e.button === 0) {
+                        e.preventDefault();
+                    }
+                } catch (err) { }
+            }, true);
+
+            // When the floating button is clicked, dispatch a synthetic click with shiftKey
+            // at the last cursor position so existing Shift+Click handlers run.
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                const el = document.elementFromPoint(lastX, lastY);
+                if (!el) return;
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    shiftKey: true,
+                    clientX: lastX,
+                    clientY: lastY
+                });
+                el.dispatchEvent(clickEvent);
+                // hide after use to avoid accidental repeats
+                btn.style.display = 'none';
+            }, true);
+        })();
     </script>
     <script>
         // Enable drag-and-drop from number picker into fav slots.
@@ -13657,6 +14338,12 @@
             try {
                 favPopup.addEventListener('dblclick', async (ev) => {
                     try {
+                        // If dblclick happened on a number cell inside favPopup (user intends to remove),
+                        // do not run the paste-from-clipboard logic here. Let the per-cell handler run.
+                        try {
+                            if (ev.target && ev.target.closest && ev.target.closest('td.fav-number, .fav-number, td.trash-number, .number-main, .rank-in-cell, .pill')) return;
+                        } catch (ee) { }
+
                         // Ignore dblclicks that originate from UI controls (buttons/inputs/selects)
                         try {
                             if (ev.target && (ev.target.closest('button') || ev.target.closest('input') || ev.target.closest('select'))) return;
@@ -14189,9 +14876,18 @@
                             if (rowInTrash) {
                                 numTd.classList.add('cell6-num-in-trash');
                                 numTd.classList.remove('cell6-num-highlight');
+                                // ensure row no longer appears as dragged-out when the num itself is in trash
+                                r.classList.remove('dragged-out', 'dragging-out');
                             } else {
                                 numTd.classList.remove('cell6-num-in-trash');
-                                if (allInTrash) numTd.classList.add('cell6-num-highlight'); else numTd.classList.remove('cell6-num-highlight');
+                                if (allInTrash) {
+                                    numTd.classList.add('cell6-num-highlight');
+                                    // style surrounding record with the same green dragged-out border
+                                    r.classList.add('dragged-out');
+                                } else {
+                                    numTd.classList.remove('cell6-num-highlight');
+                                    r.classList.remove('dragged-out', 'dragging-out');
+                                }
                             }
                         } catch (e) { }
                     }
@@ -14199,6 +14895,43 @@
             }
 
             try { (trashPopup || document.body).addEventListener('trashupdated', () => { try { updateCell6_5Highlights(); } catch (e) { } }); } catch (e) { }
+
+            // Helper: apply Cell6.5 highlights using an explicit set/array of numbers
+            function applyCell6_5HighlightSet(values) {
+                try {
+                    const set = new Set((values || []).map(v => Number(v)).filter(Number.isFinite));
+                    const rows = Array.from(document.querySelectorAll('#cell6_5 table tbody tr'));
+                    for (const r of rows) {
+                        try {
+                            const numTd = r.children && r.children[0] ? r.children[0] : null;
+                            const dontTd = r.children && r.children[1] ? r.children[1] : null;
+                            if (!numTd || !dontTd) continue;
+                            const raw = (dontTd.textContent || '').trim();
+                            const nums = raw ? raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                            const rawNum = (numTd.textContent || '').trim();
+                            const rowNum = rawNum === '' ? NaN : Number(rawNum);
+
+                            const rowInSet = Number.isFinite(rowNum) && set.has(Number(rowNum));
+                            const allInSet = nums.length > 0 && nums.every(v => set.has(Number(v)));
+
+                            if (rowInSet) {
+                                numTd.classList.add('cell6-num-in-trash');
+                                numTd.classList.remove('cell6-num-highlight');
+                                r.classList.remove('dragged-out', 'dragging-out');
+                            } else {
+                                numTd.classList.remove('cell6-num-in-trash');
+                                if (allInSet) {
+                                    numTd.classList.add('cell6-num-highlight');
+                                    r.classList.add('dragged-out');
+                                } else {
+                                    numTd.classList.remove('cell6-num-highlight');
+                                    r.classList.remove('dragged-out', 'dragging-out');
+                                }
+                            }
+                        } catch (e) { }
+                    }
+                } catch (e) { }
+            }
 
             // Keep Cell5.5 in sync when trash changes and mode = 'exclude'
             try {
@@ -15516,6 +16249,73 @@
                         window.__favDropHandled = false;
                     }
                 } catch (err) { /* ignore */ }
+            }, true);
+        })();
+    </script>
+
+    <!-- Auto: Shift+click -> open cell6_5 and set unpair mode + paste numbers -->
+    <script>
+        (function () {
+            document.addEventListener('click', function (ev) {
+                try {
+                    if (!ev.shiftKey) return; // only on Shift+click
+                    const tr = ev.target.closest('tr');
+                    if (!tr) return;
+
+                    // Try to obtain a 6-number string from common locations
+                    let result = tr.getAttribute('data-result') || tr.dataset.result || '';
+                    if (!result) {
+                        const td = tr.querySelector('td[data-result], td.result, td:last-child');
+                        if (td) result = td.textContent.trim();
+                    }
+                    if (!result) return;
+                    const nums = (typeof parseSixNumbersFromString === 'function') ? parseSixNumbersFromString(result) : null;
+                    if (!nums) return;
+
+                    // Navigate to cell6_5 (click nav button if present)
+                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]') || document.querySelector('#cell6_5_nav_btn');
+                    if (navBtn) navBtn.click();
+
+                    // After a short delay (allow renderer to run), force mode and fill inputs
+                    setTimeout(() => {
+                        // Try several selectors for the mode dropdown inside cell6_5
+                        const modeSelect = document.querySelector('#cell6_5 .controls .mode-selector select')
+                            || document.querySelector('#cell6_5 select')
+                            || document.querySelector('#modeSelectorContainer select');
+                        if (modeSelect) {
+                            try { modeSelect.value = 'unpair'; } catch (e) { }
+                            modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        // Fill the six unpair inputs if present
+                        for (let i = 0; i < 6; i++) {
+                            const input = document.getElementById(`cell6_5_unpair_input_${i}`) || document.querySelector(`#cell6_5 input[name=unpair_${i}]`);
+                            if (input) {
+                                input.value = nums[i] ?? '';
+                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        }
+
+                        // Also update place boxes if helper exists
+                        if (typeof window.setPlaceValues === 'function') {
+                            try { window.setPlaceValues(nums); } catch (e) { }
+                        }
+
+                        // Apply Cell6.5 highlights based on pasted numbers (without changing global trash)
+                        try { if (typeof applyCell6_5HighlightSet === 'function') applyCell6_5HighlightSet(nums); } catch (e) { }
+
+                        // Trigger a recompute/group update if available
+                        if (typeof debouncedGroup === 'function') debouncedGroup();
+                        else if (typeof group === 'function') group();
+
+                        // Refresh visual highlights: num cell and label styles
+                        try { if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights(); } catch (e) { }
+                        try { if (typeof updateLabelCellStyles === 'function') updateLabelCellStyles(); } catch (e) { }
+                    }, 200);
+
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                } catch (e) { /* ignore errors */ }
             }, true);
         })();
     </script>
