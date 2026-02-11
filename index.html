@@ -1182,6 +1182,53 @@
             font-family: monospace;
         }
 
+        /* Tighten number pills for Cell5.5: fixed-size and perfectly centered digits
+           Includes .cell5-pill (inline-styled fallback) and .pill */
+        #cell5_5 td.td-has-pill .pill,
+        #cell5_5 td.td-has-pill .cell5-pill {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 22px !important;
+            min-width: 22px !important;
+            height: 20px !important;
+            padding: 0 !important;
+            margin: 0 3px !important;
+            font-family: monospace !important;
+            font-size: 12px !important;
+            line-height: 1 !important;
+            box-sizing: border-box !important;
+            text-align: center !important;
+            white-space: nowrap !important;
+        }
+
+        /* Remove extra margin on the first/last pill so endpoint numbers don't add horizontal gaps */
+        #cell5_5 td.td-has-pill .pill:first-child,
+        #cell5_5 td.td-has-pill .cell5-pill:first-child {
+            margin-left: 0 !important;
+        }
+
+        #cell5_5 td.td-has-pill .pill:last-child,
+        #cell5_5 td.td-has-pill .cell5-pill:last-child {
+            margin-right: 0 !important;
+        }
+
+        /* Reduce horizontal padding on the table cells that contain pills */
+        #cell5_5 .card .card-inner-child table td.td-has-pill {
+            padding-left: 2px;
+            padding-right: 2px;
+        }
+
+        /* Reduce left/right padding of the Result column to free table width */
+        #cell5_5 table th:nth-child(2),
+        #cell5_5 table td:nth-child(2) {
+            padding-left: 4px;
+            padding-right: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Ensure fav-marked pills keep their yellow background even when the row/card is hovered */
         #cell5_5 table tr:hover .pill.in-fav,
         #cell5_5 table tr.popup-number-highlight .pill.in-fav,
@@ -4555,17 +4602,72 @@
                     const start = pIdx * pageSize;
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
-                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>k</th></tr></thead><tbody>`;
+                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>rule</th></tr></thead><tbody>`;
                     // Use the global row-trash cache when available so k̄ is consistent
                     // across different display orders/views. Fall back to 0 when not ready.
                     try {
+                        // build pair counts for rule computation (pairs across dataset)
+                        const pairCounts = new Map();
+                        try {
+                            rows.forEach(r => {
+                                try {
+                                    const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                    for (let i = 0; i < nums.length; i++) {
+                                        for (let j = i + 1; j < nums.length; j++) {
+                                            const a = nums[i], b = nums[j];
+                                            const key = `${a}-${b}`;
+                                            pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+                                        }
+                                    }
+                                } catch (e) { }
+                            });
+                        } catch (e) { }
+
+                        const computeRuleLocal = (sixNums) => {
+                            try {
+                                if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
+                                const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n));
+                                if (userNums.length !== 6) return '';
+                                const MAX_N = 44;
+                                let found = null;
+                                for (let n = MAX_N; n >= 1; n--) {
+                                    for (const cand of userNums) {
+                                        const others = [];
+                                        for (let y = 1; y <= 45; y++) {
+                                            if (y === cand) continue;
+                                            const a = Math.min(cand, y), b = Math.max(cand, y);
+                                            const key = `${a}-${b}`;
+                                            const c = pairCounts.get(key) || 0;
+                                            others.push({ y, c });
+                                        }
+                                        others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                        const pick = others.slice(0, n).map(o => o.y);
+                                        const otherFive = userNums.filter(x => x !== cand);
+                                        const conflict = pick.some(v => otherFive.indexOf(v) !== -1);
+                                        if (!conflict) { found = { n, cand, pick }; break; }
+                                    }
+                                    if (found) break;
+                                }
+                                if (!found) {
+                                    const cand = userNums[0];
+                                    const others = [];
+                                    for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
+                                    others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                    found = { n: 1, cand, pick: others.slice(0, 1).map(o => o.y) };
+                                }
+                                const remaining = userNums.filter(x => Number(x) !== Number(found.cand)).map(n => Number(n)).filter(Number.isFinite);
+                                remaining.sort((a, b) => a - b);
+                                return `${found.cand}>{${remaining.join(',')}}[${found.n}]`;
+                            } catch (e) { return ''; }
+                        };
+
                         const rowsData = page.map((row) => {
                             const result = (row.nums || []).join(',');
                             const numsHtml = (row.nums || []).map(v => {
                                 const inFav = __cell5_5_favSet.has(Number(v));
                                 const cls = inFav ? 'pill in-fav' : 'pill';
-                                return `<span class='${cls}' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`;
-                            }).join(" ");
+                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-block;text-align:center;margin-right:4px;font-size:13px;'>${v}</span>`;
+                            }).join("");
                             let t = 0;
                             try {
                                 if (typeof window.getRowTrashK === 'function') {
@@ -4573,7 +4675,8 @@
                                     t = Number.isFinite(val) ? val : 0;
                                 }
                             } catch (er) { t = 0; }
-                            return { date: row.date, result, numsHtml, t };
+                            const rule = (Array.isArray(row.nums) && row.nums.length === 6) ? computeRuleLocal(row.nums) : '';
+                            return { date: row.date, result, numsHtml, t, rule };
                         });
 
                         const sumT_forPage = rowsData.reduce((s, it) => s + (Number.isFinite(it.t) ? it.t : 0), 0);
@@ -4614,7 +4717,8 @@
                             const tooltip = `${rdat.t}`;
                             const compareAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK : avg;
                             const cls = (rdat.t >= compareAvg) ? 'k-cyan' : 'k-yellow';
-                            table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:left'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left'><span class="k-value ${cls}">${tooltip}</span></td></tr>`;
+                            // keep data-k attribute for compatibility but show `rule` column
+                            table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:center'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${rdat.rule || ''}</td></tr>`;
                         });
                     } catch (e) {
                         // fallback: render without tooltip
@@ -4623,15 +4727,23 @@
                             const numsHtml = (row.nums || []).map(v => {
                                 const inFav = __cell5_5_favSet.has(Number(v));
                                 const cls = inFav ? 'pill in-fav' : 'pill';
-                                return `<span class='${cls}' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`;
-                            }).join(" ");
+                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-block;text-align:center;margin-right:4px;font-size:13px;'>${v}</span>`;
+                            }).join("");
                             // fallback: try to compute k via global helper if available
                             let tFallback = '';
                             try { if (typeof getRowTrashK === 'function') tFallback = getRowTrashK(row); else if (typeof window.getRowTrashK === 'function') tFallback = window.getRowTrashK(row); } catch (e) { tFallback = ''; }
                             const tooltip = tFallback !== '' ? `${tFallback}` : '';
-                            let cls = 'k-yellow';
-                            try { if (typeof window !== 'undefined' && typeof window.__lastAvgK === 'number' && tooltip !== '' && Number(tooltip) >= window.__lastAvgK) cls = 'k-cyan'; } catch (er) { }
-                            table += `<tr data-result="${result}"${tooltip ? ` title="${tooltip}" data-k="${tFallback}"` : ''}><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:left'>${numsHtml}</td><td style='padding:6px;text-align:left'><span class="k-value ${cls}">${tooltip}</span></td></tr>`;
+                            // fallback rule (simple): use first number as candidate, rest as remaining, n=1
+                            let fallbackRule = '';
+                            try {
+                                const arr = Array.isArray(row.nums) ? row.nums.map(n => Number(n)).filter(Number.isFinite) : [];
+                                if (arr.length === 6) {
+                                    const cand = arr[0];
+                                    const remaining = arr.slice(1).slice().map(n => Number(n)).filter(Number.isFinite).sort((a, b) => a - b);
+                                    fallbackRule = `${cand}>{${remaining.join(',')}}[1]`;
+                                }
+                            } catch (e) { fallbackRule = ''; }
+                            table += `<tr data-result="${result}"${tooltip ? ` title="${tooltip}" data-k="${tFallback}"` : ''}><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:center'>${numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${fallbackRule}</td></tr>`;
                         });
                     }
                     table += '</tbody></table>';
@@ -16338,6 +16450,182 @@
                     ev.stopPropagation();
                 } catch (e) { /* ignore errors */ }
             }, true);
+        })();
+    </script>
+    <script>
+        (function () {
+            try {
+                const __cell5_5_hoverPrev = new WeakMap();
+                const __cell5_5_savedTrash = new WeakMap();
+
+                function _parseRowNumsFromTr(tr) {
+                    try {
+                        const raw = tr.getAttribute('data-result') || '';
+                        const nums = raw.split(/\s*,\s*/).map(s => Number(s)).filter(Number.isFinite);
+                        return nums.length === 6 ? nums : null;
+                    } catch (e) { return null; }
+                }
+
+                function _getCurrentTrashSnapshot() {
+                    try {
+                        if (typeof window.getTrashItems === 'function') return (window.getTrashItems() || []).slice();
+                        if (Array.isArray(window.__trashItems)) return (window.__trashItems || []).slice();
+                        return [];
+                    } catch (e) { return []; }
+                }
+
+                document.addEventListener('mouseover', (ev) => {
+                    try {
+                        const target = ev.target || ev.srcElement;
+                        const tr = target && target.closest ? target.closest('#cell5_5 table tbody tr') : null;
+                        if (!tr) return;
+                        if (tr.__cell5_5_hovering) return;
+                        tr.__cell5_5_hovering = true;
+                        const six = _parseRowNumsFromTr(tr);
+                        if (!six) return;
+
+                        // Save a snapshot of the current trash so we can restore it later
+                        try {
+                            const snap = _getCurrentTrashSnapshot();
+                            __cell5_5_savedTrash.set(tr, snap.slice());
+                        } catch (e) { __cell5_5_savedTrash.set(tr, []); }
+
+                        try {
+                            // Prefer the existing helper if present
+                            if (typeof computeAndApplyUnpairBest === 'function') {
+                                try { computeAndApplyUnpairBest(six); } catch (e) { /* ignore */ }
+                            }
+
+                            // Also compute a local dontmatch set quickly and replace trash temporarily
+                            try {
+                                const pairCounts = new Map();
+                                try {
+                                    (rows || []).forEach(r => {
+                                        try {
+                                            const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                            for (let i = 0; i < nums.length; i++) for (let j = i + 1; j < nums.length; j++) {
+                                                const a = nums[i], b = nums[j];
+                                                const key = `${a}-${b}`;
+                                                pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+                                            }
+                                        } catch (e) { }
+                                    });
+                                } catch (e) { }
+
+                                const userNums = (six || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                                if (userNums.length === 6) {
+                                    let found = null;
+                                    const MAX_N = Math.min(44, 44);
+                                    for (let n = MAX_N; n >= 1; n--) {
+                                        for (const cand of userNums) {
+                                            const others = [];
+                                            for (let y = 1; y <= 45; y++) {
+                                                if (y === cand) continue;
+                                                const a = Math.min(cand, y), b = Math.max(cand, y);
+                                                const key = `${a}-${b}`;
+                                                const c = pairCounts.get(key) || 0;
+                                                others.push({ y, c });
+                                            }
+                                            others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                            const pick = others.slice(0, n).map(o => o.y);
+                                            const otherFive = userNums.filter(x => x !== cand);
+                                            const conflict = pick.some(v => otherFive.indexOf(v) !== -1);
+                                            if (!conflict) {
+                                                found = { n, cand, pick };
+                                                break;
+                                            }
+                                        }
+                                        if (found) break;
+                                    }
+                                    if (!found) {
+                                        const cand = userNums[0];
+                                        const others = [];
+                                        for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
+                                        others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                        found = { n: 1, cand, pick: others.slice(0, 1).map(o => o.y) };
+                                    }
+
+                                    if (found && Array.isArray(found.pick) && found.pick.length) {
+                                        const uniq = Array.from(new Set(found.pick.map(n => Number(n)).filter(Number.isFinite)));
+                                        if (uniq.length) {
+                                            try {
+                                                // Replace current trash with uniq temporarily.
+                                                const saved = __cell5_5_savedTrash.get(tr) || [];
+                                                const targetNode = (document.getElementById('trashPopup') || document.body);
+
+                                                // If there is existing trash, restore (clear) it first, then move uniq into trash.
+                                                if (saved.length) {
+                                                    try { document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: saved }, bubbles: true, composed: true })); } catch (e) { }
+                                                    // restoreMultipleFromTrash runs synchronously (restores items one-by-one
+                                                    // and emits 'trashupdated' per item). Wait until the current call stack
+                                                    // completes before moving the temporary set into trash to avoid
+                                                    // reacting to intermediate 'trashupdated' events and reapplying
+                                                    // while restores are still in progress.
+                                                    try { Promise.resolve().then(() => { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); }); } catch (e) { try { setTimeout(() => { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); }, 0); } catch (ee) { }
+                                                    }
+                                                } else {
+                                                    try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: uniq }, bubbles: true, composed: true })); } catch (e) { }
+                                                }
+                                                // remember last applied dontmatch for compatibility
+                                                try { window.__cell6_5_lastDontmatch = new Set(uniq); } catch (e) { }
+                                            } catch (e) { }
+                                        }
+                                    }
+                                }
+                            } catch (e) { }
+                        } catch (e) { }
+                    } catch (e) { }
+                }, true);
+
+                document.addEventListener('mouseout', (ev) => {
+                    try {
+                        const target = ev.target || ev.srcElement;
+                        const tr = target && target.closest ? target.closest('#cell5_5 table tbody tr') : null;
+                        if (!tr) return;
+                        if (tr.contains && ev.relatedTarget && tr.contains(ev.relatedTarget)) return;
+                        tr.__cell5_5_hovering = false;
+
+                        const saved = __cell5_5_savedTrash.get(tr) || [];
+                        // current temporary trash (likely applied during hover)
+                        const cur = (typeof window.getTrashItems === 'function') ? (window.getTrashItems() || []) : (Array.isArray(window.__trashItems) ? (window.__trashItems || []) : []);
+                        const targetNode = (document.getElementById('trashPopup') || document.body);
+
+                        // First clear whatever is currently in trash (the hover-applied set),
+                        // then restore the saved snapshot.
+                        try {
+                                if (cur && cur.length) {
+                                try { document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: cur }, bubbles: true, composed: true })); } catch (e) { }
+                                // schedule re-application after synchronous restores finish
+                                try {
+                                    Promise.resolve().then(() => {
+                                        if (saved && saved.length) {
+                                            try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: saved }, bubbles: true, composed: true })); } catch (e) { }
+                                        } else {
+                                            try { (document.getElementById('trashClearBtn') || targetNode.querySelector && targetNode.querySelector('#trashClearBtn'))?.click(); } catch (e) { }
+                                        }
+                                    });
+                                } catch (e) {
+                                    try { setTimeout(() => {
+                                        if (saved && saved.length) {
+                                            try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: saved }, bubbles: true, composed: true })); } catch (er) { }
+                                        } else {
+                                            try { (document.getElementById('trashClearBtn') || targetNode.querySelector && targetNode.querySelector('#trashClearBtn'))?.click(); } catch (er) { }
+                                        }
+                                    }, 0); } catch (ee) { }
+                                }
+                            } else {
+                                if (saved && saved.length) {
+                                    try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: saved }, bubbles: true, composed: true })); } catch (e) { }
+                                }
+                            }
+                        } catch (e) { }
+
+                        // cleanup
+                        try { __cell5_5_savedTrash.delete(tr); } catch (e) { }
+                        try { __cell5_5_hoverPrev.delete(tr); } catch (e) { }
+                    } catch (e) { }
+                }, true);
+            } catch (e) { }
         })();
     </script>
 </body>
