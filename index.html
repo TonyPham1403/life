@@ -7512,104 +7512,18 @@
             ruleBtn.classList.add('numtrash-wrapper');
             ruleBtn.addEventListener('click', async (ev) => {
                 try {
-                    // Load full dataset from data.json and process sequentially
-                    const resp = await fetch('data.json');
-                    if (!resp.ok) {
-                        try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (e) { }
+                    const resp = await fetch('rule.xlsx');
+                    if (resp.ok) {
+                        const blob = await resp.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = 'rule.xlsx'; document.body.appendChild(a); a.click(); try { document.body.removeChild(a); } catch (e) { }
+                        try { URL.revokeObjectURL(url); } catch (e) { }
                         return;
                     }
-                    const data = await resp.json();
-
-                    // parse results into arrays
-                    const parsedRows = (Array.isArray(data) ? data : []).map(obj => {
-                        const res = (obj && (obj.Result || obj.result)) || '';
-                        return (res || '').split(/\s*,\s*/).map(s => parseInt(s, 10)).filter(Number.isFinite);
-                    });
-
-                    // build global pair counts from full data.json
-                    const pairCounts = new Map();
-                    parsedRows.forEach(nums => {
-                        if (!Array.isArray(nums) || nums.length !== 6) return;
-                        const ns = nums.slice().sort((a, b) => a - b);
-                        for (let i = 0; i < ns.length; i++) {
-                            for (let j = i + 1; j < ns.length; j++) {
-                                const a = ns[i], b = ns[j];
-                                const key = `${a}-${b}`;
-                                pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-                            }
-                        }
-                    });
-
-                    // compute rule for a single 6-number array using pairCounts
-                    const computeRule = (sixNums) => {
-                        try {
-                            if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
-                            const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n));
-                            if (userNums.length !== 6) return '';
-                            const MAX_N = 44;
-                            let found = null;
-                            for (let n = MAX_N; n >= 1; n--) {
-                                for (const cand of userNums) {
-                                    const others = [];
-                                    for (let y = 1; y <= 45; y++) {
-                                        if (y === cand) continue;
-                                        const a = Math.min(cand, y), b = Math.max(cand, y);
-                                        const key = `${a}-${b}`;
-                                        const c = pairCounts.get(key) || 0;
-                                        others.push({ y, c });
-                                    }
-                                    others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
-                                    const pick = others.slice(0, n).map(o => o.y);
-                                    const otherFive = userNums.filter(x => x !== cand);
-                                    const conflict = pick.some(v => otherFive.indexOf(v) !== -1);
-                                    if (!conflict) { found = { n, cand, pick }; break; }
-                                }
-                                if (found) break;
-                            }
-                            if (!found) {
-                                const cand = userNums[0];
-                                const others = [];
-                                for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
-                                others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
-                                found = { n: 1, cand, pick: others.slice(0, 1).map(o => o.y) };
-                            }
-                            const remaining = userNums.filter(x => Number(x) !== Number(found.cand)).map(n => Number(n)).filter(Number.isFinite);
-                            remaining.sort((a, b) => a - b);
-                            return `${found.cand}>{${remaining.join(',')}}[${found.n}]`;
-                        } catch (e) { return ''; }
-                    };
-
-                    const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const headers = ['date', 'result', 'rule'];
-                    let xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-                    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-                    xml += '<Worksheet ss:Name="Rules"><Table>';
-                    xml += '<Row>';
-                    headers.forEach(h => { xml += `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`; });
-                    xml += '</Row>';
-
-                    for (let i = 0; i < (Array.isArray(data) ? data.length : 0); i++) {
-                        try {
-                            const obj = data[i] || {};
-                            const dateVal = obj.date || obj.Date || '';
-                            const resultVal = obj.Result || obj.result || '';
-                            const nums = (resultVal || '').split(/\s*,\s*/).map(s => parseInt(s, 10)).filter(Number.isFinite);
-                            const rule = (nums.length === 6) ? computeRule(nums) : '';
-
-                            xml += '<Row>';
-                            xml += `<Cell><Data ss:Type="String">${esc(dateVal)}</Data></Cell>`;
-                            xml += `<Cell><Data ss:Type="String">${esc(resultVal)}</Data></Cell>`;
-                            xml += `<Cell><Data ss:Type="String">${esc(rule)}</Data></Cell>`;
-                            xml += '</Row>';
-                        } catch (e) { }
-                    }
-
-                    xml += '</Table></Worksheet></Workbook>';
-                    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = 'rule.xlsx'; document.body.appendChild(a); a.click(); try { document.body.removeChild(a); } catch (e) { }
-                    try { URL.revokeObjectURL(url); } catch (e) { }
-                } catch (e) { try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (er) { } }
+                    try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (e) { }
+                } catch (e) {
+                    try { ev.target.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 320 }); } catch (er) { }
+                }
             });
 
             controls.append("Số x:", xContainer, typeof focusPrevBtn !== 'undefined' ? focusPrevBtn : document.createElement('span'), typeof focusNextBtn !== 'undefined' ? focusNextBtn : document.createElement('span'), comboExtras, (body && body.__xSelWrapper) ? body.__xSelWrapper : xSel, consecLabel, orderLabel, "Trash:", trashSel, "Fav:", favSel, unpairInputs, unpairInfo, ruleBtn, numTrashLabel, optLabel, sortSel, recencySel);
