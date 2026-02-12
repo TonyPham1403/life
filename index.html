@@ -3692,12 +3692,12 @@
                     if (isUnpair && typeof window.computeAndApplyUnpairBest === 'function') {
                         try {
                             const inputs = c65.querySelectorAll('.controls.unpair-mode .drag-input-container input[type="number"]');
-                            if (inputs && inputs.length === 6) {
+                            if (inputs && inputs.length >= 1) {
                                 const vals = Array.from(inputs).map(el => (el.value || '').trim()).filter(s => s !== '');
-                                if (vals.length === 6) {
-                                    const nums = vals.map(s => parseInt(s, 10));
+                                if (vals.length >= 1) {
+                                    const nums = vals.map(s => parseInt(s, 10)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
                                     const uniq = Array.from(new Set(nums));
-                                    if (uniq.length === 6) {
+                                    if (uniq.length >= 1) {
                                         setTimeout(() => { try { window.computeAndApplyUnpairBest(uniq); } catch (e) { } }, 120);
                                     }
                                 }
@@ -7305,14 +7305,14 @@
                         // If all 6 inputs are filled with distinct numbers, compute best numTrash and num
                         try {
                             const filled = unpairInputEls.map(e => (e.value || '').trim()).filter(s => s !== '');
-                            if (filled.length === 6) {
-                                const nums = filled.map(s => parseInt(s, 10));
+                            if (filled.length >= 1) {
+                                const nums = filled.map(s => parseInt(s, 10)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
                                 const uniq = Array.from(new Set(nums));
-                                if (uniq.length === 6) {
+                                if (uniq.length >= 1) {
                                     try { computeAndApplyUnpairBest(uniq); } catch (e) { }
                                 }
                             } else {
-                                // clear the informational field when not all inputs provided
+                                // clear the informational field when no inputs provided
                                 try { if (typeof unpairInfo !== 'undefined' && unpairInfo) unpairInfo.textContent = ''; } catch (e) { }
                             }
                         } catch (e) { }
@@ -7458,10 +7458,10 @@
             // trigger UI updates (highlights + trash popup update).
             function computeAndApplyUnpairBest(sixNums) {
                 try {
-                    if (!Array.isArray(sixNums) || sixNums.length !== 6) return;
+                    if (!Array.isArray(sixNums) || sixNums.length === 0) return;
                     // ensure numeric
-                    const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n));
-                    if (userNums.length !== 6) return;
+                    const userNums = sixNums.map(n => Number(n)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                    if (userNums.length === 0) return;
                     // build pair counts across dataset
                     const pairCounts = new Map();
                     try {
@@ -7526,13 +7526,14 @@
                                     // display candidate and the other five input numbers (remaining from the six)
                                     try {
                                         const remaining = (userNums || []).filter(x => Number(x) !== Number(found.cand)).map(n => Number(n)).filter(Number.isFinite);
+                                        const k = (typeof numTrashInput !== 'undefined' && numTrashInput) ? String(numTrashInput.value || '') : String(found.n || '');
                                         if (remaining && remaining.length) {
                                             remaining.sort((a, b) => a - b);
                                             // append current numTrash value in brackets
-                                            const k = (typeof numTrashInput !== 'undefined' && numTrashInput) ? String(numTrashInput.value || '') : String(found.n || '');
                                             unpairInfo.innerHTML = `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${found.cand}</span>>{${remaining.join(',')}}<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 2px;border-radius:4px">[${k}]</span>`;
                                         } else {
-                                            unpairInfo.textContent = '';
+                                            // single number only — show candidate and k
+                                            unpairInfo.innerHTML = `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${found.cand}</span><span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 2px;border-radius:4px">[${k}]</span>`;
                                         }
                                     } catch (ee) { unpairInfo.textContent = '' }
                                 }
