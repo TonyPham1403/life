@@ -7328,6 +7328,12 @@
                     } catch (e) { }
                 });
 
+                // Arrow left/right: cycle focus between the 6 unpair inputs (circular)
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); unpairInputEls[(i - 1 + unpairInputEls.length) % unpairInputEls.length].focus(); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); unpairInputEls[(i + 1) % unpairInputEls.length].focus(); }
+                });
+
                 // drag/drop: support swapping with other dynamic inputs, accept place-index/place-set,
                 // and clear value on dragend if drop was not handled (matching Cell6.6 behavior)
                 container.addEventListener('dragstart', (e) => {
