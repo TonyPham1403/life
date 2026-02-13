@@ -1684,6 +1684,45 @@
             width: 100% !important;
         }
 
+        /* Same behavior for Cell11: don't center its grid/cards when only one child/table */
+        #cell11 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+
+        /* Each table in Cell11 takes exactly half the row width */
+        #cell11 .grid-centered>* {
+            flex: 0 0 calc(50% - 5px) !important;
+            max-width: calc(50% - 5px) !important;
+            min-width: 0 !important;
+        }
+
+        #cell11 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell11 .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+            flex: 0 1 auto !important;
+        }
+
+        #cell11 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
+        /* Clear any :only-child centering inside cell11 */
+        #cell11 .card.card-inner>.card-inner-child:only-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
         /* Same behavior for Cell6.6: don't center its grid/cards when only one child/table */
         #cell6_6 .grid-centered {
             justify-content: flex-start !important;
@@ -5662,6 +5701,9 @@
                         const popup = document.getElementById('numberPickerPopup');
                         if (popup && popup.contains(ev.target)) return;
                     } catch (e) { }
+
+                    // Skip dblclick inside Cell11 — Cell11 has its own handler
+                    try { if (ev.target.closest('#cell11')) return; } catch (e) { }
 
                     // Only handle dblclick when user targets a place-box or one of the six input containers
                     const box = ev.target.closest('.place-box');
@@ -11392,208 +11434,412 @@
 
         // Cell11: pattern search 6 positions with commas, _ wildcard
         function renderCell11() {
-            const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern số", "Nhập số (1-45) vào từng vị trí để tìm kỳ khớp. Có thể kéo thả số giữa các vị trí bằng chuột. Bỏ trống vị trí nào thì vị trí đó chấp nhận số bất kỳ.");
-            const inputs = Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+            const body = sectionShell("cell11", "Cell11 · Tìm kỳ theo Pattern / Label", "Nhập số (1-45) hoặc label (1-6) vào từng vị trí để tìm kỳ khớp. Toggle chế độ Pattern / Label.");
+
+            // Mode state: 'pattern' or 'label'
+            let cell11Mode = 'pattern';
+            const modeBtn = document.createElement('button');
+            modeBtn.textContent = 'Pattern (1-45)';
+            modeBtn.style.padding = '6px 10px';
+            modeBtn.style.fontSize = '12px';
+            modeBtn.style.cursor = 'pointer';
+
+            // Create inputs factory based on mode
+            const createInputs = (mode) => {
+                if (mode === 'pattern') {
+                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "number"; inp.min = 1; inp.max = 45; inp.placeholder = ""; inp.style.width = "70px"; return inp; });
+                } else {
+                    return Array.from({ length: 6 }, () => { const inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 1; inp.placeholder = "_"; inp.size = 1; inp.style.width = "70px"; return inp; });
+                }
+            };
+
+            let inputs = createInputs(cell11Mode);
 
             // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
-            const containers = inputs.map((inp, idx) => {
-                const container = document.createElement("div");
-                container.className = "drag-input-container";
-                container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
-                container.draggable = false;
+            const createContainers = (inputArray) => {
+                return inputArray.map((inp, idx) => {
+                    const container = document.createElement("div");
+                    container.className = "drag-input-container";
+                    container.style.cssText = "position:relative;display:inline-block;margin-right:6px;overflow:hidden;vertical-align:middle;";
+                    container.draggable = false;
 
-                // small left-side grip so it doesn't cover the whole input and block typing
-                const dragHandle = document.createElement("div");
-                dragHandle.className = "drag-handle";
-                dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
+                    const dragHandle = document.createElement("div");
+                    dragHandle.className = "drag-handle";
+                    dragHandle.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:grab;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);`;
 
-                inp.style.position = "relative";
-                inp.style.zIndex = "1";
-                inp.style.paddingRight = '40px';
-                inp.style.boxSizing = 'border-box';
+                    inp.style.position = "relative";
+                    inp.style.zIndex = "1";
+                    inp.style.paddingRight = '40px';
+                    inp.style.boxSizing = 'border-box';
 
-                const btnGroup = document.createElement('div');
-                btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
-                const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
-                const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
-                const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
+                    const btnGroup = document.createElement('div');
+                    btnGroup.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;z-index:3;pointer-events:auto;width:32px;align-items:center;';
+                    const arrowStyle = 'width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;';
+                    const up = document.createElement('button'); up.type = 'button'; up.className = 'arrow-up'; up.innerHTML = '▲'; up.title = 'Tăng 1'; up.style.cssText = arrowStyle;
+                    const down = document.createElement('button'); down.type = 'button'; down.className = 'arrow-down'; down.innerHTML = '▼'; down.title = 'Giảm 1'; down.style.cssText = arrowStyle;
 
-                // clamp to [1,45]
-                const clampNumber = () => {
-                    const raw = String(inp.value ?? '').trim();
-                    if (raw === '') return;
-                    let n = parseInt(raw, 10);
-                    if (!Number.isFinite(n)) { inp.value = ''; return; }
-                    if (n < 1) inp.value = '1';
-                    else if (n > 45) inp.value = '45';
-                    else inp.value = String(n);
-                };
+                    const clampForPattern = () => {
+                        const raw = String(inp.value ?? '').trim();
+                        if (raw === '') return;
+                        let n = parseInt(raw, 10);
+                        if (!Number.isFinite(n)) { inp.value = ''; return; }
+                        if (n < 1) inp.value = '1';
+                        else if (n > 45) inp.value = '45';
+                        else inp.value = String(n);
+                    };
 
-                up.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    let n = parseInt(String(inp.value ?? '').trim(), 10);
-                    if (!Number.isFinite(n)) n = 0;
-                    n = n + 1;
-                    if (n > 45) n = 1; // wrap
-                    if (n < 1) n = 1;
-                    inp.value = String(n);
-                    inp.dispatchEvent(new Event('input'));
-                    if (run) run();
+                    const clampForLabel = () => {
+                        const raw = String(inp.value ?? '').trim();
+                        if (raw === '' || raw === '_') return;
+                        let n = parseInt(raw, 10);
+                        if (!Number.isFinite(n)) { inp.value = ''; return; }
+                        if (n < 1) inp.value = '1';
+                        else if (n > 6) inp.value = '6';
+                        else inp.value = String(n);
+                    };
+
+                    up.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (cell11Mode === 'pattern') {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n + 1;
+                            if (n > 45) n = 1;
+                            if (n < 1) n = 1;
+                            inp.value = String(n);
+                        } else {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n + 1;
+                            if (n > 6) n = 1;
+                            if (n < 1) n = 1;
+                            inp.value = String(n);
+                        }
+                        inp.dispatchEvent(new Event('input'));
+                        if (run) run();
+                    });
+                    down.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (cell11Mode === 'pattern') {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n - 1;
+                            if (n < 1) n = 45;
+                            if (n > 45) n = 45;
+                            inp.value = String(n);
+                        } else {
+                            let n = parseInt(String(inp.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 0;
+                            n = n - 1;
+                            if (n < 1) n = 6;
+                            if (n > 6) n = 6;
+                            inp.value = String(n);
+                        }
+                        inp.dispatchEvent(new Event('input'));
+                        if (run) run();
+                    });
+
+                    btnGroup.appendChild(up);
+                    btnGroup.appendChild(down);
+
+                    const updateDraggable = () => {
+                        const v = String(inp.value ?? '').trim();
+                        const hasValue = inp.type === 'number' ? v !== '' : (v !== '' && v !== '_');
+                        container.draggable = hasValue;
+                        dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
+                        dragHandle.style.cursor = hasValue ? 'grab' : 'default';
+                        container.style.borderRadius = '10px';
+                        container.style.padding = '2px';
+                        container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
+                        container.style.opacity = hasValue ? '1' : '0.85';
+                    };
+
+                    inp.addEventListener('input', () => {
+                        if (cell11Mode === 'pattern') clampForPattern(); else clampForLabel();
+                        updateDraggable();
+                    });
+                    inp.addEventListener('change', () => {
+                        if (cell11Mode === 'pattern') clampForPattern(); else clampForLabel();
+                        updateDraggable();
+                    });
+                    updateDraggable();
+
+                    container.appendChild(inp);
+                    container.appendChild(btnGroup);
+                    container.appendChild(dragHandle);
+                    container.dataset.index = idx;
+
+                    // Double-click to paste clipboard (6 numbers)
+                    container.addEventListener('dblclick', async (e) => {
+                        e.stopPropagation();
+                        let text = null;
+                        try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (err) { text = null; }
+                        if (!text || String(text).trim() === '') {
+                            try { const res = window.prompt('Paste 6 numbers (comma or space separated), e.g. 29,3,35,24,18,30', ''); if (res && String(res).trim() !== '') text = res.trim(); } catch (ex) { text = null; }
+                        }
+                        if (!text) return;
+                        // Label mode: accept a raw 6-digit string like "152345" → 1,5,2,3,4,5
+                        if (cell11Mode === 'label') {
+                            const raw = text.trim();
+                            if (/^\d{6}$/.test(raw)) {
+                                const digits = raw.split('').map(d => parseInt(d, 10));
+                                if (digits.every(d => d >= 1 && d <= 6)) {
+                                    for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(digits[ii]); inputs[ii].dispatchEvent(new Event('input')); }
+                                    try { container.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (ex) { }
+                                    if (run) run();
+                                    return;
+                                }
+                            }
+                        }
+                        const parts = text.split(/[^0-9]+/).map(p => p.trim()).filter(Boolean);
+                        if (parts.length !== 6) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
+                        const parsed = parts.map(p => parseInt(p, 10));
+                        if (parsed.some(n => !Number.isFinite(n) || n < 1)) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
+                        if (cell11Mode === 'pattern') {
+                            // Pattern mode: 6 distinct numbers 1-45
+                            if (parsed.some(n => n > 45) || new Set(parsed).size !== 6) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
+                            for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(parsed[ii]); inputs[ii].dispatchEvent(new Event('input')); }
+                        } else {
+                            // Label mode: if all values ≤6, accept directly; otherwise convert via getCol
+                            const allLabel = parsed.every(n => n >= 1 && n <= 6);
+                            if (allLabel) {
+                                for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(parsed[ii]); inputs[ii].dispatchEvent(new Event('input')); }
+                            } else {
+                                if (parsed.some(n => n > 45)) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
+                                for (let ii = 0; ii < 6; ii++) { const col = getCol(parsed[ii]); inputs[ii].value = col ? String(col) : ''; inputs[ii].dispatchEvent(new Event('input')); }
+                            }
+                        }
+                        try { container.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (ex) { }
+                        if (run) run();
+                    });
+
+                    return container;
                 });
-                down.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    let n = parseInt(String(inp.value ?? '').trim(), 10);
-                    if (!Number.isFinite(n)) n = 0;
-                    n = n - 1;
-                    if (n < 1) n = 45; // wrap
-                    if (n > 45) n = 45;
-                    inp.value = String(n);
-                    inp.dispatchEvent(new Event('input'));
-                    if (run) run();
-                });
+            };
 
-                btnGroup.appendChild(up);
-                btnGroup.appendChild(down);
-
-                const updateDraggable = () => {
-                    const v = String(inp.value ?? '').trim();
-                    const hasValue = v !== '';
-                    container.draggable = hasValue;
-                    dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
-                    dragHandle.style.cursor = hasValue ? 'grab' : 'default';
-                    container.style.borderRadius = '10px';
-                    container.style.padding = '2px';
-                    container.style.border = hasValue ? '2px solid var(--accent)' : '2px solid transparent';
-                    container.style.opacity = hasValue ? '1' : '0.85';
-                };
-
-                inp.addEventListener('input', () => { clampNumber(); updateDraggable(); });
-                inp.addEventListener('change', () => { clampNumber(); updateDraggable(); });
-                updateDraggable();
-
-                container.appendChild(inp);
-                container.appendChild(btnGroup);
-                container.appendChild(dragHandle);
-                container.dataset.index = idx;
-
-                return container;
-            });
+            let containers = createContainers(inputs);
 
             // Drag and drop logic
             let draggedIndex = null;
             let dropHandled = false;
 
-            containers.forEach((container, idx) => {
-                container.addEventListener("dragstart", (e) => {
-                    draggedIndex = idx;
-                    dropHandled = false;
-                    container.style.opacity = "0.4";
-                    container.style.cursor = "grabbing";
-                    e.dataTransfer.effectAllowed = "copyMove";
-                    e.dataTransfer.setData("text/plain", inputs[idx].value);
-                });
+            const setupDragListeners = (containerArray) => {
+                containerArray.forEach((container, idx) => {
+                    let isDragOverThis = false;
 
-                container.addEventListener("dragend", (e) => {
-                    container.style.opacity = "";
-                    container.style.cursor = "grab";
-                    // If drop didn't happen (dragged outside), delete the value
-                    if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
-                        inputs[idx].value = "";
-                        inputs[idx].dispatchEvent(new Event("input"));
-                        if (run) run();
-                    }
-                    draggedIndex = null;
-                    dropHandled = false;
-                    containers.forEach(c => {
-                        c.style.backgroundColor = "";
-                        c.style.transform = "";
+                    container.addEventListener("dragstart", (e) => {
+                        draggedIndex = idx;
+                        dropHandled = false;
+                        container.style.opacity = "0.4";
+                        container.style.cursor = "grabbing";
+                        e.dataTransfer.effectAllowed = "copyMove";
+                        e.dataTransfer.setData("text/plain", inputs[idx].value);
                     });
-                });
 
-                container.addEventListener("dragover", (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
-                    container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
-                    container.style.transform = "scale(1.05)";
-                });
-
-                container.addEventListener("dragleave", (e) => {
-                    container.style.backgroundColor = "";
-                    container.style.transform = "";
-                });
-
-                container.addEventListener("drop", (e) => {
-                    e.preventDefault();
-                    dropHandled = true;
-                    const draggedData = e.dataTransfer.getData('text/plain');
-                    const placeIndexData = e.dataTransfer.getData('application/x-place-index');
-                    const placeSetData = e.dataTransfer.getData('application/x-place-set');
-
-                    // Swap with a single place box
-                    if (placeIndexData !== null && placeIndexData !== '') {
-                        const srcIdx = parseInt(placeIndexData, 10);
-                        const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
-                        if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
-                            const incoming = placeVals[srcIdx];
-                            const outgoing = inputs[idx].value;
-                            inputs[idx].value = incoming || '';
+                    container.addEventListener("dragend", (e) => {
+                        container.style.opacity = "";
+                        container.style.cursor = "grab";
+                        if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                            inputs[idx].value = "";
                             inputs[idx].dispatchEvent(new Event("input"));
-                            placeVals[srcIdx] = outgoing || '';
-                            if (window.setPlaceValues) window.setPlaceValues(placeVals);
-                            if (window.markPlaceDropHandled) window.markPlaceDropHandled();
-                            run();
+                            if (run) run();
+                        }
+                        draggedIndex = null;
+                        dropHandled = false;
+                        isDragOverThis = false;
+                        containerArray.forEach(c => {
+                            c.style.backgroundColor = "";
+                            c.style.transform = "";
+                        });
+                    });
+
+                    container.addEventListener("dragover", (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = draggedIndex !== null ? "move" : "copy";
+                        if (!isDragOverThis) {
+                            isDragOverThis = true;
+                            container.style.backgroundColor = "rgba(56, 239, 125, 0.2)";
+                            container.style.transform = "scale(1.05)";
+                        }
+                    });
+
+                    container.addEventListener("dragleave", (e) => {
+                        isDragOverThis = false;
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                    });
+
+                    container.addEventListener("drop", (e) => {
+                        e.preventDefault();
+                        dropHandled = true;
+                        isDragOverThis = false;
+                        const draggedData = e.dataTransfer.getData('text/plain');
+                        const placeIndexData = e.dataTransfer.getData('application/x-place-index');
+                        const placeSetData = e.dataTransfer.getData('application/x-place-set');
+                        const labelData = e.dataTransfer.getData('application/x-label');
+
+                        // Swap with a single place box
+                        if (placeIndexData !== null && placeIndexData !== '') {
+                            const srcIdx = parseInt(placeIndexData, 10);
+                            const placeVals = window.getPlaceValues ? [...window.getPlaceValues()] : null;
+                            if (!isNaN(srcIdx) && placeVals && srcIdx >= 0 && srcIdx < 6) {
+                                const incoming = placeVals[srcIdx];
+                                const outgoing = inputs[idx].value;
+                                if (cell11Mode === 'label') {
+                                    const col = incoming ? getCol(parseInt(incoming, 10)) : '';
+                                    inputs[idx].value = col ? String(col) : '';
+                                } else {
+                                    inputs[idx].value = incoming || '';
+                                }
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                placeVals[srcIdx] = outgoing || '';
+                                if (window.setPlaceValues) window.setPlaceValues(placeVals);
+                                if (window.markPlaceDropHandled) window.markPlaceDropHandled();
+                                run();
+                                container.style.backgroundColor = "";
+                                container.style.transform = "";
+                                draggedIndex = null;
+                                return;
+                            }
+                        }
+                        // Accept place set (6 numbers)
+                        if (placeSetData) {
+                            try {
+                                const values = JSON.parse(placeSetData);
+                                if (Array.isArray(values) && values.length === 6) {
+                                    for (let i = 0; i < 6; i++) {
+                                        if (cell11Mode === 'label') {
+                                            const col = values[i] ? getCol(parseInt(values[i], 10)) : '';
+                                            inputs[i].value = col ? String(col) : '';
+                                        } else {
+                                            inputs[i].value = values[i] || '';
+                                        }
+                                        inputs[i].dispatchEvent(new Event("input"));
+                                    }
+                                    if (run) run();
+                                }
+                            } catch (err) { }
+                        }
+                        // Kéo số/label trực tiếp từ popup
+                        else if (draggedIndex === null && !placeIndexData && draggedData && !isNaN(draggedData)) {
+                            const numVal = parseInt(draggedData, 10);
+                            if (cell11Mode === 'pattern' && numVal >= 1 && numVal <= 45) {
+                                inputs[idx].value = numVal;
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                if (run) run();
+                                return;
+                            } else if (cell11Mode === 'label') {
+                                const col = getCol(numVal);
+                                inputs[idx].value = col || '';
+                                inputs[idx].dispatchEvent(new Event("input"));
+                                if (run) run();
+                                return;
+                            }
+                        }
+                        // Kéo label từ header popup khi mode = label
+                        else if (draggedIndex === null && labelData && cell11Mode === 'label') {
+                            inputs[idx].value = labelData.replace('C', '');
+                            inputs[idx].dispatchEvent(new Event("input"));
+                            if (run) run();
+                            draggedIndex = null;
                             container.style.backgroundColor = "";
                             container.style.transform = "";
-                            draggedIndex = null;
                             return;
                         }
-                    }
-                    // Accept place set (6 numbers)
-                    if (placeSetData) {
-                        try {
-                            const values = JSON.parse(placeSetData);
-                            if (Array.isArray(values) && values.length === 6) {
-                                for (let i = 0; i < 6; i++) {
-                                    inputs[i].value = values[i] || '';
-                                    inputs[i].dispatchEvent(new Event("input"));
-                                }
-                                if (run) run();
-                            }
-                        } catch (err) { }
-                    }
-                    // Kéo số trực tiếp từ popup (chỉ nếu không phải internal drag)
-                    else if (draggedIndex === null && draggedData && !isNaN(draggedData)) {
-                        const num = parseInt(draggedData, 10);
-                        if (num >= 1 && num <= 45) {
-                            inputs[idx].value = num;
+                        // Otherwise swap
+                        else if (draggedIndex !== null && draggedIndex !== idx) {
+                            const tempValue = inputs[idx].value;
+                            inputs[idx].value = inputs[draggedIndex].value;
+                            inputs[draggedIndex].value = tempValue;
+
                             inputs[idx].dispatchEvent(new Event("input"));
-                            run(idx);
-                            return;
+                            inputs[draggedIndex].dispatchEvent(new Event("input"));
+
+                            run();
                         }
-                    }
-                    // Otherwise swap
-                    else if (draggedIndex !== null && draggedIndex !== idx) {
-                        const tempValue = inputs[idx].value;
-                        inputs[idx].value = inputs[draggedIndex].value;
-                        inputs[draggedIndex].value = tempValue;
-
-                        inputs[idx].dispatchEvent(new Event("input"));
-                        inputs[draggedIndex].dispatchEvent(new Event("input"));
-
-                        run();
-                    }
-                    container.style.backgroundColor = "";
-                    container.style.transform = "";
-                    draggedIndex = null;
+                        container.style.backgroundColor = "";
+                        container.style.transform = "";
+                        draggedIndex = null;
+                    });
                 });
-            });
+            };
+
+            setupDragListeners(containers);
 
             const controls = document.createElement("div"); controls.className = "controls";
-            const labelText = document.createElement("span"); labelText.textContent = "Pattern:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px";
+            // Mode toggle button
+            controls.appendChild(modeBtn);
+            const labelText = document.createElement("span"); labelText.textContent = "Pattern:"; labelText.style.fontWeight = "700"; labelText.style.fontSize = "14px"; labelText.style.marginLeft = "12px";
             controls.appendChild(labelText);
             containers.forEach(c => controls.appendChild(c));
             const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
             recencySel.addEventListener('change', () => { try { run(); } catch (e) { } });
+
+            // Trash toggle for Cell11 — synced with Cell6.5/Cell6.6
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell11_trashSel'; trashSel.className = 'trash-mode trash-toggle'; trashSel.style.cssText = 'padding:6px 10px;margin-left:4px;vertical-align:middle;'; } catch (e) { }
+            trashSel.type = 'button';
+            trashSel.value = 'include';
+            trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    try { const other = document.getElementById('cell6_5_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
+                    try { const other = document.getElementById('cell6_6_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            // keep synced when popup or other cells update trash
+            try {
+                document.addEventListener('trashchange', () => {
+                    try {
+                        const other = document.getElementById('cell6_5_trashSel') || document.getElementById('cell6_6_trashSel');
+                        if (other && trashSel && trashSel.value !== other.value) { trashSel.value = other.value; trashSel.textContent = other.value; }
+                    } catch (e) { }
+                    try { run(); } catch (e) { }
+                });
+            } catch (e) { }
+
+            // Fav toggle for Cell11 — mirror Cell6.6
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell11_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button';
+            favSel.value = 'exclude';
+            favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px';
+            favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            // Ensure Cell11 redraws when the fav popup changes
+            try {
+                const secEl = document.getElementById('cell11');
+                if (secEl && !secEl.__favListenerAdded) {
+                    secEl.__favListenerAdded = true;
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell11_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                try { run(); } catch (err) { }
+                            }
+                        } catch (e) { }
+                    });
+                }
+            } catch (e) { }
+
+            controls.append('Trash:', trashSel, 'Fav:', favSel);
+
             body.appendChild(controls);
 
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
@@ -11606,6 +11852,43 @@
             controls.appendChild(hint);
             // place recency select at end of controls
             controls.appendChild(recencySel);
+
+            // Helper: get trash/fav filtered rows
+            function getFilteredRows() {
+                let source = rows.slice();
+                // Trash filter
+                const trashMode = trashSel.value || 'include';
+                if (trashMode === 'exclude') {
+                    const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                    const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                    if (trashedSet.size) {
+                        source = source.filter(r => {
+                            for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
+                            return true;
+                        });
+                    }
+                }
+                // Fav filter
+                const favMode = favSel.value || 'exclude';
+                if (favMode === 'include') {
+                    let favs = [];
+                    try {
+                        if (window.getFavItems && typeof window.getFavItems === 'function') {
+                            favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                        } else if (Array.isArray(window.__favItems) && window.__favItems.length) {
+                            favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n));
+                        }
+                    } catch (e) { }
+                    if (favs.length) {
+                        const favSet = new Set(favs);
+                        source = source.filter(r => {
+                            for (const nn of r.nums) if (favSet.has(Number(nn))) return true;
+                            return false;
+                        });
+                    }
+                }
+                return source;
+            }
 
             function run(changeIdx) {
                 // Build pairCounts & computeRule for rule column (same as Cell6.5)
@@ -11659,40 +11942,135 @@
                     } catch (e) { return ''; }
                 };
 
-                const pattern = inputs.map(inp => {
-                    const v = inp.value.trim();
-                    if (!v) return "_";
-                    const n = parseInt(v, 10);
-                    return (n >= 1 && n <= 45) ? String(n) : "_";
-                });
-                if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
-                if (pattern.every(p => p === "_")) { wrap.innerHTML = "<div class='loader'>Nhập vào 1 ô để tìm kiếm...</div>"; return; }
-                const results = rows.filter(r => pattern.every((p, i) => p === "_" || r.nums[i] === Number(p)));
-                if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
-                const patternStr = pattern.join(',');
-                let display = results.slice();
-                if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
-                let html = `<div class='muted'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
-                const chunk = 15;
-                for (let i = 0; i < display.length; i += chunk) {
-                    html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
-                    display.slice(i, i + chunk).forEach(r => {
-                        const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
-                        const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
-                        const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
-                        const ruleHtml = __c11_computeRule(r.nums);
-                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                const filteredRows = getFilteredRows();
+
+                if (cell11Mode === 'pattern') {
+                    // === PATTERN MODE (original logic) ===
+                    const pattern = inputs.map(inp => {
+                        const v = inp.value.trim();
+                        if (!v) return "_";
+                        const n = parseInt(v, 10);
+                        return (n >= 1 && n <= 45) ? String(n) : "_";
                     });
-                    html += "</tbody></table></div>";
+                    if (!filteredRows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                    if (pattern.every(p => p === "_")) { wrap.innerHTML = "<div class='loader'>Nhập vào 1 ô để tìm kiếm...</div>"; return; }
+                    const results = filteredRows.filter(r => pattern.every((p, i) => p === "_" || r.nums[i] === Number(p)));
+                    if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
+                    const patternStr = pattern.join(',');
+                    let display = results.slice();
+                    if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
+                    let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
+                    const chunk = 15;
+                    for (let i = 0; i < display.length; i += chunk) {
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        display.slice(i, i + chunk).forEach(r => {
+                            const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
+                            const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
+                            const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
+                            const ruleHtml = __c11_computeRule(r.nums);
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                        });
+                        html += "</tbody></table></div>";
+                    }
+                    html += "</div>";
+                    wrap.innerHTML = html;
+                } else {
+                    // === LABEL MODE: strict positional match ===
+                    // Each input corresponds to a position in the 6-char label.
+                    // If input[i] has a value v (1-6), then row.label[i] must === String(v).
+                    // Empty inputs match any label character at that position.
+                    const labelPattern = inputs.map(inp => {
+                        const v = String(inp.value ?? '').trim();
+                        if (!v || v === '_') return null;
+                        const n = parseInt(v, 10);
+                        return (n >= 1 && n <= 6) ? String(n) : null;
+                    });
+                    if (!filteredRows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
+                    if (labelPattern.every(p => p === null)) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 ô (1-6) để tìm label...</div>"; return; }
+
+                    const results = filteredRows.filter(r => {
+                        const lbl = r.label;
+                        if (!lbl || lbl.length < 6) return false;
+                        for (let i = 0; i < 6; i++) {
+                            if (labelPattern[i] !== null && lbl[i] !== labelPattern[i]) return false;
+                        }
+                        return true;
+                    });
+
+                    if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp label pattern</div>"; return; }
+                    const patternStr = labelPattern.map(p => p === null ? '_' : p).join(',');
+                    let display = results.slice();
+                    if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
+                    let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · label ${patternStr}</div><div class='grid-centered'>`;
+                    const chunk = 15;
+                    for (let i = 0; i < display.length; i += chunk) {
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        display.slice(i, i + chunk).forEach(r => {
+                            const highlightPositions = labelPattern.map((p, i) => p !== null ? i : -1).filter(i => i >= 0);
+                            const nums = r.nums.map((v, idx) => {
+                                const isMatch = highlightPositions.includes(idx);
+                                return isMatch ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`;
+                            }).join(" ");
+                            const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
+                            const ruleHtml = __c11_computeRule(r.nums);
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                        });
+                        html += "</tbody></table></div>";
+                    }
+                    html += "</div>";
+                    wrap.innerHTML = html;
                 }
-                html += "</div>";
-                wrap.innerHTML = html;
             }
+
+            // Mode toggle
+            const applyCell11Mode = (mode) => {
+                if (mode !== 'pattern' && mode !== 'label') return;
+                cell11Mode = mode;
+                modeBtn.textContent = mode === 'pattern' ? 'Pattern (1-45)' : 'Label (1-6)';
+
+                inputs = createInputs(mode);
+                containers = createContainers(inputs);
+                draggedIndex = null;
+                setupDragListeners(containers);
+
+                const oldContainers = controls.querySelectorAll(".drag-input-container");
+                oldContainers.forEach(c => c.remove());
+
+                labelText.textContent = mode === 'pattern' ? 'Pattern:' : 'Label:';
+
+                let anchor = labelText;
+                containers.forEach(c => {
+                    anchor.parentNode.insertBefore(c, anchor.nextSibling);
+                    anchor = c;
+                });
+
+                // Keyboard navigation
+                inputs.forEach((inp, logicalIdx) => {
+                    inp.oninput = () => run(logicalIdx);
+                    inp.onkeydown = (e) => {
+                        if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[logicalIdx > 0 ? logicalIdx - 1 : inputs.length - 1].focus(); }
+                        if (e.key === 'ArrowRight') { e.preventDefault(); inputs[logicalIdx < inputs.length - 1 ? logicalIdx + 1 : 0].focus(); }
+                        if (e.key === 'ArrowUp') { e.preventDefault(); let n = parseInt(String(inp.value ?? '').trim(), 10); if (!Number.isFinite(n)) n = 0; n++; if (cell11Mode === 'label') { if (n > 6) n = 1; } else { if (n > 45) n = 1; } if (n < 1) n = 1; inp.value = String(n); inp.dispatchEvent(new Event('input')); run(); }
+                        if (e.key === 'ArrowDown') { e.preventDefault(); let n = parseInt(String(inp.value ?? '').trim(), 10); if (!Number.isFinite(n)) n = 0; n--; if (cell11Mode === 'label') { if (n < 1) n = 6; } else { if (n < 1) n = 45; } inp.value = String(n); inp.dispatchEvent(new Event('input')); run(); }
+                    };
+                });
+
+                run();
+            };
+
+            modeBtn.addEventListener('click', () => {
+                const next = cell11Mode === 'pattern' ? 'label' : 'pattern';
+                applyCell11Mode(next);
+            });
+
+            // Initial key handlers
             inputs.forEach((inp, idx) => {
                 inp.oninput = () => run(idx);
                 inp.onkeydown = (e) => {
                     if (e.key === 'ArrowLeft') { e.preventDefault(); inputs[idx > 0 ? idx - 1 : inputs.length - 1].focus(); }
                     if (e.key === 'ArrowRight') { e.preventDefault(); inputs[idx < inputs.length - 1 ? idx + 1 : 0].focus(); }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); let n = parseInt(String(inp.value ?? '').trim(), 10); if (!Number.isFinite(n)) n = 0; n++; if (cell11Mode === 'label') { if (n > 6) n = 1; } else { if (n > 45) n = 1; } if (n < 1) n = 1; inp.value = String(n); inp.dispatchEvent(new Event('input')); run(); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); let n = parseInt(String(inp.value ?? '').trim(), 10); if (!Number.isFinite(n)) n = 0; n--; if (cell11Mode === 'label') { if (n < 1) n = 6; } else { if (n < 1) n = 45; } inp.value = String(n); inp.dispatchEvent(new Event('input')); run(); }
                 };
             });
             clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
