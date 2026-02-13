@@ -3063,9 +3063,12 @@
                             style="color:#38ef7d;font-weight:900;margin-left:8px;font-size:16px;text-shadow:0 0 8px rgba(56,239,125,0.22);">0.00</span>
                     </span>
                     <label style="margin-left:10px;font-size:12px;">Rule:</label>
-                    <button id="ruleToggle"
+                    <button id="trashToggle"
                         style="width:68px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"
-                        title="Normal = rê record không đổi nền đỏ; Rule = rê record áp dụng nền đỏ tạm thời">normal</button>
+                        title="Normal = rê record không đổi trash; Trash = rê record áp dụng trash tạm thời">normal</button>
+                    <button id="favToggle"
+                        style="width:68px;font-size:12px;padding:6px 10px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"
+                        title="Normal = rê record không đổi fav; Fav = rê record áp dụng fav tạm thời">normal</button>
                 </div>
             </div>
         </div>
@@ -3449,11 +3452,12 @@
                 // If hovering a result row, try to find the header <strong>{...}</strong>
                 // in the same card and use it to compute popup highlights.
                 if (tr && cardEl) {
-                    // Skip popup highlight for Cell5.5 / Cell6.5 rows when Rule toggle is "normal"
+                    // Skip popup highlight for Cell5.5 / Cell6.5 rows when both toggles are "normal"
                     try {
                         if (tr.closest('#cell5_5') || tr.closest('#cell6_5') || tr.closest('#cell6_6') || tr.closest('#cell7') || tr.closest('#cell8') || tr.closest('#cell9') || tr.closest('#cell11')) {
-                            const ruleMode = (typeof window.getRuleToggleMode === 'function') ? window.getRuleToggleMode() : 'normal';
-                            if (ruleMode !== 'rule') return;
+                            const trashMode = (typeof window.getTrashToggleMode === 'function') ? window.getTrashToggleMode() : 'normal';
+                            const favMode = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal';
+                            if (trashMode === 'normal' && favMode === 'normal') return;
                         }
                     } catch (e) { }
                     const s = cardEl.querySelector('strong');
@@ -13354,30 +13358,42 @@
             } catch (e) { }
         })();
 
-        // Setup Rule toggle button: "normal" vs "rule" for Cell5.5 hover behavior
+        // Setup Rule toggle buttons: trash toggle ("normal"/"trash") and fav toggle ("normal"/"fav")
         (function setupRuleToggle() {
-            const btn = document.getElementById('ruleToggle');
-            if (!btn) return;
-            // Expose getter so the hover handler can check the current mode
-            window.getRuleToggleMode = function () { return btn.textContent.trim().toLowerCase(); };
-            btn.addEventListener('click', () => {
-                const cur = btn.textContent.trim().toLowerCase();
-                if (cur === 'normal') {
-                    btn.textContent = 'rule';
-                } else {
-                    btn.textContent = 'normal';
-                }
-            });
+            const trashBtn = document.getElementById('trashToggle');
+            const favBtn = document.getElementById('favToggle');
+            // Expose getters so hover handlers can check each mode independently
+            window.getTrashToggleMode = function () { return trashBtn ? trashBtn.textContent.trim().toLowerCase() : 'normal'; };
+            window.getFavToggleMode = function () { return favBtn ? favBtn.textContent.trim().toLowerCase() : 'normal'; };
+            // Legacy compatibility: getRuleToggleMode returns 'rule' when BOTH are active
+            window.getRuleToggleMode = function () {
+                const t = window.getTrashToggleMode();
+                const f = window.getFavToggleMode();
+                if (t === 'trash' && f === 'fav') return 'rule';
+                return 'normal';
+            };
+            if (trashBtn) {
+                trashBtn.addEventListener('click', () => {
+                    const cur = trashBtn.textContent.trim().toLowerCase();
+                    trashBtn.textContent = (cur === 'normal') ? 'trash' : 'normal';
+                });
+            }
+            if (favBtn) {
+                favBtn.addEventListener('click', () => {
+                    const cur = favBtn.textContent.trim().toLowerCase();
+                    favBtn.textContent = (cur === 'normal') ? 'fav' : 'normal';
+                });
+            }
         })();
 
-        // Spacebar toggles rule button instead of scrolling
+        // Spacebar toggles trash toggle button instead of scrolling
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' || e.key === ' ') {
                 // Don't intercept when typing in inputs/textareas/selects
                 const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
                 if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable)) return;
                 e.preventDefault();
-                const btn = document.getElementById('ruleToggle');
+                const btn = document.getElementById('trashToggle');
                 if (btn) btn.click();
             }
         });
@@ -14335,10 +14351,10 @@
                     // ensure the row belongs to cell5_5 or cell6_5
                     const sec = tr.closest('section');
                     if (!sec || (sec.id !== 'cell5_5' && sec.id !== 'cell6_5' && sec.id !== 'cell6_6' && sec.id !== 'cell7' && sec.id !== 'cell8' && sec.id !== 'cell9' && sec.id !== 'cell11')) return;
-                    // Only preview fav when Rule toggle is "rule"
+                    // Only preview fav when fav toggle is "fav"
                     try {
-                        const ruleMode = (typeof window.getRuleToggleMode === 'function') ? window.getRuleToggleMode() : 'normal';
-                        if (ruleMode !== 'rule') return;
+                        const favMode = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal';
+                        if (favMode !== 'fav') return;
                     } catch (e) { return; }
                     // allow preview even if favPopup is visible (handled in renderFavPreview)
                     // try parse rule column (third td) like `16>{6,13...}`
@@ -14381,8 +14397,9 @@
                     n = Number(n);
                     if (!Number.isFinite(n)) return;
                     // Ensure exclusivity: remove from trash if present
+                    // Skip when __skipFavTrashExclusion is set (temp hover restore keeps trash intact)
                     try {
-                        if (Array.isArray(trashItems) && trashItems.includes(n)) {
+                        if (!window.__skipFavTrashExclusion && Array.isArray(trashItems) && trashItems.includes(n)) {
                             trashItems = trashItems.filter(v => v !== n);
                             try { const c = numberPickerTable.querySelector('td[data-number="' + n + '"]'); if (c) c.classList.remove('in-trash'); } catch (e) { }
                             try { renderTrash(); } catch (e) { }
@@ -14397,7 +14414,7 @@
                     try {
                         const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                         if (cell) {
-                            cell.classList.remove('in-trash');
+                            if (!window.__skipFavTrashExclusion) cell.classList.remove('in-trash');
                             cell.classList.add('in-fav');
                         }
                     } catch (e) { }
@@ -15234,8 +15251,9 @@
                 try { if (window && window.__trashClearing) return; } catch (e) { }
                 if (!n || trashItems.includes(n)) return;
                 // Ensure exclusivity: remove from fav if present
+                // Skip when __skipTrashFavExclusion is set (temporary hover mode keeps fav intact)
                 try {
-                    if (Array.isArray(favItems) && favItems.includes(n)) {
+                    if (!window.__skipTrashFavExclusion && Array.isArray(favItems) && favItems.includes(n)) {
                         favItems = favItems.filter(v => v !== n);
                         try { const c2 = numberPickerTable.querySelector('td[data-number="' + n + '"]'); if (c2) c2.classList.remove('in-fav'); } catch (e) { }
                         try { renderFav(); } catch (e) { }
@@ -15245,7 +15263,7 @@
 
                 const cell = numberPickerTable.querySelector('td[data-number="' + n + '"]');
                 if (cell) {
-                    cell.classList.remove('in-fav');
+                    if (!window.__skipTrashFavExclusion) cell.classList.remove('in-fav');
                     cell.classList.add('in-trash');
                 }
                 trashItems.push(n);
@@ -16146,6 +16164,8 @@
             try { window.getTrashItems = function () { return trashItems.slice(); }; window.__trashItems = trashItems; } catch (e) { /* ignore */ }
             // expose addToFav / removeFromFav globally so renderCell6_5 (computeAndApplyUnpairBest) can use them
             try { window.addToFav = addToFav; window.removeFromFav = removeFromFav; } catch (e) { }
+            // expose current fav items via a safe global getter for other sections
+            try { window.getFavItems = function () { return favItems.slice(); }; } catch (e) { }
 
             // expose a clearAllTrash function so cross-scope code can reliably
             // clear the trashItems array and re-render the trash popup.
@@ -16550,6 +16570,8 @@
             try {
                 let __originalTrash = null;      // global snapshot of trash before any hover
                 let __hoverActiveTr = null;      // the <tr> currently being hovered
+                let __tempHiddenFav = [];         // fav items temporarily hidden during trash hover
+                let __tempHiddenTrash = [];       // trash items temporarily hidden during fav hover
 
                 function _parseRowNumsFromTr(tr) {
                     try {
@@ -16567,6 +16589,71 @@
                     } catch (e) { return []; }
                 }
 
+                function _getCurrentFavSnapshot() {
+                    try {
+                        if (typeof window.getFavItems === 'function') return (window.getFavItems() || []).slice();
+                        return [];
+                    } catch (e) { return []; }
+                }
+
+                // Restore fav items that were temporarily hidden during hover
+                function _restoreHiddenFav() {
+                    if (!__tempHiddenFav || !__tempHiddenFav.length) return;
+                    try {
+                        window.__skipFavTrashExclusion = true;
+                        for (const n of __tempHiddenFav) {
+                            if (typeof window.addToFav === 'function') window.addToFav(n);
+                        }
+                        window.__skipFavTrashExclusion = false;
+                    } catch (e) { window.__skipFavTrashExclusion = false; }
+                    __tempHiddenFav = [];
+                }
+
+                // Hide fav items that overlap with current trash
+                function _hideOverlappingFav() {
+                    try {
+                        const currentTrash = _getCurrentTrashSnapshot();
+                        const currentFav = _getCurrentFavSnapshot();
+                        const overlap = currentFav.filter(n => currentTrash.includes(n));
+                        if (overlap.length) {
+                            __tempHiddenFav = overlap;
+                            for (const n of overlap) {
+                                if (typeof window.removeFromFav === 'function') window.removeFromFav(n);
+                            }
+                        }
+                    } catch (e) { }
+                }
+
+                // Restore trash items that were temporarily hidden during fav-only hover
+                function _restoreHiddenTrash() {
+                    if (!__tempHiddenTrash || !__tempHiddenTrash.length) return;
+                    try {
+                        window.__skipTrashFavExclusion = true;
+                        for (const n of __tempHiddenTrash) {
+                            try {
+                                document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: [n] }, bubbles: true, composed: true }));
+                            } catch (e) { }
+                        }
+                        window.__skipTrashFavExclusion = false;
+                    } catch (e) { window.__skipTrashFavExclusion = false; }
+                    __tempHiddenTrash = [];
+                }
+
+                // Hide trash items that overlap with fav candidate (for fav-only mode)
+                function _hideTrashForFavCandidate(cand) {
+                    try {
+                        const currentTrash = _getCurrentTrashSnapshot();
+                        const n = Number(cand);
+                        if (currentTrash.includes(n)) {
+                            __tempHiddenTrash.push(n);
+                            // Remove from trash so fav yellow shows
+                            try {
+                                document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: [n] }, bubbles: true, composed: true }));
+                            } catch (e) { }
+                        }
+                    } catch (e) { }
+                }
+
                 // Synchronously clear current trash and apply new set
                 function _replaceTrash(numsToRemove, numsToAdd) {
                     if (numsToRemove && numsToRemove.length) {
@@ -16580,7 +16667,7 @@
                     }
                 }
 
-                function _computeDontmatch(six) {
+                function _computeDontmatch(six, preferredCand) {
                     try {
                         const pairCounts = new Map();
                         (rows || []).forEach(r => {
@@ -16597,9 +16684,14 @@
                         const userNums = (six || []).map(n => Number(n)).filter(n => Number.isFinite(n));
                         if (userNums.length !== 6) return null;
 
+                        // If a preferred candidate is provided and is among the six, only try that one
+                        const candsToTry = (preferredCand != null && Number.isFinite(Number(preferredCand)) && userNums.includes(Number(preferredCand)))
+                            ? [Number(preferredCand)]
+                            : userNums;
+
                         let found = null;
                         for (let n = 44; n >= 1; n--) {
-                            for (const cand of userNums) {
+                            for (const cand of candsToTry) {
                                 const others = [];
                                 for (let y = 1; y <= 45; y++) {
                                     if (y === cand) continue;
@@ -16617,7 +16709,7 @@
                             if (found) break;
                         }
                         if (!found) {
-                            const cand = userNums[0];
+                            const cand = candsToTry[0];
                             const others = [];
                             for (let y = 1; y <= 45; y++) { if (y === cand) continue; const a = Math.min(cand, y), b = Math.max(cand, y); const key = `${a}-${b}`; const c = pairCounts.get(key) || 0; others.push({ y, c }); }
                             others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
@@ -16637,11 +16729,12 @@
                         if (!tr) return;
                         // Skip Cell6.5 unpair mode — it has its own dedicated hover handlers
                         try { const c65 = tr.closest('#cell6_5'); if (c65 && c65.querySelector('.controls.unpair-mode')) return; } catch (e) { }
-                        // Only apply temporary trash when Rule toggle is set to "rule"
-                        try {
-                            const ruleMode = (typeof window.getRuleToggleMode === 'function') ? window.getRuleToggleMode() : 'normal';
-                            if (ruleMode !== 'rule') return;
-                        } catch (e) { return; }
+                        // Read both toggle modes
+                        let __trashMode = 'normal', __favMode = 'normal';
+                        try { __trashMode = (typeof window.getTrashToggleMode === 'function') ? window.getTrashToggleMode() : 'normal'; } catch (e) { }
+                        try { __favMode = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal'; } catch (e) { }
+                        // Skip if both toggles are normal — nothing to do
+                        if (__trashMode === 'normal' && __favMode === 'normal') return;
                         if (__hoverActiveTr === tr) return; // same row, skip
 
                         const six = _parseRowNumsFromTr(tr);
@@ -16654,25 +16747,51 @@
 
                         __hoverActiveTr = tr;
 
-                        // Compute dontmatch for this row
-                        const __result = _computeDontmatch(six);
-                        const uniq = __result ? __result.dontmatch : null;
-
-                        if (uniq && uniq.length) {
-                            // Clear current trash and apply new dontmatch
-                            const cur = _getCurrentTrashSnapshot();
-                            _replaceTrash(cur, uniq);
-                            try { window.__cell6_5_lastDontmatch = new Set(uniq); } catch (e) { }
-                        }
-                        // Temporarily add candidate to fav (yellow on popup)
+                        // Try to parse the displayed candidate from the row text (e.g., "16>{...}[10]")
+                        // This ensures the hover highlights the same candidate that the section displays.
+                        let __displayedCand = null;
                         try {
-                            if (__result && __result.cand != null && typeof window.addToFav === 'function') {
-                                const __prevRuleFav = window.__ruleModeHoverFavCand || null;
-                                if (__prevRuleFav != null && __prevRuleFav !== __result.cand && typeof window.removeFromFav === 'function') window.removeFromFav(__prevRuleFav);
-                                window.addToFav(__result.cand);
-                                window.__ruleModeHoverFavCand = __result.cand;
+                            const tds = tr.querySelectorAll('td');
+                            for (const td of tds) {
+                                const txt = (td.textContent || '').trim();
+                                const m = txt.match(/(\d+)\s*>\s*\{/);
+                                if (m) { const v = Number(m[1]); if (Number.isFinite(v) && v >= 1 && v <= 45) { __displayedCand = v; break; } }
                             }
                         } catch (e) { }
+
+                        // Compute dontmatch for this row (prefer displayed candidate if found)
+                        const __result = _computeDontmatch(six, __displayedCand);
+                        const uniq = __result ? __result.dontmatch : null;
+
+                        // === TRASH MODE: apply dontmatch to trash ===
+                        if (__trashMode === 'trash') {
+                            // Enable flag so moveToTrash skips fav exclusivity during temp hover
+                            window.__skipTrashFavExclusion = true;
+                            // Restore any previously hidden fav items before changing trash
+                            _restoreHiddenFav();
+
+                            if (uniq && uniq.length) {
+                                // Clear current trash and apply new dontmatch
+                                const cur = _getCurrentTrashSnapshot();
+                                _replaceTrash(cur, uniq);
+                                try { window.__cell6_5_lastDontmatch = new Set(uniq); } catch (e) { }
+                                // After trash is applied (double microtask), hide fav items that overlap with new trash
+                                try { Promise.resolve().then(() => Promise.resolve().then(() => { _hideOverlappingFav(); })); } catch (e) { }
+                            }
+                        }
+
+                        // === FAV MODE: add candidate to fav ===
+                        if (__favMode === 'fav' && __result && __result.cand != null && typeof window.addToFav === 'function') {
+                            const __prevRuleFav = window.__ruleModeHoverFavCand || null;
+                            if (__prevRuleFav != null && __prevRuleFav !== __result.cand && typeof window.removeFromFav === 'function') window.removeFromFav(__prevRuleFav);
+                            // In fav-only mode (trash=normal): temporarily hide trash for candidate so yellow shows
+                            if (__trashMode === 'normal') {
+                                _restoreHiddenTrash(); // restore any previously hidden trash
+                                _hideTrashForFavCandidate(__result.cand);
+                            }
+                            window.addToFav(__result.cand);
+                            window.__ruleModeHoverFavCand = __result.cand;
+                        }
                     } catch (e) { }
                 }, true);
 
@@ -16683,11 +16802,12 @@
                         if (!tr) return;
                         // Skip Cell6.5 unpair mode — it has its own dedicated hover handlers
                         try { const c65 = tr.closest('#cell6_5'); if (c65 && c65.querySelector('.controls.unpair-mode')) return; } catch (e) { }
-                        // Only restore trash when Rule toggle is "rule" (mirror the mouseover guard)
-                        try {
-                            const ruleMode = (typeof window.getRuleToggleMode === 'function') ? window.getRuleToggleMode() : 'normal';
-                            if (ruleMode !== 'rule') return;
-                        } catch (e) { return; }
+                        // Read both toggle modes
+                        let __trashModeOut = 'normal', __favModeOut = 'normal';
+                        try { __trashModeOut = (typeof window.getTrashToggleMode === 'function') ? window.getTrashToggleMode() : 'normal'; } catch (e) { }
+                        try { __favModeOut = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal'; } catch (e) { }
+                        // Skip if both toggles are normal
+                        if (__trashModeOut === 'normal' && __favModeOut === 'normal') return;
                         if (tr.contains && ev.relatedTarget && tr.contains(ev.relatedTarget)) return;
 
                         // Check if moving to another tracked row → DON'T restore yet
@@ -16697,19 +16817,40 @@
                             return;
                         }
 
-                        // Leaving ALL rows → restore original trash
-                        const cur = _getCurrentTrashSnapshot();
-                        const saved = __originalTrash || [];
-                        _replaceTrash(cur, saved);
+                        // === TRASH MODE RESTORE ===
+                        if (__trashModeOut === 'trash') {
+                            // Leaving ALL rows → restore original trash
+                            const cur = _getCurrentTrashSnapshot();
+                            const saved = __originalTrash || [];
+                            _replaceTrash(cur, saved);
 
-                        // Remove temporary rule-mode hover fav candidate
-                        try {
+                            // After trash is fully restored (double microtask), restore hidden fav and clear flags
+                            try {
+                                Promise.resolve().then(() => Promise.resolve().then(() => {
+                                    _restoreHiddenFav();
+                                    window.__skipTrashFavExclusion = false;
+                                    if (typeof syncFavHighlights === 'function') syncFavHighlights();
+                                }));
+                            } catch (e) { window.__skipTrashFavExclusion = false; }
+                        }
+
+                        // === FAV MODE RESTORE ===
+                        if (__favModeOut === 'fav') {
                             const __rf = window.__ruleModeHoverFavCand;
                             if (__rf != null && typeof window.removeFromFav === 'function') {
                                 window.removeFromFav(__rf);
                                 window.__ruleModeHoverFavCand = null;
                             }
-                        } catch (e) { }
+                            // In fav-only mode: restore trash items hidden by fav candidate
+                            if (__trashModeOut === 'normal') {
+                                try {
+                                    Promise.resolve().then(() => {
+                                        _restoreHiddenTrash();
+                                        if (typeof syncFavHighlights === 'function') syncFavHighlights();
+                                    });
+                                } catch (e) { }
+                            }
+                        }
 
                         // Reset global state
                         __originalTrash = null;
