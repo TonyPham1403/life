@@ -426,10 +426,19 @@
             pointer-events: auto !important;
         }
 
-        /* Dim label cells that don't have values */
-        .number-picker-table tfoot:not(.disabled) th.label-cell:not(.with-values) {
+        /* All Cx labels are always interactive (drag/dblclick) regardless of brightness */
+        .number-picker-table tfoot:not(.disabled) th.label-cell {
+            cursor: grab;
+            pointer-events: auto !important;
+        }
+
+        .number-picker-table tfoot:not(.disabled) th.label-cell:active {
+            cursor: grabbing;
+        }
+
+        /* Dim label cells that don't have values — visual only, still interactive */
+        .number-picker-table tfoot:not(.disabled) th.label-cell:not(.with-values):not(.col-all-trashed):not(.col-all-fav) {
             opacity: 0.3 !important;
-            pointer-events: none !important;
         }
 
         .number-picker-table tbody.disabled,
@@ -437,6 +446,32 @@
             pointer-events: none;
             opacity: 0.3;
             position: relative;
+        }
+
+        /* Allow label cells (C1-C6) to remain interactive even when tfoot is disabled
+           so users can drag-to-trash or dblclick-to-fav entire columns in number mode */
+        .number-picker-table tfoot.disabled th.label-cell {
+            pointer-events: auto;
+            cursor: grab;
+            opacity: 1;
+            position: relative;
+            z-index: 2;
+        }
+
+        .number-picker-table tfoot.disabled th.label-cell:active {
+            cursor: grabbing;
+        }
+
+        /* Visual indicator when all numbers in a column are in trash */
+        .number-picker-table th.label-cell.col-all-trashed {
+            background: linear-gradient(135deg, #b71c1c 0%, #e53935 100%) !important;
+            color: #fff !important;
+        }
+
+        /* Visual indicator when all numbers in a column are in fav */
+        .number-picker-table th.label-cell.col-all-fav {
+            background: linear-gradient(135deg, #f9a825 0%, #fdd835 100%) !important;
+            color: #1a1a1a !important;
         }
 
         .number-picker-table tbody.disabled::after,
@@ -3377,6 +3412,7 @@
                     }
                 } catch (e) { /* ignore */ }
             });
+
         }
 
         // Sync favorite markers from fav list/popup into the main number picker table
@@ -12454,6 +12490,9 @@
                 // Ensure favorite markers are synced after regeneration
                 try { syncFavHighlights(); } catch (e) { /* ignore */ }
 
+                // Update label cell column states (trashed/fav indicators) after regeneration
+                try { if (typeof window.__updateLabelCellColStates === 'function') window.__updateLabelCellColStates(); } catch (e) { /* ignore */ }
+
                 // Draw connections after table is rendered
                 requestAnimationFrame(() => drawConnections());
             }
@@ -14977,6 +15016,26 @@
             // dblclick on a popup number toggles fav state
             numberPickerTable.addEventListener('dblclick', (e) => {
                 try {
+                    // Handle label cell (C1-C6) dblclick: toggle fav for all numbers in that column
+                    const th = e.target.closest('th.label-cell');
+                    if (th) {
+                        const label = th.dataset.label; // e.g. "C2"
+                        const colNum = parseInt(label.substring(1), 10);
+                        const colNums = [];
+                        for (let i = 1; i <= 45; i++) { if (getCol(i) === colNum) colNums.push(i); }
+                        if (!colNums.length) return;
+                        // Check if ALL numbers in this column are already in fav
+                        const allInFav = colNums.every(n => favItems.includes(n));
+                        if (allInFav) {
+                            // Remove all from fav
+                            for (const n of colNums) { try { removeFromFav(n); } catch (e) { } }
+                        } else {
+                            // Add all to fav (will also remove from trash via exclusivity)
+                            for (const n of colNums) { try { addToFav(n); } catch (e) { } }
+                        }
+                        try { updateLabelCellColStates(); } catch (e) { }
+                        return;
+                    }
                     const td = e.target.closest('td');
                     if (!td) return;
                     const n = Number(td.dataset.number || td.getAttribute('data-number'));
@@ -14984,6 +15043,36 @@
                     if (favItems.includes(n)) removeFromFav(n); else addToFav(n);
                 } catch (err) { }
             });
+
+            // Helper: get all numbers belonging to a column
+            function getColNumbers(colNum) {
+                const nums = [];
+                for (let i = 1; i <= 45; i++) { if (getCol(i) === colNum) nums.push(i); }
+                return nums;
+            }
+
+            // Helper: update label cell visual states (trashed/fav indicators)
+            function updateLabelCellColStates() {
+                try {
+                    const labels = numberPickerTable.querySelectorAll('th.label-cell');
+                    labels.forEach(cell => {
+                        const colNum = parseInt(cell.dataset.label.substring(1), 10);
+                        const colNums = getColNumbers(colNum);
+                        const allTrash = colNums.length > 0 && colNums.every(n => trashItems.includes(n));
+                        const allFav = colNums.length > 0 && colNums.every(n => favItems.includes(n));
+                        cell.classList.toggle('col-all-trashed', allTrash);
+                        cell.classList.toggle('col-all-fav', allFav);
+                    });
+                } catch (e) { }
+            }
+            // Expose globally so regeneratePopupTable can call it
+            window.__updateLabelCellColStates = updateLabelCellColStates;
+
+            // Listen for trash/fav changes to keep label states in sync
+            try {
+                document.addEventListener('trashupdated', () => { try { updateLabelCellColStates(); } catch (e) { } }, true);
+                document.addEventListener('favchange', () => { try { updateLabelCellColStates(); } catch (e) { } }, true);
+            } catch (e) { }
 
             function adjustTrashPosition() {
                 const sample = numberPickerTable.querySelector('tbody tr td');
@@ -15643,6 +15732,11 @@
                 if (cell) {
                     if (!window.__skipTrashFavExclusion) cell.classList.remove('in-fav');
                     cell.classList.add('in-trash');
+                    // If this number is currently in a place box, show dim overlay (half green / half red)
+                    try {
+                        const plVals = (window.getPlaceValues ? window.getPlaceValues() : []).map(Number);
+                        if (plVals.includes(n)) cell.classList.add('in-trash-dim');
+                    } catch (e) { }
                 }
                 trashItems.push(n);
                 renderTrash();
@@ -15739,6 +15833,23 @@
             // delegated dragstart to mark source for popup cells and track trash-origin
             document.addEventListener('dragstart', (e) => {
                 try {
+                    // Handle label cell (C1-C6) drag for column-level trash/restore
+                    const th = e.target.closest('th.label-cell');
+                    if (th && th.closest('#numberPickerTable')) {
+                        const label = th.dataset.label; // e.g. "C2"
+                        const colNum = parseInt(label.substring(1), 10);
+                        e.dataTransfer.setData('text/plain', label);
+                        e.dataTransfer.setData('source', 'label-col');
+                        e.dataTransfer.setData('application/x-label', label);
+                        e.dataTransfer.effectAllowed = 'move';
+                        th.style.opacity = '0.5';
+                        window.__lastDragSource = 'label-col';
+                        window.__draggingLabelCol = colNum;
+                        window.__dragOriginCell = th;
+                        draggingNumber = null;
+                        draggingFromTrash = null;
+                        return; // don't fall through to td handling
+                    }
                     const td = e.target.closest('td');
                     if (!td) return;
                     const num = td.dataset && td.dataset.number ? td.dataset.number : (td.textContent || '').trim();
@@ -15781,6 +15892,41 @@
                     e.preventDefault();
                     const data = e.dataTransfer.getData('text/plain');
                     const source = e.dataTransfer.getData('source');
+                    // Handle label-col drops on fav/trash targets
+                    if (source === 'label-col') {
+                        const colNum = window.__draggingLabelCol;
+                        if (!colNum) return;
+                        const colNums = getColNumbers(colNum);
+                        if (!colNums.length) return;
+                        const dropOnFav = !!e.target.closest('#favPopup') || !!e.target.closest('#favBtn');
+                        const dropOnTrash = !!e.target.closest('#trashPopup');
+                        if (dropOnFav) {
+                            // Toggle: if all in fav, remove all; otherwise add all
+                            const allInFav = colNums.every(n => favItems.includes(n));
+                            if (allInFav) {
+                                for (const n of colNums) { try { removeFromFav(n); } catch (e) { } }
+                            } else {
+                                for (const n of colNums) { try { addToFav(n); } catch (e) { } }
+                            }
+                            try { updateLabelCellColStates(); } catch (e) { }
+                            window.__labelColDropHandled = true;
+                            return;
+                        }
+                        if (dropOnTrash && trashEnabled) {
+                            // Toggle: if all in trash, restore all; otherwise trash all
+                            const allInTrash = colNums.every(n => trashItems.includes(n));
+                            if (allInTrash) {
+                                for (const n of colNums) { try { restoreFromTrash(n); } catch (e) { } }
+                            } else {
+                                for (const n of colNums) { try { moveToTrash(n); } catch (e) { } }
+                            }
+                            try { updateLabelCellColStates(); } catch (e) { }
+                            window.__labelColDropHandled = true;
+                            return;
+                        }
+                        // Other drop targets for label-col are handled in dragend
+                        return;
+                    }
                     const num = parseInt(data);
                     if (!num) return;
                     const dropOnTrash = !!e.target.closest('#trashPopup');
@@ -15891,6 +16037,73 @@
             // restore the item when drag ends outside the trash popup (fixes intermittent "stuck" behavior)
             document.addEventListener('dragend', (e) => {
                 try {
+                    // Handle label-col drag end: move/restore entire column to/from trash
+                    const labelSource = (window && window.__lastDragSource === 'label-col');
+                    if (labelSource && window.__draggingLabelCol) {
+                        const colNum = window.__draggingLabelCol;
+                        const colNums = getColNumbers(colNum);
+                        // Restore label cell opacity
+                        try {
+                            const originTh = window.__dragOriginCell;
+                            if (originTh) originTh.style.opacity = '1';
+                        } catch (e) { }
+                        // If the drop handler already processed this (fav/trash target), skip
+                        const alreadyHandled = !!window.__labelColDropHandled;
+                        window.__labelColDropHandled = false;
+                        if (!alreadyHandled) {
+                            // Check if drag ended outside the label cell area
+                            const x = lastDragClientX || e.clientX || 0;
+                            const y = lastDragClientY || e.clientY || 0;
+                            let outsideOrigin = true;
+                            try {
+                                const originCell = window.__dragOriginCell || null;
+                                if (originCell) {
+                                    const rect = originCell.getBoundingClientRect();
+                                    outsideOrigin = !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+                                }
+                            } catch (e) { }
+                            if (outsideOrigin && colNums.length && trashEnabled) {
+                                // Check where drag ended
+                                const x2 = lastDragClientX || e.clientX || 0;
+                                const y2 = lastDragClientY || e.clientY || 0;
+                                const el = document.elementFromPoint(x2, y2);
+                                const endedOverFav = el && el.closest && el.closest('#favPopup, #favBtn');
+                                const endedOverTrash = el && el.closest && el.closest('#trashPopup');
+                                if (endedOverFav) {
+                                    // Add all to fav
+                                    const allInFav = colNums.every(n => favItems.includes(n));
+                                    if (allInFav) {
+                                        for (const n of colNums) { try { removeFromFav(n); } catch (e) { } }
+                                    } else {
+                                        for (const n of colNums) { try { addToFav(n); } catch (e) { } }
+                                    }
+                                } else if (endedOverTrash) {
+                                    // Add all to trash
+                                    const allInTrash = colNums.every(n => trashItems.includes(n));
+                                    if (allInTrash) {
+                                        for (const n of colNums) { try { restoreFromTrash(n); } catch (e) { } }
+                                    } else {
+                                        for (const n of colNums) { try { moveToTrash(n); } catch (e) { } }
+                                    }
+                                } else {
+                                    // Dragged outside = trash (original behavior)
+                                    const allInTrash = colNums.every(n => trashItems.includes(n));
+                                    if (allInTrash) {
+                                        for (const n of colNums) { try { restoreFromTrash(n); } catch (e) { } }
+                                    } else {
+                                        for (const n of colNums) { try { moveToTrash(n); } catch (e) { } }
+                                    }
+                                }
+                                try { updateLabelCellColStates(); } catch (e) { }
+                            }
+                        }
+                        // Clean up
+                        window.__draggingLabelCol = null;
+                        window.__lastDragSource = null;
+                        window.__dragOriginCell = null;
+                        draggingFromTrash = null;
+                        return;
+                    }
                     // If the drag started from the trash and didn't end over the trash,
                     // restore it — but only when the pointer ended outside the original
                     // trashed cell rectangle (prevents tiny pointer movements from toggling).
