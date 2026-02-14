@@ -3369,6 +3369,37 @@
         opacity: 1;
         background: rgba(56, 239, 125, 0.08);
     }
+
+    /* Scale handle for draft popup (bottom-right corner) */
+    #draftPopup .draft-scale-handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 18px;
+        height: 18px;
+        cursor: nwse-resize;
+        pointer-events: auto;
+        z-index: 10;
+        user-select: none;
+    }
+
+    #draftPopup .draft-scale-handle::after {
+        content: '';
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--text);
+        border-bottom: 2px solid var(--text);
+        opacity: 0.4;
+    }
+
+    /* Flash green border when a draft row is copied */
+    #draftPopup tr.draft-row-copied td {
+        box-shadow: inset 0 0 0 2px #38ef7d;
+        transition: box-shadow 0.15s ease;
+    }
 </style>
 
 <body>
@@ -3464,6 +3495,7 @@
                 </tbody>
             </table>
         </div>
+        <div class="draft-scale-handle" aria-hidden="true"></div>
     </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
     <button id="scrollToBottom" title="Xuống cuối trang">↓</button>
@@ -12578,10 +12610,12 @@
 
             // Popup scale state
             const popupScaleState = { scale: 1.0 };
+            window.__popupScaleState = popupScaleState;
 
             const savePopupScale = () => {
                 localStorage.setItem('popupScale', JSON.stringify(popupScaleState.scale));
             };
+            window.__savePopupScale = savePopupScale;
 
             const loadPopupScale = () => {
                 const saved = localStorage.getItem('popupScale');
@@ -12606,8 +12640,16 @@
                         fp.style.transformOrigin = 'top right';
                     }
                 } catch (e) { }
+                try {
+                    const dp = document.getElementById('draftPopup');
+                    if (dp) {
+                        dp.style.transform = `scale(${popupScaleState.scale})`;
+                        dp.style.transformOrigin = 'top left';
+                    }
+                } catch (e) { }
                 try { if (typeof adjustFavPosition === 'function') adjustFavPosition(); } catch (e) { }
             };
+            window.__applyPopupScale = applyPopupScale;
 
             const applyPopupScaleInstant = () => {
                 // Apply scale instantly without transition animation
@@ -12635,6 +12677,17 @@
                         fp.style.transformOrigin = 'top right';
                         void fp.offsetHeight;
                         fp.style.transition = oldF;
+                    }
+                } catch (e) { }
+                try {
+                    const dp = document.getElementById('draftPopup');
+                    if (dp) {
+                        const oldD = dp.style.transition;
+                        dp.style.transition = 'none';
+                        dp.style.transform = `scale(${popupScaleState.scale})`;
+                        dp.style.transformOrigin = 'top left';
+                        void dp.offsetHeight;
+                        dp.style.transition = oldD;
                     }
                 } catch (e) { }
                 // Force browser to process the change
@@ -14295,6 +14348,7 @@
 
                 // ── Editing ──
                 let editing = null;
+                let navigating = false; // flag to suppress blur during arrow navigation
 
                 function onPillClick(e) {
                     if (dragging) return;
@@ -14364,7 +14418,9 @@
                         const children = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
                         const idx = children.indexOf(input);
                         if (idx < 0) return;
+                        navigating = true; // suppress blur handler during navigation
                         commit(true);
+                        navigating = false;
                         const refreshed = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
                         let nextIdx = idx + direction;
                         if (nextIdx < 0) nextIdx = refreshed.length - 1;
@@ -14375,7 +14431,7 @@
                         }
                     }
 
-                    input.addEventListener('blur', () => { if (editing) commit(true); });
+                    input.addEventListener('blur', () => { if (editing && !navigating) commit(true); });
                     input.addEventListener('keydown', (ev) => {
                         if (ev.key === 'Enter') { ev.preventDefault(); commit(true); }
                         else if (ev.key === 'Escape') { commit(false); }
@@ -18446,7 +18502,27 @@
             // ── Show / Hide ──
             function showDraft(atRecords) {
                 if (!isPickerVisible()) return;
-                if (atRecords) renderDraft(atRecords);
+                if (atRecords) {
+                    renderDraft(atRecords);
+                } else if (!draftTableBody.querySelector('tr:not(.draft-add-row-tr)')) {
+                    // No rows yet — try to load from localStorage
+                    try {
+                        const saved = localStorage.getItem('draftRecords');
+                        if (saved && saved.trim()) {
+                            const recs = saved.trim().split('\n').map(line => {
+                                const parts = line.split(',');
+                                if (parts.length !== 6) return null;
+                                return parts.map(p => {
+                                    const t = p.trim();
+                                    if (t === '' || t === '__') return null;
+                                    const n = parseInt(t, 10);
+                                    return Number.isFinite(n) && n >= 1 && n <= 45 ? n : null;
+                                });
+                            }).filter(Boolean);
+                            if (recs.length) renderDraft(recs);
+                        }
+                    } catch (e) { }
+                }
                 if (!draftTableBody.querySelector('tr.draft-add-row-tr')) ensureAddRow();
                 draftPopup.style.display = 'block';
                 draftPopup.style.visibility = 'hidden';
@@ -18479,10 +18555,37 @@
 
                 draftPopup.style.visibility = 'visible';
                 draftPopup.setAttribute('aria-hidden', 'false');
+                // Apply current popup scale to draft popup
+                try {
+                    const s = window.__popupScaleState ? window.__popupScaleState.scale : 1;
+                    if (s !== 1) {
+                        draftPopup.style.transform = `scale(${s})`;
+                        draftPopup.style.transformOrigin = 'top left';
+                    }
+                } catch (e) { }
                 try { window.__prevDraftVisible = true; } catch (e) { }
             }
 
             function hideDraft(skipRemember) {
+                // Save current records to localStorage before hiding
+                try {
+                    const rows = Array.from(draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)'));
+                    const lines = [];
+                    for (const r of rows) {
+                        const pills = Array.from(r.querySelectorAll('.pill'));
+                        if (pills.length === 6) {
+                            const vals = pills.map(sp => {
+                                const t = (sp.textContent || '').trim();
+                                return (t === '' || t === '__') ? '' : t;
+                            });
+                            // Only save rows that have at least one value
+                            if (vals.some(v => v !== '')) {
+                                lines.push(vals.join(','));
+                            }
+                        }
+                    }
+                    localStorage.setItem('draftRecords', lines.join('\n'));
+                } catch (e) { }
                 draftPopup.style.display = 'none';
                 draftPopup.setAttribute('aria-hidden', 'true');
                 try { if (!skipRemember) window.__prevDraftVisible = false; } catch (e) { }
@@ -18498,13 +18601,39 @@
                 if (tag === 'input' || tag === 'textarea' || (active && active.isContentEditable)) return;
                 if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     if (!isPickerVisible()) return;
-                    if (draftPopup.style.display === 'block') hideDraft(); else showDraft();
+                    if (draftPopup.style.display === 'block') {
+                        // Copy all draft records to clipboard before closing
+                        try {
+                            const rows = Array.from(draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)'));
+                            const csvLines = [];
+                            for (const r of rows) {
+                                const pills = Array.from(r.querySelectorAll('.pill'));
+                                if (pills.length === 6) {
+                                    const vals = pills.map(sp => {
+                                        const t = (sp.textContent || '').trim();
+                                        return (t === '' || t === '__') ? '' : t;
+                                    });
+                                    if (vals.some(v => v !== '')) {
+                                        csvLines.push(vals.join(','));
+                                    }
+                                }
+                            }
+                            if (csvLines.length) {
+                                navigator.clipboard.writeText(csvLines.join('\n')).catch(() => { });
+                            }
+                        } catch (ex) { }
+                        hideDraft();
+                    } else {
+                        showDraft();
+                    }
                 }
             });
 
-            // dblclick to read clipboard and append
+            // dblclick to read clipboard and append (skip if dblclick originated inside draft table)
             document.addEventListener('dblclick', async (ev) => {
                 try {
+                    // Skip if double-click is on a draft record row (handled separately for copy)
+                    if (ev.target && ev.target.closest && ev.target.closest('#draftTable tr:not(.draft-add-row-tr)')) return;
                     if (!isPickerVisible()) return;
                     const text = await (navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : Promise.resolve(''));
                     const recs = parseClipboardText(text);
@@ -18527,6 +18656,76 @@
             // Clear button
             const clearBtn = document.getElementById('draftClearBtn');
             if (clearBtn) clearBtn.addEventListener('click', () => { renderDraft([]); });
+
+            // ── Scale handle for draftPopup (bottom-right corner) ──
+            (function addDraftScaleHandle() {
+                const handle = draftPopup.querySelector('.draft-scale-handle');
+                if (!handle) return;
+                let isScalingD = false;
+                let startX_D = 0;
+                let startScale_D = 1;
+
+                handle.addEventListener('mousedown', (e) => {
+                    // Read current scale from popupScaleState if available
+                    try { startScale_D = window.__popupScaleState ? window.__popupScaleState.scale : parseFloat((draftPopup.style.transform || '').replace(/[^0-9.]/g, '') || '1'); } catch (err) { startScale_D = 1; }
+                    isScalingD = true;
+                    startX_D = e.clientX;
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isScalingD) return;
+                    const diff = e.clientX - startX_D;
+                    const newScale = Math.max(0.5, Math.min(2, startScale_D + diff * 0.0025));
+                    const rounded = parseFloat(newScale.toFixed(3));
+                    // Update global scale state and apply to all popups
+                    try {
+                        if (window.__popupScaleState) {
+                            window.__popupScaleState.scale = rounded;
+                        }
+                        if (typeof window.__applyPopupScale === 'function') {
+                            window.__applyPopupScale();
+                        } else {
+                            // Fallback: scale only draftPopup
+                            draftPopup.style.transform = `scale(${rounded})`;
+                            draftPopup.style.transformOrigin = 'top left';
+                        }
+                        if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
+                    } catch (err) { }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isScalingD) {
+                        isScalingD = false;
+                        try { if (typeof window.__savePopupScale === 'function') window.__savePopupScale(); } catch (e) { }
+                    }
+                });
+            })();
+
+            // ── Double-click on draft row to copy as CSV ──
+            if (draftTableBody) {
+                draftTableBody.addEventListener('dblclick', (ev) => {
+                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr:not(.draft-add-row-tr)') : null;
+                    if (!tr) return;
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                    const pills = Array.from(tr.querySelectorAll('.pill'));
+                    if (pills.length !== 6) return;
+                    const vals = pills.map(sp => {
+                        const t = (sp.textContent || '').trim();
+                        return (t === '' || t === '__') ? '' : t;
+                    });
+                    const csv = vals.join(',');
+                    try {
+                        navigator.clipboard.writeText(csv).then(() => {
+                            // Flash green border
+                            tr.classList.add('draft-row-copied');
+                            setTimeout(() => tr.classList.remove('draft-row-copied'), 600);
+                        }).catch(() => { });
+                    } catch (e) { }
+                }, true);
+            }
 
             // NO click-outside-close: draft only closes via 'a' key or when picker hides
         })();
