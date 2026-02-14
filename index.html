@@ -1424,21 +1424,12 @@
         }
 
         /* Highlight class applied to number cells in the popup when hovering a group row.
-           Use an outline + stronger box-shadow and z-index so the orange accent isn't
-           visually obscured by darker 'selected/disabled' backgrounds or competing rules. */
+           Use a dark solid background (requested) and keep on-top z-index. */
         #numberPickerPopup #numberPickerTable td.popup-number-highlight {
-            /* Thicker visible outline with inward emphasis (inner glow)
-               Keep properties conservative to avoid linter noise. */
-            outline: 4px solid #ff8c00;
-            outline-offset: 2px;
-            /* Outer soft glow + subtle ring to increase perceived thickness */
-            box-shadow:
-                0 10px 24px rgba(255, 140, 0, 0.10),
-                /* outer soft shadow */
-                0 0 0 6px rgba(255, 140, 0, 0.06),
-                /* mid ring */
-                inset 0 0 0 4px rgba(255, 140, 0, 0.18);
-            /* inner thickening */
+            background: #1a2a3a !important;
+            color: #ffffff !important;
+            box-shadow: none !important;
+            outline: none !important;
             position: relative;
             z-index: 1100;
         }
@@ -3069,6 +3060,316 @@
         }
     </style>
 </head>
+<!-- Draft popup CSS inserted -->
+<style>
+    /* Draft popup styles: reuse trash popup visuals but keep it attached to number picker */
+    #draftPopup {
+        position: fixed;
+        display: none;
+        z-index: 10002;
+        width: 320px;
+        max-width: 42vw;
+        background: var(--card);
+        border: 2px solid var(--accent);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        color: var(--text);
+        border-radius: 8px;
+        overflow: hidden;
+        font-size: 13px;
+        /* prevent content-visibility from hiding during position calc */
+        content-visibility: visible;
+    }
+
+    #draftPopup .draft-header {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    #draftPopup .draft-header .title {
+        font-weight: 700
+    }
+
+    #draftPopup .draft-body {
+        padding: 8px;
+        /* default: let content size itself and avoid scrollbars for small lists */
+        max-height: none;
+        overflow: visible;
+    }
+
+    /* when draft has many records, enable a scrollable body */
+    #draftPopup.has-scroll .draft-body {
+        max-height: 320px;
+        overflow: auto;
+    }
+
+    #draftPopup table {
+        width: 100%;
+        border-collapse: collapse
+    }
+
+    #draftPopup td {
+        padding: 6px 8px;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.03)
+    }
+
+    #draftPopup .record-row {
+        display: flex;
+        gap: 8px;
+        align-items: center
+    }
+
+    #draftPopup .pills {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    /* Draft pills: styled like Cell5.5 result column pills, black text */
+    #draftPopup .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        min-width: 22px;
+        height: 20px;
+        padding: 0;
+        margin: 0 3px;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1;
+        box-sizing: border-box;
+        text-align: center;
+        white-space: nowrap;
+        border-radius: 4px;
+        font-weight: 700;
+        background: #e6f4ea;
+        color: #000;
+        cursor: pointer;
+    }
+
+    /* Empty pill placeholder */
+    #draftPopup .pill.pill-empty {
+        background: rgba(128, 128, 128, 0.15);
+        color: #999;
+        border: 1px dashed rgba(128, 128, 128, 0.4);
+        cursor: pointer;
+    }
+
+    #draftPopup .pills .pill:first-child {
+        margin-left: 0;
+    }
+
+    #draftPopup .pills .pill:last-child {
+        margin-right: 0;
+    }
+
+    #draftPopup .draft-controls {
+        display: flex;
+        gap: 8px
+    }
+
+    #draftPopup .small-btn {
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: transparent;
+        border: 1px solid var(--border);
+        cursor: pointer
+    }
+
+    /* Grabber styles for draft rows */
+    #draftPopup td.has-grabber {
+        position: relative;
+    }
+
+    #draftPopup .grabber {
+        cursor: grab;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        user-select: none;
+        color: var(--text);
+        opacity: 0.9;
+        font-weight: 700;
+        margin-left: 8px;
+        flex: 0 0 auto;
+    }
+
+    #draftPopup .grabber:active {
+        cursor: grabbing;
+        opacity: 1;
+    }
+
+    /* Floating clone while dragging inside draft popup */
+    .draft-dragging-clone {
+        position: fixed;
+        z-index: 100000;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+        opacity: 0.95;
+        border-radius: 6px;
+        background: var(--card);
+        transform-origin: top left;
+        pointer-events: none;
+        transition: none;
+        will-change: transform, left, top;
+    }
+
+    /* Clone inherits pill/row styles from draftPopup scope */
+    .draft-dragging-clone .record-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .draft-dragging-clone .pills {
+        display: flex;
+        gap: 6px;
+        flex-wrap: nowrap;
+        flex: 1;
+    }
+
+    .draft-dragging-clone .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        min-width: 22px;
+        height: 20px;
+        padding: 0;
+        margin: 0 3px;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1;
+        box-sizing: border-box;
+        text-align: center;
+        white-space: nowrap;
+        border-radius: 4px;
+        font-weight: 700;
+        background: #e6f4ea;
+        color: #000;
+    }
+
+    .draft-dragging-clone .pill.pill-empty {
+        background: rgba(128, 128, 128, 0.15);
+        color: #999;
+        border: 1px dashed rgba(128, 128, 128, 0.4);
+    }
+
+    .draft-dragging-clone .pills .pill:first-child {
+        margin-left: 0;
+    }
+
+    .draft-dragging-clone .pills .pill:last-child {
+        margin-right: 0;
+    }
+
+    .draft-dragging-clone .grabber {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        user-select: none;
+        opacity: 0.9;
+        font-weight: 700;
+        margin-left: 8px;
+        flex: 0 0 auto;
+        color: var(--text);
+    }
+
+    .draft-dragging-clone td.has-grabber {
+        padding: 6px 8px;
+        border: none;
+    }
+
+    .draft-dragging-clone table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    /* Block hover effects on number picker / place boxes during row drag */
+    body.draft-row-dragging-active #numberPickerPopup td,
+    body.draft-row-dragging-active .place-box,
+    body.draft-row-dragging-active .place-container {
+        pointer-events: none !important;
+    }
+
+    /* Source row is hidden while being dragged (replaced by placeholder) */
+    #draftPopup tr.draft-row-dragging {
+        opacity: 0.3;
+        background: rgba(128, 128, 128, 0.15);
+        transition: opacity 0.15s;
+    }
+
+    /* Placeholder row that marks drop target inside draft */
+    #draftPopup tr.draft-row-placeholder td {
+        background: rgba(56, 239, 125, 0.12);
+        border: 2px dashed var(--accent);
+        padding: 0;
+        height: 36px;
+        transition: height 0.15s;
+    }
+
+    /* Pill edit / drag-swap visuals */
+    #draftPopup span.pill-target {
+        outline: 2px solid var(--accent);
+        transform: translateY(-1px);
+    }
+
+    /* Pill editor styled to match pill appearance exactly */
+    #draftPopup input.pill-editor {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        min-width: 22px;
+        height: 20px;
+        padding: 0;
+        margin: 0 3px;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1;
+        box-sizing: border-box;
+        text-align: center;
+        white-space: nowrap;
+        border-radius: 4px;
+        font-weight: 700;
+        background: #e6f4ea;
+        color: #000;
+        border: 2px solid var(--accent);
+        outline: none;
+    }
+
+    /* Add-row button at the bottom of draft table */
+    #draftPopup .draft-add-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 4px 0;
+        cursor: pointer;
+        color: var(--text);
+        opacity: 0.6;
+        font-size: 18px;
+        font-weight: 700;
+        border: none;
+        background: transparent;
+        border-top: 1px dashed rgba(128, 128, 128, 0.2);
+        transition: opacity 0.15s;
+    }
+
+    #draftPopup .draft-add-row:hover {
+        opacity: 1;
+        background: rgba(56, 239, 125, 0.08);
+    }
+</style>
 
 <body>
     <header>
@@ -3145,6 +3446,23 @@
                         title="Normal = rê record không đổi fav; Fav = rê record áp dụng fav tạm thời">normal</button>
                 </div>
             </div>
+        </div>
+    </div>
+    </div>
+    <!-- Draft popup: attached to numberPickerPopup; toggled with key 'a' -->
+    <div id="draftPopup" aria-hidden="true">
+        <div class="draft-header">
+            <div class="title">Draft (a to toggle)</div>
+            <div class="draft-controls">
+                <button id="draftClearBtn" class="small-btn" title="Clear">Clear</button>
+            </div>
+        </div>
+        <div class="draft-body">
+            <table id="draftTable" aria-label="Draft records">
+                <tbody>
+                    <!-- rows inserted by JS -->
+                </tbody>
+            </table>
         </div>
     </div>
     <button id="scrollToTop" title="Quay về đầu trang">↑</button>
@@ -3389,6 +3707,13 @@
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
             tbl.querySelectorAll('td.popup-number-highlight').forEach(td => td.classList.remove('popup-number-highlight'));
+            try {
+                // restore place values if we temporarily replaced them while highlighting
+                if (window.__prevPlaceValues && typeof window.setPlaceValues === 'function') {
+                    try { window.setPlaceValues(window.__prevPlaceValues); } catch (e) { }
+                    window.__prevPlaceValues = null;
+                }
+            } catch (e) { }
         }
 
         function applyPopupHighlights(nums) {
@@ -3412,6 +3737,16 @@
                     }
                 } catch (e) { /* ignore */ }
             });
+
+            // Temporarily replace the 6 place boxes with these numbers so user sees the set
+            try {
+                if (Array.isArray(nums) && nums.length === 6 && typeof window.getPlaceValues === 'function') {
+                    // save previous
+                    try { window.__prevPlaceValues = (window.getPlaceValues ? window.getPlaceValues().slice() : null); } catch (e) { window.__prevPlaceValues = null; }
+                    // set new place values (strings)
+                    try { if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n))); } catch (e) { }
+                }
+            } catch (e) { }
 
         }
 
@@ -13618,6 +13953,20 @@
                                     f.style.top = (fTop + dy) + 'px';
                                 }
                             } catch (e) { /* ignore fav move errors */ }
+                            try {
+                                const d = document.getElementById('draftPopup');
+                                if (d && d.style.display === 'block' && d.parentElement === document.body) {
+                                    let dLeft = parseFloat(d.style.left);
+                                    let dTop = parseFloat(d.style.top);
+                                    if (isNaN(dLeft) || isNaN(dTop)) {
+                                        if (typeof adjustDraftPosition === 'function') adjustDraftPosition();
+                                        dLeft = parseFloat(d.style.left) || 0;
+                                        dTop = parseFloat(d.style.top) || 0;
+                                    }
+                                    d.style.left = (dLeft + dx) + 'px';
+                                    d.style.top = (dTop + dy) + 'px';
+                                }
+                            } catch (e) { /* ignore draft move errors */ }
                         } else {
                             // fallback: if trash is child of popup or not visible, keep regular adjust behavior
                             if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
@@ -13880,7 +14229,308 @@
     <!-- Floating Shift Navigation button: appears while Shift is held and avoids text selection -->
     <button id="shiftNavBtn" title="Shift navigation"
         style="display:none;position:fixed;z-index:99999;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.2);">⇧
-        Nav</button>
+        <!-- Draft pills: click-to-edit and drag-to-swap implementation -->
+        <script>
+            (function enableDraftPillInteractions() {
+                const draft = document.getElementById('draftPopup');
+                if (!draft) return;
+                const selector = '#draftPopup .draft-body table span.pill';
+
+                function initPill(span) {
+                    if (!span || span._pillInit) return;
+                    span.style.touchAction = 'none';
+                    span.addEventListener('click', onPillClick);
+                    span.addEventListener('mousedown', onPillMouseDown);
+                    span._pillInit = true;
+                }
+
+                function flashRed(el, duration = 900) {
+                    try {
+                        const prev = el.style.background;
+                        el.style.transition = 'background 160ms ease';
+                        el.style.background = '#ffd6d6';
+                        setTimeout(() => { el.style.background = prev || ''; }, duration);
+                    } catch (e) { }
+                }
+
+                function rowHasValue(row, val, ignoreEl) {
+                    if (!row) return false;
+                    const vNum = parseInt(String(val).trim(), 10);
+                    if (isNaN(vNum)) return false;
+                    return Array.from(row.querySelectorAll('span.pill')).some(p => {
+                        if (p === ignoreEl) return false;
+                        const pnum = parseInt((p.textContent || '').trim(), 10);
+                        return !isNaN(pnum) && pnum === vNum;
+                    });
+                }
+
+                function rowFindPillsWithValue(row, val, ignoreEl) {
+                    if (!row) return [];
+                    const vNum = parseInt(String(val).trim(), 10);
+                    if (isNaN(vNum)) return [];
+                    return Array.from(row.querySelectorAll('span.pill')).filter(p => {
+                        if (p === ignoreEl) return false;
+                        const pnum = parseInt((p.textContent || '').trim(), 10);
+                        return !isNaN(pnum) && pnum === vNum;
+                    });
+                }
+
+                function scan() { document.querySelectorAll(selector).forEach(initPill); }
+                if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scan); else scan();
+                const bodyEl = draft.querySelector('.draft-body');
+                if (bodyEl) new MutationObserver(scan).observe(bodyEl, { childList: true, subtree: true });
+
+                function isEmptyVal(v) { return v === '' || v === null || v === undefined || String(v).trim() === '' || String(v).trim() === '__'; }
+                function pillText(n) {
+                    if (isEmptyVal(n)) return '__';
+                    const num = parseInt(String(n).trim(), 10);
+                    if (isNaN(num)) return '__';
+                    return String(num);
+                }
+                function updatePillClass(span) {
+                    const txt = (span.textContent || '').trim();
+                    if (txt === '__' || txt === '') span.classList.add('pill-empty');
+                    else span.classList.remove('pill-empty');
+                }
+
+                // ── Editing ──
+                let editing = null;
+
+                function onPillClick(e) {
+                    if (dragging) return;
+                    const span = e.currentTarget;
+                    if (editing) return;
+                    e.stopPropagation();
+                    const oldText = span.textContent.trim();
+                    const old = (oldText === '__') ? '' : oldText;
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'pill-editor';
+                    input.value = old;
+                    const rowEl = span.closest ? span.closest('tr') : null;
+                    span.replaceWith(input);
+                    input.focus();
+                    input.select();
+                    editing = { input, span, old, row: rowEl };
+
+                    function commit(save) {
+                        if (!editing) return;
+                        const valRaw = save ? input.value.trim() : old;
+                        if (save) {
+                            if (valRaw === '' || valRaw === '__') {
+                                const newSpan = document.createElement('span');
+                                newSpan.className = 'pill pill-empty';
+                                newSpan.textContent = '__';
+                                input.replaceWith(newSpan);
+                                initPill(newSpan);
+                                editing = null;
+                                return;
+                            }
+                            const num = parseInt(valRaw, 10);
+                            const row = editing.row || (editing.span && editing.span.closest ? editing.span.closest('tr') : null);
+                            if (!/^[0-9]+$/.test(valRaw) || isNaN(num) || num < 1 || num > 45) {
+                                flashRed(input, 900);
+                                input.focus(); input.select();
+                                return;
+                            }
+                            if (rowHasValue(row, valRaw, editing.span)) {
+                                flashRed(input);
+                                rowFindPillsWithValue(row, valRaw, editing.span).forEach(p => { try { flashRed(p); } catch (e) { } });
+                                const reverted = document.createElement('span');
+                                reverted.className = 'pill';
+                                reverted.textContent = old || '__';
+                                updatePillClass(reverted);
+                                setTimeout(() => { try { input.replaceWith(reverted); } catch (e) { } initPill(reverted); }, 220);
+                                editing = null;
+                                return;
+                            }
+                        }
+                        const val = save ? valRaw : old;
+                        const newSpan = document.createElement('span');
+                        newSpan.className = 'pill';
+                        newSpan.textContent = pillText(val);
+                        updatePillClass(newSpan);
+                        input.replaceWith(newSpan);
+                        initPill(newSpan);
+                        editing = null;
+                    }
+
+                    // Navigate to adjacent pill with ArrowLeft / ArrowRight (wraps around)
+                    function navigatePill(direction) {
+                        const row = editing ? (editing.row || (editing.input && editing.input.closest ? editing.input.closest('tr') : null)) : null;
+                        if (!row) return;
+                        const pillsContainer = row.querySelector('.pills');
+                        if (!pillsContainer) return;
+                        const children = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
+                        const idx = children.indexOf(input);
+                        if (idx < 0) return;
+                        commit(true);
+                        const refreshed = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
+                        let nextIdx = idx + direction;
+                        if (nextIdx < 0) nextIdx = refreshed.length - 1;
+                        if (nextIdx >= refreshed.length) nextIdx = 0;
+                        const targetPill = refreshed[nextIdx];
+                        if (targetPill && targetPill.classList.contains('pill')) {
+                            setTimeout(() => targetPill.click(), 30);
+                        }
+                    }
+
+                    input.addEventListener('blur', () => { if (editing) commit(true); });
+                    input.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); commit(true); }
+                        else if (ev.key === 'Escape') { commit(false); }
+                        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); navigatePill(-1); }
+                        else if (ev.key === 'ArrowRight') { ev.preventDefault(); navigatePill(1); }
+                        else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+                            ev.preventDefault();
+                            const cur = parseInt(input.value.trim(), 10);
+                            const delta = ev.key === 'ArrowUp' ? 1 : -1;
+                            let next = (isNaN(cur) ? 0 : cur) + delta;
+                            if (next < 1) next = 1;
+                            if (next > 45) next = 45;
+                            const row = editing.row || (editing.span && editing.span.closest ? editing.span.closest('tr') : null);
+                            if (rowHasValue(row, next, editing.span)) {
+                                let attempts = 0;
+                                while (rowHasValue(row, next, editing.span) && attempts < 45) {
+                                    next += delta;
+                                    if (next < 1) next = 1;
+                                    if (next > 45) next = 45;
+                                    attempts++;
+                                }
+                                if (rowHasValue(row, next, editing.span)) return;
+                            }
+                            input.value = String(next);
+                            input.select();
+                        }
+                    });
+                }
+
+                // ── Drag-to-swap ──
+                let dragging = false, dragSrc = null, clone = null, target = null;
+                let dragStartX = 0, dragStartY = 0, dragMoved = false;
+                let dragSrcOldText = '';
+
+                function onPillMouseDown(e) {
+                    if (e.button !== 0) return;
+                    if (editing) return;
+                    e.preventDefault(); e.stopPropagation();
+                    dragSrc = e.currentTarget;
+                    dragStartX = e.clientX;
+                    dragStartY = e.clientY;
+                    dragMoved = false;
+                    dragSrcOldText = '';
+                    document.addEventListener('mousemove', onPillMouseMove);
+                    document.addEventListener('mouseup', onPillMouseUp);
+                }
+
+                function onPillMouseMove(e) {
+                    if (!dragSrc) return;
+                    if (!dragMoved) {
+                        const dx = e.clientX - dragStartX;
+                        const dy = e.clientY - dragStartY;
+                        if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                        dragMoved = true;
+                        dragging = true;
+                        dragSrcOldText = dragSrc.textContent.trim();
+                        // Create clone copying computed styles so it looks identical
+                        const r = dragSrc.getBoundingClientRect();
+                        clone = dragSrc.cloneNode(true);
+                        const cs = getComputedStyle(dragSrc);
+                        clone.style.cssText = 'position:fixed;z-index:100002;pointer-events:none;'
+                            + 'left:' + r.left + 'px;top:' + r.top + 'px;'
+                            + 'width:' + r.width + 'px;height:' + r.height + 'px;'
+                            + 'box-shadow:0 8px 24px rgba(0,0,0,0.35);transform:scale(1.15);'
+                            + 'display:inline-flex;align-items:center;justify-content:center;'
+                            + 'background:' + cs.background + ';color:' + cs.color + ';'
+                            + 'font:' + cs.font + ';border-radius:' + cs.borderRadius + ';';
+                        document.body.appendChild(clone);
+                        // Source becomes empty immediately (pill visually leaves its position)
+                        dragSrc.textContent = '__';
+                        dragSrc.classList.add('pill-empty');
+                    }
+                    if (!dragging) return;
+                    clone.style.left = (e.clientX - 12) + 'px';
+                    clone.style.top = (e.clientY - 12) + 'px';
+                    // Only target pills inside draftPopup
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    const pill = el && el.closest ? el.closest('#draftPopup span.pill') : null;
+                    if (pill && pill !== dragSrc) {
+                        if (target && target !== pill) target.classList.remove('pill-target');
+                        target = pill; target.classList.add('pill-target');
+                    } else {
+                        if (target) { target.classList.remove('pill-target'); target = null; }
+                    }
+                }
+
+                function onPillMouseUp(e) {
+                    document.removeEventListener('mousemove', onPillMouseMove);
+                    document.removeEventListener('mouseup', onPillMouseUp);
+                    if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+
+                    if (dragging && dragSrc) {
+                        const a = dragSrcOldText; // original value of source before drag
+                        const aIsEmpty = isEmptyVal(a);
+
+                        // Check if dropped outside draftPopup → delete value
+                        const draftRect = draft.getBoundingClientRect();
+                        const outside = e.clientX < draftRect.left || e.clientX > draftRect.right
+                            || e.clientY < draftRect.top || e.clientY > draftRect.bottom;
+
+                        if (outside) {
+                            // Dropped outside: value is deleted (source already shows __)
+                            updatePillClass(dragSrc);
+                            if (target) target.classList.remove('pill-target');
+                        } else if (target && dragSrc !== target) {
+                            const b = target.textContent.trim();
+                            const bIsEmpty = isEmptyVal(b);
+                            const rowA = dragSrc.closest('tr');
+                            const rowB = target.closest('tr');
+                            let blocked = false;
+
+                            if (rowA !== rowB) {
+                                // Cross-record swap: check uniqueness both ways
+                                if (!aIsEmpty && rowHasValue(rowB, a, target)) {
+                                    blocked = true;
+                                    // Flash 3: source, target, and the conflict pill in target row
+                                    flashRed(dragSrc); flashRed(target);
+                                    rowFindPillsWithValue(rowB, a, target).forEach(p => flashRed(p));
+                                    // Revert source
+                                    dragSrc.textContent = a;
+                                    updatePillClass(dragSrc);
+                                } else if (!bIsEmpty && rowHasValue(rowA, b, dragSrc)) {
+                                    blocked = true;
+                                    flashRed(dragSrc); flashRed(target);
+                                    rowFindPillsWithValue(rowA, b, dragSrc).forEach(p => flashRed(p));
+                                    dragSrc.textContent = a;
+                                    updatePillClass(dragSrc);
+                                }
+                            }
+
+                            if (!blocked) {
+                                // Swap: source gets target's value, target gets source's original
+                                dragSrc.textContent = pillText(b);
+                                updatePillClass(dragSrc);
+                                target.textContent = pillText(a);
+                                updatePillClass(target);
+                                initPill(dragSrc); initPill(target);
+                            }
+                            if (target) target.classList.remove('pill-target');
+                        } else {
+                            // Dropped on no valid target or itself: revert source
+                            dragSrc.textContent = a;
+                            updatePillClass(dragSrc);
+                        }
+                    }
+
+                    dragging = false; dragSrc = null; clone = null; target = null;
+                    dragMoved = false; dragSrcOldText = '';
+                }
+
+                window.__scanDraftPills = scan;
+            })();
+        </script>
+        Nav
+    </button>
     <script>
         // Flag Shift+click globally so the Shift-only trash toggle doesn't fire after a Shift+click action
         document.addEventListener('click', function (ev) {
@@ -14406,7 +15056,7 @@
             // expose helper for restoring position from other scopes
             try { window.__adjustTrashPosition = adjustTrashPosition; } catch (e) { }
 
-            // Observe popup position/style changes and keep trash (and fav) aligned.
+            // Observe popup position/style changes and keep trash (fav) and draft aligned.
             try {
                 const popupPosObserver = new MutationObserver((mutations) => {
                     // while user is actively dragging the popup, avoid calling adjust
@@ -14414,7 +15064,26 @@
                     try { if (typeof isDraggingPopup !== 'undefined' && isDraggingPopup) return; } catch (e) { }
                     for (const m of mutations) {
                         if (m.type === 'attributes' && m.attributeName === 'style') {
-                            try { if (typeof adjustTrashPosition === 'function') adjustTrashPosition(); } catch (e) { }
+                            try {
+                                if (typeof adjustTrashPosition === 'function') adjustTrashPosition();
+                            } catch (e) { }
+                            try {
+                                if (typeof adjustDraftPosition === 'function') adjustDraftPosition();
+                            } catch (e) { }
+                            // Sync draft visibility with number-picker visibility:
+                            try {
+                                const dp = document.getElementById('draftPopup');
+                                const npStyle = window.getComputedStyle(numberPickerPopup);
+                                const npVisible = npStyle.display !== 'none' && numberPickerPopup.offsetWidth > 0 && numberPickerPopup.getBoundingClientRect().width > 0;
+                                if (!npVisible) {
+                                    // picker hidden -> remember current draft visibility then hide draft
+                                    try { window.__prevDraftVisible = !!(dp && dp.style.display === 'block'); } catch (e) { }
+                                    try { if (dp && dp.style.display === 'block') { if (typeof window.__hideDraft === 'function') window.__hideDraft(true); else dp.style.display = 'none'; } } catch (e) { }
+                                } else {
+                                    // picker visible -> restore draft only if it was visible before picker hid
+                                    try { if (window.__prevDraftVisible && dp && dp.style.display !== 'block') { if (typeof window.__showDraft === 'function') window.__showDraft(); } } catch (e) { }
+                                }
+                            } catch (e) { }
                             break;
                         }
                     }
@@ -15101,6 +15770,40 @@
                 trashPopup.style.top = top + 'px';
                 try { if (typeof adjustFavPosition === 'function') adjustFavPosition(); } catch (e) { }
             }
+
+            // Position the draft popup so it sticks to the right side of the
+            // number-picker popup (and falls back to the left if no room).
+            function adjustDraftPosition() {
+                try {
+                    const draftPopup = document.getElementById('draftPopup');
+                    if (!draftPopup) return;
+                    // ensure fixed positioning
+                    draftPopup.style.position = 'fixed';
+                    const pickerRect = numberPickerPopup.getBoundingClientRect();
+                    const gap = 8;
+
+                    // measure draft dimensions
+                    const dpW = draftPopup.offsetWidth || Math.max(280, 320);
+                    const dpH = draftPopup.offsetHeight || Math.round(dpW / 1.732);
+
+                    // preferred: attach to right of picker
+                    let left = Math.round(pickerRect.right + gap);
+                    if (left + dpW > window.innerWidth - 4) {
+                        // not enough room on right -> place to left
+                        left = Math.round(pickerRect.left - dpW - gap);
+                    }
+                    // clamp into viewport
+                    left = Math.max(4, Math.min(left, window.innerWidth - dpW - 4));
+
+                    let top = Math.round(pickerRect.top + 8);
+                    if (top + dpH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - dpH - 8);
+
+                    draftPopup.style.left = left + 'px';
+                    draftPopup.style.top = top + 'px';
+                } catch (e) { /* ignore */ }
+            }
+
+            try { window.__adjustDraftPosition = adjustDraftPosition; } catch (e) { }
 
             function renderTrash() {
                 const tbody = trashPopup.querySelector('tbody');
@@ -17449,6 +18152,383 @@
                     } catch (e) { }
                 }, true);
             } catch (e) { }
+        })();
+    </script>
+    <script>
+        (function () {
+            const draftPopup = document.getElementById('draftPopup');
+            const draftTableBody = document.querySelector('#draftTable tbody');
+            const numberPicker = document.getElementById('numberPickerPopup');
+
+            // ── helpers ──
+            function isPickerVisible() {
+                try {
+                    if (!numberPicker) return false;
+                    const s = window.getComputedStyle(numberPicker);
+                    return s.display !== 'none' && numberPicker.offsetWidth > 0 && numberPicker.getBoundingClientRect().width > 0;
+                } catch (e) { return false; }
+            }
+
+            function validateLine(s) {
+                const parts = s.split(',').map(x => x.trim());
+                if (parts.length !== 6) return null;
+                const result = parts.map(p => {
+                    if (p === '' || p === '__') return null;
+                    const n = parseInt(p, 10);
+                    if (!Number.isFinite(n) || n < 1 || n > 45) return null;
+                    return n;
+                });
+                const filled = result.filter(v => v !== null);
+                if (new Set(filled).size !== filled.length) return null;
+                return result;
+            }
+
+            function recordKey(nums) {
+                return nums.map(n => n === null ? '__' : String(n)).join(',');
+            }
+
+            function getExistingKeys() {
+                const keys = new Set();
+                try {
+                    const rows = Array.from(document.querySelectorAll('#draftTable tbody tr:not(.draft-add-row-tr)'));
+                    for (const r of rows) {
+                        const pills = Array.from(r.querySelectorAll('.pill'));
+                        if (pills.length === 6) {
+                            const key = pills.map(sp => {
+                                const t = (sp.textContent || '').trim();
+                                return (t === '' || t === '__') ? '__' : t;
+                            }).join(',');
+                            keys.add(key);
+                        }
+                    }
+                } catch (e) { }
+                return keys;
+            }
+
+            function parseClipboardText(text) {
+                if (!text) return [];
+                const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                const records = [];
+                const seen = getExistingKeys();
+                for (const line of lines) {
+                    const res = validateLine(line);
+                    if (res) {
+                        const key = recordKey(res);
+                        if (!seen.has(key)) { seen.add(key); records.push(res); }
+                    }
+                }
+                return records;
+            }
+
+            // ── Row drag state (mouse-based) ──
+            let dragState = null;
+
+            function createPlaceholder(h) {
+                const ph = document.createElement('tr');
+                ph.className = 'draft-row-placeholder';
+                const td = document.createElement('td');
+                td.colSpan = 1;
+                td.style.height = h + 'px';
+                ph.appendChild(td);
+                return ph;
+            }
+
+            function onGrabberMouseDown(ev, tr) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const rect = tr.getBoundingClientRect();
+
+                // Create a proper visible clone: wrap cloned <tr> in a <table>
+                const clonedTr = tr.cloneNode(true);
+                const wrapTable = document.createElement('table');
+                wrapTable.style.cssText = 'border-collapse:collapse;width:' + rect.width + 'px;margin:0;padding:0;';
+                const wrapBody = document.createElement('tbody');
+                wrapBody.appendChild(clonedTr);
+                wrapTable.appendChild(wrapBody);
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'draft-dragging-clone';
+                wrapper.style.left = rect.left + 'px';
+                wrapper.style.top = rect.top + 'px';
+                wrapper.style.width = rect.width + 'px';
+                const cs = getComputedStyle(draftPopup);
+                wrapper.style.background = cs.backgroundColor || 'var(--card)';
+                wrapper.style.color = cs.color || 'var(--text)';
+                wrapper.style.padding = '2px 0';
+                wrapper.style.borderRadius = '6px';
+                wrapper.appendChild(wrapTable);
+                document.body.appendChild(wrapper);
+
+                const ph = createPlaceholder(rect.height);
+                tr.classList.add('draft-row-dragging');
+
+                dragState = {
+                    srcRow: tr,
+                    clone: wrapper,
+                    placeholder: ph,
+                    offsetX: ev.clientX - rect.left,
+                    offsetY: ev.clientY - rect.top
+                };
+
+                tr.parentNode.insertBefore(ph, tr);
+                tr.style.display = 'none';
+
+                // Block hover effects on picker/place during row drag
+                document.body.classList.add('draft-row-dragging-active');
+            }
+
+            function onMouseMove(ev) {
+                if (!dragState) return;
+                ev.preventDefault();
+                const { clone, placeholder, srcRow } = dragState;
+                clone.style.left = (ev.clientX - dragState.offsetX) + 'px';
+                clone.style.top = (ev.clientY - dragState.offsetY) + 'px';
+
+                const elUnderneath = document.elementFromPoint(ev.clientX, ev.clientY);
+                if (!elUnderneath) return;
+                const targetRow = elUnderneath.closest ? elUnderneath.closest('#draftTable tbody tr:not(.draft-add-row-tr)') : null;
+                if (!targetRow || targetRow === placeholder || targetRow === srcRow) return;
+
+                const targetRect = targetRow.getBoundingClientRect();
+                const before = (ev.clientY < targetRect.top + targetRect.height / 2);
+                if (before) {
+                    targetRow.parentNode.insertBefore(placeholder, targetRow);
+                } else {
+                    targetRow.parentNode.insertBefore(placeholder, targetRow.nextSibling);
+                }
+            }
+
+            function onMouseUp(ev) {
+                if (!dragState) return;
+                const { srcRow, clone, placeholder } = dragState;
+
+                // Check if dropped outside draftPopup → delete the record
+                const draftRect = draftPopup.getBoundingClientRect();
+                const outside = ev.clientX < draftRect.left || ev.clientX > draftRect.right
+                    || ev.clientY < draftRect.top || ev.clientY > draftRect.bottom;
+
+                if (outside) {
+                    // Remove the row entirely
+                    if (placeholder.parentNode) placeholder.remove();
+                    srcRow.remove();
+                } else {
+                    // Insert row at placeholder position
+                    if (placeholder.parentNode) {
+                        placeholder.parentNode.insertBefore(srcRow, placeholder);
+                        placeholder.remove();
+                    }
+                    srcRow.style.display = '';
+                    srcRow.classList.remove('draft-row-dragging');
+                }
+
+                if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+                dragState = null;
+                document.body.classList.remove('draft-row-dragging-active');
+
+                updateScrollClass();
+                try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
+                try { draftPopup.dispatchEvent(new CustomEvent('draftreordered', { bubbles: true })); } catch (e) { }
+            }
+
+            document.addEventListener('mousemove', onMouseMove, true);
+            document.addEventListener('mouseup', onMouseUp, true);
+
+            // ── Helper: create a single record row ──
+            function createRecordRow(nums, idx) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.classList.add('has-grabber');
+                const row = document.createElement('div');
+                row.className = 'record-row';
+                const pills = document.createElement('div');
+                pills.className = 'pills';
+                pills.style.flex = '1';
+                nums.forEach(n => {
+                    const sp = document.createElement('span');
+                    sp.className = 'pill';
+                    if (n === null || n === undefined) {
+                        sp.textContent = '__';
+                        sp.classList.add('pill-empty');
+                    } else {
+                        sp.textContent = String(n);
+                    }
+                    pills.appendChild(sp);
+                });
+                const grabber = document.createElement('div');
+                grabber.className = 'grabber';
+                grabber.setAttribute('title', 'Kéo để sắp xếp lại');
+                grabber.textContent = '☰';
+                grabber.addEventListener('mousedown', (ev) => { onGrabberMouseDown(ev, tr); });
+
+                row.appendChild(pills);
+                row.appendChild(grabber);
+                td.appendChild(row);
+                tr.appendChild(td);
+                tr.dataset.index = idx;
+                return tr;
+            }
+
+            // ── Create "+" add row ──
+            function ensureAddRow() {
+                const existing = draftTableBody.querySelector('tr.draft-add-row-tr');
+                if (existing) existing.remove();
+
+                const tr = document.createElement('tr');
+                tr.className = 'draft-add-row-tr';
+                const td = document.createElement('td');
+                const btn = document.createElement('button');
+                btn.className = 'draft-add-row';
+                btn.textContent = '+';
+                btn.title = 'Thêm hàng rỗng';
+                btn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const emptyNums = [null, null, null, null, null, null];
+                    const idx = draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)').length;
+                    const newRow = createRecordRow(emptyNums, idx);
+                    draftTableBody.insertBefore(newRow, tr);
+                    try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
+                    updateScrollClass();
+                });
+                td.appendChild(btn);
+                tr.appendChild(td);
+                draftTableBody.appendChild(tr);
+            }
+
+            function updateScrollClass() {
+                try {
+                    const cnt = draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)').length;
+                    if (draftPopup) draftPopup.classList.toggle('has-scroll', cnt >= 10);
+                } catch (e) { }
+            }
+
+            // ── Render draft records ──
+            function renderDraft(records) {
+                draftTableBody.innerHTML = '';
+                records.forEach((nums, idx) => {
+                    const tr = createRecordRow(nums, idx);
+                    draftTableBody.appendChild(tr);
+                });
+                ensureAddRow();
+                updateScrollClass();
+            }
+
+            // ── Hover: highlight numbers in popup (skip during row drag) ──
+            try {
+                if (draftTableBody) {
+                    draftTableBody.addEventListener('mouseover', (ev) => {
+                        try {
+                            if (dragState) return; // don't highlight during row drag
+                            const tr = ev.target && ev.target.closest ? ev.target.closest('tr') : null;
+                            if (!tr || tr.classList.contains('draft-add-row-tr')) return;
+                            const pillEls = Array.from(tr.querySelectorAll('.pill'));
+                            if (!pillEls.length) return;
+                            const nums = pillEls.map(sp => {
+                                const t = (sp.textContent || '').trim();
+                                if (t === '__' || t === '') return null;
+                                const n = parseInt(t, 10);
+                                return Number.isFinite(n) ? n : null;
+                            }).filter(n => n !== null);
+                            if (nums.length > 0 && typeof applyPopupHighlights === 'function') applyPopupHighlights(nums);
+                        } catch (e) { }
+                    }, true);
+
+                    draftTableBody.addEventListener('mouseout', (ev) => {
+                        try {
+                            if (dragState) return;
+                            const related = ev.relatedTarget;
+                            if (related && draftPopup && draftPopup.contains(related)) return;
+                            if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                        } catch (e) { }
+                    }, true);
+                }
+            } catch (e) { }
+
+            // ── Show / Hide ──
+            function showDraft(atRecords) {
+                if (!isPickerVisible()) return;
+                if (atRecords) renderDraft(atRecords);
+                if (!draftTableBody.querySelector('tr.draft-add-row-tr')) ensureAddRow();
+                draftPopup.style.display = 'block';
+                draftPopup.style.visibility = 'hidden';
+                draftPopup.style.left = '';
+                draftPopup.style.right = '';
+
+                const dpWidth = draftPopup.offsetWidth || 320;
+                let placed = false;
+
+                if (numberPicker) {
+                    try {
+                        if (isPickerVisible()) {
+                            const rect = numberPicker.getBoundingClientRect();
+                            let left = rect.right + 8;
+                            if (left + dpWidth > window.innerWidth - 12) {
+                                left = rect.left - 8 - dpWidth;
+                            }
+                            left = Math.max(8, Math.min(left, window.innerWidth - dpWidth - 12));
+                            draftPopup.style.left = left + 'px';
+                            draftPopup.style.top = Math.max(8, rect.top) + 'px';
+                            placed = true;
+                        }
+                    } catch (e) { }
+                }
+
+                if (!placed) {
+                    draftPopup.style.display = 'none';
+                    return;
+                }
+
+                draftPopup.style.visibility = 'visible';
+                draftPopup.setAttribute('aria-hidden', 'false');
+                try { window.__prevDraftVisible = true; } catch (e) { }
+            }
+
+            function hideDraft(skipRemember) {
+                draftPopup.style.display = 'none';
+                draftPopup.setAttribute('aria-hidden', 'true');
+                try { if (!skipRemember) window.__prevDraftVisible = false; } catch (e) { }
+            }
+
+            try { window.__showDraft = showDraft; } catch (e) { }
+            try { window.__hideDraft = hideDraft; } catch (e) { }
+
+            // Toggle with key 'a' — only when picker is open
+            document.addEventListener('keydown', (e) => {
+                const active = document.activeElement;
+                const tag = active && active.tagName ? active.tagName.toLowerCase() : '';
+                if (tag === 'input' || tag === 'textarea' || (active && active.isContentEditable)) return;
+                if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    if (!isPickerVisible()) return;
+                    if (draftPopup.style.display === 'block') hideDraft(); else showDraft();
+                }
+            });
+
+            // dblclick to read clipboard and append
+            document.addEventListener('dblclick', async (ev) => {
+                try {
+                    if (!isPickerVisible()) return;
+                    const text = await (navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : Promise.resolve(''));
+                    const recs = parseClipboardText(text);
+                    if (recs.length) {
+                        const addRowEl = draftTableBody.querySelector('tr.draft-add-row-tr');
+                        const existingCount = draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)').length;
+                        recs.forEach((nums, i) => {
+                            const tr = createRecordRow(nums, existingCount + i);
+                            if (addRowEl) draftTableBody.insertBefore(tr, addRowEl);
+                            else draftTableBody.appendChild(tr);
+                        });
+                        ensureAddRow();
+                        updateScrollClass();
+                        try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
+                        if (draftPopup.style.display !== 'block') showDraft();
+                    }
+                } catch (e) { }
+            }, true);
+
+            // Clear button
+            const clearBtn = document.getElementById('draftClearBtn');
+            if (clearBtn) clearBtn.addEventListener('click', () => { renderDraft([]); });
+
+            // NO click-outside-close: draft only closes via 'a' key or when picker hides
         })();
     </script>
 </body>
