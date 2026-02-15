@@ -3059,6 +3059,89 @@
             box-shadow: 0 2px 6px rgba(46, 125, 50, 0.18);
         }
     </style>
+    <!-- Cell11 multi-value picker dropdown CSS -->
+    <style>
+        .cell11-mv-dropdown {
+            position: absolute;
+            z-index: 10010;
+            background: var(--card);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+            padding: 6px;
+            display: none;
+        }
+
+        .cell11-mv-dropdown.show {
+            display: block;
+        }
+
+        .cell11-mv-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+        }
+
+        .cell11-mv-grid .mv-cell {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 24px;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+            background: #fffbea;
+            color: #000;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .cell11-mv-grid .mv-cell:hover {
+            filter: brightness(0.92);
+        }
+
+        .cell11-mv-grid .mv-cell.mv-selected {
+            background: #2e7d32;
+            color: #fff;
+            border-color: #2e7d32;
+        }
+
+        [data-theme="dark"] .cell11-mv-grid .mv-cell {
+            background: rgba(255, 251, 234, 0.12);
+            color: var(--text);
+            border-color: rgba(128, 128, 128, 0.3);
+        }
+
+        [data-theme="dark"] .cell11-mv-grid .mv-cell.mv-selected {
+            background: #2e7d32;
+            color: #fff;
+            border-color: #2e7d32;
+        }
+
+        /* Show multi-value badge on input containers */
+        .drag-input-container .cell11-mv-badge {
+            position: absolute;
+            top: 0px;
+            right: 0px;
+            background: #2e7d32;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            border-radius: 50%;
+            min-width: 15px;
+            height: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            pointer-events: none;
+            line-height: 1;
+        }
+    </style>
 </head>
 <!-- Draft popup CSS inserted -->
 <style>
@@ -11858,6 +11941,134 @@
 
             let inputs = createInputs(cell11Mode);
 
+            // Multi-value state: one Set<number> per position (pattern mode only)
+            let cell11MultiValues = Array.from({ length: 6 }, () => new Set());
+
+            // Shared dropdown element for multi-value picker
+            const mvDropdown = document.createElement('div');
+            mvDropdown.className = 'cell11-mv-dropdown';
+            document.body.appendChild(mvDropdown);
+            let mvDropdownIdx = -1; // which input index the dropdown is open for
+
+            function buildMvGrid(posIdx) {
+                mvDropdown.innerHTML = '';
+                const grid = document.createElement('div');
+                grid.className = 'cell11-mv-grid';
+                // Layout: 6 columns matching COL_MAP groups (C1:1-8, C2:9-16, C3:17-24, C4:25-31, C5:32-38, C6:39-45)
+                const colGroups = [
+                    [1, 2, 3, 4, 5, 6, 7, 8],
+                    [9, 10, 11, 12, 13, 14, 15, 16],
+                    [17, 18, 19, 20, 21, 22, 23, 24],
+                    [25, 26, 27, 28, 29, 30, 31],
+                    [32, 33, 34, 35, 36, 37, 38],
+                    [39, 40, 41, 42, 43, 44, 45]
+                ];
+                const maxRows = 8;
+                for (let row = maxRows - 1; row >= 0; row--) {
+                    for (let col = 0; col < 6; col++) {
+                        const num = colGroups[col][row];
+                        if (num === undefined) {
+                            const empty = document.createElement('div');
+                            empty.style.width = '28px'; empty.style.height = '24px';
+                            grid.appendChild(empty);
+                            continue;
+                        }
+                        const cell = document.createElement('div');
+                        cell.className = 'mv-cell';
+                        cell.textContent = String(num);
+                        cell.dataset.num = num;
+                        const selected = cell11MultiValues[posIdx];
+                        if (selected.has(num)) cell.classList.add('mv-selected');
+                        cell.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const set = cell11MultiValues[posIdx];
+                            if (set.has(num)) {
+                                set.delete(num);
+                                cell.classList.remove('mv-selected');
+                            } else {
+                                set.add(num);
+                                cell.classList.add('mv-selected');
+                            }
+                            // Sync input value: if only one value, show it; if multi, show first or clear
+                            syncInputFromMulti(posIdx);
+                            updateMvBadge(posIdx);
+                            if (run) run();
+                        });
+                        grid.appendChild(cell);
+                    }
+                }
+                mvDropdown.appendChild(grid);
+            }
+
+            function syncInputFromMulti(posIdx) {
+                const set = cell11MultiValues[posIdx];
+                if (set.size === 0) {
+                    inputs[posIdx].value = '';
+                    inputs[posIdx].placeholder = '';
+                } else if (set.size === 1) {
+                    inputs[posIdx].value = String([...set][0]);
+                    inputs[posIdx].placeholder = '';
+                } else {
+                    // Multiple values: clear input, show as placeholder text
+                    inputs[posIdx].value = '';
+                    const arr = [...set].sort((a, b) => a - b);
+                    inputs[posIdx].placeholder = '{' + arr.join(',') + '}';
+                }
+                inputs[posIdx].dispatchEvent(new Event('input'));
+            }
+
+            function updateMvBadge(posIdx) {
+                const container = inputs[posIdx].closest('.drag-input-container');
+                if (!container) return;
+                let badge = container.querySelector('.cell11-mv-badge');
+                const set = cell11MultiValues[posIdx];
+                if (set.size > 1) {
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'cell11-mv-badge';
+                        container.appendChild(badge);
+                    }
+                    badge.textContent = String(set.size);
+                    badge.style.display = 'flex';
+                } else {
+                    if (badge) badge.style.display = 'none';
+                }
+            }
+
+            function updateAllMvBadges() {
+                for (let i = 0; i < 6; i++) updateMvBadge(i);
+            }
+
+            function showMvDropdown(posIdx, anchorEl) {
+                if (cell11Mode !== 'pattern') return;
+                mvDropdownIdx = posIdx;
+                // Also include single input value in the multi-set
+                const singleVal = parseInt(String(inputs[posIdx].value).trim(), 10);
+                if (Number.isFinite(singleVal) && singleVal >= 1 && singleVal <= 45) {
+                    cell11MultiValues[posIdx].add(singleVal);
+                }
+                buildMvGrid(posIdx);
+                mvDropdown.classList.add('show');
+                // Position below the anchor
+                const rect = anchorEl.getBoundingClientRect();
+                mvDropdown.style.left = rect.left + 'px';
+                mvDropdown.style.top = (rect.bottom + 4) + 'px';
+            }
+
+            function hideMvDropdown() {
+                mvDropdown.classList.remove('show');
+                mvDropdownIdx = -1;
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('mousedown', (e) => {
+                if (mvDropdown.classList.contains('show') && !mvDropdown.contains(e.target)) {
+                    // Check if target is one of the cell11 inputs
+                    const isCell11Input = inputs.some(inp => inp === e.target || (inp.closest && inp.closest('.drag-input-container') === e.target.closest('.drag-input-container')));
+                    if (!isCell11Input) hideMvDropdown();
+                }
+            });
+
             // Create draggable containers for inputs — add in-input up/down buttons and consistent sizing
             const createContainers = (inputArray) => {
                 return inputArray.map((inp, idx) => {
@@ -11910,6 +12121,10 @@
                             if (n > 45) n = 1;
                             if (n < 1) n = 1;
                             inp.value = String(n);
+                            // Sync multi-value: replace with single value when using arrows
+                            cell11MultiValues[idx].clear();
+                            cell11MultiValues[idx].add(n);
+                            updateMvBadge(idx);
                         } else {
                             let n = parseInt(String(inp.value ?? '').trim(), 10);
                             if (!Number.isFinite(n)) n = 0;
@@ -11930,6 +12145,10 @@
                             if (n < 1) n = 45;
                             if (n > 45) n = 45;
                             inp.value = String(n);
+                            // Sync multi-value: replace with single value when using arrows
+                            cell11MultiValues[idx].clear();
+                            cell11MultiValues[idx].add(n);
+                            updateMvBadge(idx);
                         } else {
                             let n = parseInt(String(inp.value ?? '').trim(), 10);
                             if (!Number.isFinite(n)) n = 0;
@@ -11947,7 +12166,9 @@
 
                     const updateDraggable = () => {
                         const v = String(inp.value ?? '').trim();
-                        const hasValue = inp.type === 'number' ? v !== '' : (v !== '' && v !== '_');
+                        const hasInputValue = inp.type === 'number' ? v !== '' : (v !== '' && v !== '_');
+                        const hasMultiValue = cell11MultiValues[idx] && cell11MultiValues[idx].size > 0;
+                        const hasValue = hasInputValue || hasMultiValue;
                         container.draggable = hasValue;
                         dragHandle.style.pointerEvents = hasValue ? 'auto' : 'none';
                         dragHandle.style.cursor = hasValue ? 'grab' : 'default';
@@ -11971,6 +12192,45 @@
                     container.appendChild(btnGroup);
                     container.appendChild(dragHandle);
                     container.dataset.index = idx;
+
+                    // Right-click: open multi-value picker (pattern mode only)
+                    // Use mousedown button===2 for reliable detection + contextmenu for preventDefault
+                    const onRightMouseDown = (e) => {
+                        if (e.button !== 2) return;
+                        if (cell11Mode !== 'pattern') return;
+                        e.stopPropagation();
+                        showMvDropdown(idx, container);
+                    };
+                    const onContextMenu = (e) => {
+                        if (cell11Mode !== 'pattern') return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                    };
+                    inp.addEventListener('mousedown', onRightMouseDown);
+                    container.addEventListener('mousedown', onRightMouseDown);
+                    inp.addEventListener('contextmenu', onContextMenu);
+                    container.addEventListener('contextmenu', onContextMenu);
+
+                    // When user types a single value, sync into multi-value set + update UI + run filter
+                    const origChangeHandler = () => {
+                        if (cell11Mode === 'pattern') {
+                            const v = parseInt(String(inp.value).trim(), 10);
+                            if (Number.isFinite(v) && v >= 1 && v <= 45) {
+                                cell11MultiValues[idx].add(v);
+                            } else if (String(inp.value).trim() === '') {
+                                // Only clear if user explicitly emptied the input
+                                cell11MultiValues[idx].clear();
+                            }
+                            syncInputFromMulti(idx);
+                            updateMvBadge(idx);
+                            // Rebuild MV grid if dropdown is open for this position
+                            if (mvDropdownIdx === idx && mvDropdown.classList.contains('show')) {
+                                buildMvGrid(idx);
+                            }
+                            if (run) run();
+                        }
+                    };
+                    inp.addEventListener('change', origChangeHandler);
 
                     // Double-click to paste clipboard (6 numbers)
                     container.addEventListener('dblclick', async (e) => {
@@ -12036,15 +12296,21 @@
                         container.style.opacity = "0.4";
                         container.style.cursor = "grabbing";
                         e.dataTransfer.effectAllowed = "copyMove";
-                        e.dataTransfer.setData("text/plain", inputs[idx].value);
+                        // Store the display value (single or first of multi) for external drops
+                        const set = cell11MultiValues[idx];
+                        const val = set && set.size > 0 ? String([...set][0]) : inputs[idx].value;
+                        e.dataTransfer.setData("text/plain", val);
                     });
 
                     container.addEventListener("dragend", (e) => {
                         container.style.opacity = "";
                         container.style.cursor = "grab";
-                        if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                        if (!dropHandled && draggedIndex === idx && (inputs[idx].value || cell11MultiValues[idx].size > 0)) {
+                            cell11MultiValues[idx].clear();
                             inputs[idx].value = "";
+                            inputs[idx].placeholder = "";
                             inputs[idx].dispatchEvent(new Event("input"));
+                            updateMvBadge(idx);
                             if (run) run();
                         }
                         draggedIndex = null;
@@ -12149,14 +12415,17 @@
                             container.style.transform = "";
                             return;
                         }
-                        // Otherwise swap
+                        // Otherwise swap (including multi-value Sets)
                         else if (draggedIndex !== null && draggedIndex !== idx) {
-                            const tempValue = inputs[idx].value;
-                            inputs[idx].value = inputs[draggedIndex].value;
-                            inputs[draggedIndex].value = tempValue;
-
-                            inputs[idx].dispatchEvent(new Event("input"));
-                            inputs[draggedIndex].dispatchEvent(new Event("input"));
+                            // Swap multi-value sets
+                            const tempSet = cell11MultiValues[idx];
+                            cell11MultiValues[idx] = cell11MultiValues[draggedIndex];
+                            cell11MultiValues[draggedIndex] = tempSet;
+                            // Sync both inputs from their new sets
+                            syncInputFromMulti(idx);
+                            syncInputFromMulti(draggedIndex);
+                            updateMvBadge(idx);
+                            updateMvBadge(draggedIndex);
 
                             run();
                         }
@@ -12348,18 +12617,36 @@
                 const filteredRows = getFilteredRows();
 
                 if (cell11Mode === 'pattern') {
-                    // === PATTERN MODE (original logic) ===
-                    const pattern = inputs.map(inp => {
+                    // === PATTERN MODE with multi-value OR support ===
+                    // Build pattern: each position can be "_" (wildcard), a single number, or a Set of numbers
+                    const pattern = inputs.map((inp, i) => {
+                        const multiSet = cell11MultiValues[i];
+                        if (multiSet && multiSet.size > 0) {
+                            return multiSet; // Set of numbers for OR matching
+                        }
                         const v = inp.value.trim();
                         if (!v) return "_";
                         const n = parseInt(v, 10);
-                        return (n >= 1 && n <= 45) ? String(n) : "_";
+                        if (n >= 1 && n <= 45) {
+                            const s = new Set([n]);
+                            return s;
+                        }
+                        return "_";
                     });
                     if (!filteredRows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                     if (pattern.every(p => p === "_")) { wrap.innerHTML = "<div class='loader'>Nhập vào 1 ô để tìm kiếm...</div>"; return; }
-                    const results = filteredRows.filter(r => pattern.every((p, i) => p === "_" || r.nums[i] === Number(p)));
+                    // Filter: for each position, row.nums[i] must be in the Set (OR) or pattern is "_" (wildcard)
+                    const results = filteredRows.filter(r => pattern.every((p, i) => {
+                        if (p === "_") return true;
+                        return p.has(r.nums[i]);
+                    }));
                     if (!results.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
-                    const patternStr = pattern.join(',');
+                    // Build display string for pattern
+                    const patternStr = pattern.map(p => {
+                        if (p === "_") return "_";
+                        const arr = [...p].sort((a, b) => a - b);
+                        return arr.length === 1 ? String(arr[0]) : '{' + arr.join(',') + '}';
+                    }).join(',');
                     let display = results.slice();
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                     let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
@@ -12432,6 +12719,9 @@
                 modeBtn.textContent = mode === 'pattern' ? 'Pattern (1-45)' : 'Label (1-6)';
 
                 inputs = createInputs(mode);
+                // Reset multi-values when switching modes
+                cell11MultiValues = Array.from({ length: 6 }, () => new Set());
+                hideMvDropdown();
                 containers = createContainers(inputs);
                 draggedIndex = null;
                 setupDragListeners(containers);
@@ -12476,7 +12766,7 @@
                     if (e.key === 'ArrowDown') { e.preventDefault(); let n = parseInt(String(inp.value ?? '').trim(), 10); if (!Number.isFinite(n)) n = 0; n--; if (cell11Mode === 'label') { if (n < 1) n = 6; } else { if (n < 1) n = 45; } inp.value = String(n); inp.dispatchEvent(new Event('input')); run(); }
                 };
             });
-            clearBtn.onclick = () => { inputs.forEach(i => i.value = ""); run(); };
+            clearBtn.onclick = () => { inputs.forEach(i => { i.value = ""; i.placeholder = ""; }); cell11MultiValues.forEach(s => s.clear()); updateAllMvBadges(); hideMvDropdown(); run(); };
             run();
         }
 
@@ -14292,6 +14582,8 @@
                 function initPill(span) {
                     if (!span || span._pillInit) return;
                     span.style.touchAction = 'none';
+                    span.style.userSelect = 'none';
+                    span.style.webkitUserSelect = 'none';
                     span.addEventListener('click', onPillClick);
                     span.addEventListener('mousedown', onPillMouseDown);
                     span._pillInit = true;
@@ -14349,12 +14641,16 @@
                 // ── Editing ──
                 let editing = null;
                 let navigating = false; // flag to suppress blur during arrow navigation
+                const DRAG_HOLD_MS = 180; // hold threshold to distinguish click vs drag
 
-                function onPillClick(e) {
+                function startEditing(span) {
                     if (dragging) return;
-                    const span = e.currentTarget;
-                    if (editing) return;
-                    e.stopPropagation();
+                    // If already editing another pill, commit it first
+                    if (editing && editing.commit) {
+                        navigating = true;
+                        editing.commit(true);
+                        navigating = false;
+                    }
                     const oldText = span.textContent.trim();
                     const old = (oldText === '__') ? '' : oldText;
                     const input = document.createElement('input');
@@ -14367,15 +14663,15 @@
                     input.select();
                     editing = { input, span, old, row: rowEl };
 
-                    function commit(save) {
-                        if (!editing) return;
+                    function commitEditing(save) {
+                        if (!editing || editing.input !== input) return;
                         const valRaw = save ? input.value.trim() : old;
                         if (save) {
                             if (valRaw === '' || valRaw === '__') {
                                 const newSpan = document.createElement('span');
                                 newSpan.className = 'pill pill-empty';
                                 newSpan.textContent = '__';
-                                input.replaceWith(newSpan);
+                                try { input.replaceWith(newSpan); } catch (ex) { }
                                 initPill(newSpan);
                                 editing = null;
                                 return;
@@ -14404,10 +14700,13 @@
                         newSpan.className = 'pill';
                         newSpan.textContent = pillText(val);
                         updatePillClass(newSpan);
-                        input.replaceWith(newSpan);
+                        try { input.replaceWith(newSpan); } catch (ex) { }
                         initPill(newSpan);
                         editing = null;
                     }
+
+                    // Store commit on outer scope for reuse
+                    editing.commit = commitEditing;
 
                     // Navigate to adjacent pill with ArrowLeft / ArrowRight (wraps around)
                     function navigatePill(direction) {
@@ -14418,8 +14717,8 @@
                         const children = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
                         const idx = children.indexOf(input);
                         if (idx < 0) return;
-                        navigating = true; // suppress blur handler during navigation
-                        commit(true);
+                        navigating = true;
+                        commitEditing(true);
                         navigating = false;
                         const refreshed = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
                         let nextIdx = idx + direction;
@@ -14427,14 +14726,14 @@
                         if (nextIdx >= refreshed.length) nextIdx = 0;
                         const targetPill = refreshed[nextIdx];
                         if (targetPill && targetPill.classList.contains('pill')) {
-                            setTimeout(() => targetPill.click(), 30);
+                            setTimeout(() => startEditing(targetPill), 30);
                         }
                     }
 
-                    input.addEventListener('blur', () => { if (editing && !navigating) commit(true); });
+                    input.addEventListener('blur', () => { if (editing && editing.input === input && !navigating) commitEditing(true); });
                     input.addEventListener('keydown', (ev) => {
-                        if (ev.key === 'Enter') { ev.preventDefault(); commit(true); }
-                        else if (ev.key === 'Escape') { commit(false); }
+                        if (ev.key === 'Enter') { ev.preventDefault(); commitEditing(true); }
+                        else if (ev.key === 'Escape') { commitEditing(false); }
                         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); navigatePill(-1); }
                         else if (ev.key === 'ArrowRight') { ev.preventDefault(); navigatePill(1); }
                         else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
@@ -14461,20 +14760,29 @@
                     });
                 }
 
+                // Legacy click handler — no longer primary; startEditing is called from mouseup timing
+                function onPillClick(e) {
+                    // Clicks are now handled by mousedown/mouseup timing logic
+                    // This handler is kept as a no-op for compatibility
+                }
+
                 // ── Drag-to-swap ──
                 let dragging = false, dragSrc = null, clone = null, target = null;
                 let dragStartX = 0, dragStartY = 0, dragMoved = false;
                 let dragSrcOldText = '';
+                let dragSrcWasEditing = false;
+                let mouseDownTime = 0; // timestamp of mousedown for click vs drag detection
 
                 function onPillMouseDown(e) {
                     if (e.button !== 0) return;
-                    if (editing) return;
                     e.preventDefault(); e.stopPropagation();
                     dragSrc = e.currentTarget;
                     dragStartX = e.clientX;
                     dragStartY = e.clientY;
                     dragMoved = false;
                     dragSrcOldText = '';
+                    dragSrcWasEditing = false;
+                    mouseDownTime = Date.now();
                     document.addEventListener('mousemove', onPillMouseMove);
                     document.addEventListener('mouseup', onPillMouseUp);
                 }
@@ -14484,9 +14792,32 @@
                     if (!dragMoved) {
                         const dx = e.clientX - dragStartX;
                         const dy = e.clientY - dragStartY;
-                        if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                        const dist = Math.abs(dx) + Math.abs(dy);
+                        const elapsed = Date.now() - mouseDownTime;
+                        // Require BOTH: distance > 4px AND hold time > DRAG_HOLD_MS
+                        if (dist < 4 || elapsed < DRAG_HOLD_MS) return;
                         dragMoved = true;
                         dragging = true;
+
+                        // If there's an active editor, commit and convert back to span first
+                        if (editing && editing.input) {
+                            dragSrcWasEditing = true;
+                            const val = editing.input.value.trim();
+                            const num = parseInt(val, 10);
+                            const validVal = (!isNaN(num) && num >= 1 && num <= 45) ? String(num) : editing.old;
+                            const newSpan = document.createElement('span');
+                            newSpan.className = 'pill';
+                            newSpan.textContent = pillText(validVal);
+                            newSpan.style.touchAction = 'none';
+                            newSpan.style.userSelect = 'none';
+                            newSpan.style.webkitUserSelect = 'none';
+                            updatePillClass(newSpan);
+                            try { editing.input.replaceWith(newSpan); } catch (ex) { }
+                            initPill(newSpan);
+                            dragSrc = newSpan;
+                            editing = null;
+                        }
+
                         dragSrcOldText = dragSrc.textContent.trim();
                         // Create clone copying computed styles so it looks identical
                         const r = dragSrc.getBoundingClientRect();
@@ -14522,6 +14853,15 @@
                     document.removeEventListener('mousemove', onPillMouseMove);
                     document.removeEventListener('mouseup', onPillMouseUp);
                     if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+
+                    if (!dragging && dragSrc) {
+                        // Quick click (released before drag started) → open editor
+                        const clickedPill = dragSrc;
+                        dragging = false; dragSrc = null; clone = null; target = null;
+                        dragMoved = false; dragSrcOldText = ''; dragSrcWasEditing = false;
+                        startEditing(clickedPill);
+                        return;
+                    }
 
                     if (dragging && dragSrc) {
                         const a = dragSrcOldText; // original value of source before drag
@@ -14569,17 +14909,27 @@
                                 target.textContent = pillText(a);
                                 updatePillClass(target);
                                 initPill(dragSrc); initPill(target);
+                                // If the source was being edited, open editor on target (where value landed)
+                                if (dragSrcWasEditing) {
+                                    const editTarget = target;
+                                    setTimeout(() => { try { startEditing(editTarget); } catch (ex) { } }, 40);
+                                }
                             }
                             if (target) target.classList.remove('pill-target');
                         } else {
                             // Dropped on no valid target or itself: revert source
                             dragSrc.textContent = a;
                             updatePillClass(dragSrc);
+                            // If was editing and dropped on itself, re-open editor
+                            if (dragSrcWasEditing && dragSrc) {
+                                const editTarget = dragSrc;
+                                setTimeout(() => { try { startEditing(editTarget); } catch (ex) { } }, 40);
+                            }
                         }
                     }
 
                     dragging = false; dragSrc = null; clone = null; target = null;
-                    dragMoved = false; dragSrcOldText = '';
+                    dragMoved = false; dragSrcOldText = ''; dragSrcWasEditing = false;
                 }
 
                 window.__scanDraftPills = scan;
