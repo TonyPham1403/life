@@ -1429,7 +1429,8 @@
             background: #1a2a3a !important;
             color: #ffffff !important;
             box-shadow: none !important;
-            outline: none !important;
+            outline: 3px solid #ff8c00 !important;
+            outline-offset: -2px;
             position: relative;
             z-index: 1100;
         }
@@ -3488,7 +3489,9 @@
 <body>
     <header>
         <div class="topbar">
-            <div class="brand">Life Notebook
+            <div class="brand"><button id="orderToggleBtn" title="Toggle record display order (Tab)"
+                    style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap;transition:background 0.15s;">Ordered
+                    ✓</button>
                 <span id="htmlBadge">HTML</span>
             </div>
             <nav id="nav"></nav>
@@ -3835,11 +3838,7 @@
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
             clearPopupHighlights();
-            // Only apply the orange popup highlight when quick-place mode is 'hover'
-            try {
-                const inHover = (window.getQuickPlaceMode && window.getQuickPlaceMode() === 'hover');
-                if (!inHover) return;
-            } catch (e) { return; }
+            // Always apply the orange popup highlight for group header numbers
             nums.forEach(n => {
                 try {
                     const td = tbl.querySelector(`td[data-number="${n}"]`);
@@ -3854,8 +3853,10 @@
             });
 
             // Temporarily replace the 6 place boxes with these numbers so user sees the set
+            // Only when in 'hover' quick-place mode to avoid overwriting user's places
             try {
-                if (Array.isArray(nums) && nums.length === 6 && typeof window.getPlaceValues === 'function') {
+                const inHover = (window.getQuickPlaceMode && window.getQuickPlaceMode() === 'hover');
+                if (inHover && Array.isArray(nums) && nums.length === 6 && typeof window.getPlaceValues === 'function') {
                     // save previous
                     try { window.__prevPlaceValues = (window.getPlaceValues ? window.getPlaceValues().slice() : null); } catch (e) { window.__prevPlaceValues = null; }
                     // set new place values (strings)
@@ -10862,6 +10863,13 @@
                     [32, 33, 34, 35, 36, 37, 38],
                     [39, 40, 41, 42, 43, 44, 45]
                 ];
+                // Compute suggestion for this position
+                let suggestionNum = -1;
+                try {
+                    if (typeof window.__cell9ComputeSuggestion === 'function' && cell9ModeState === 'number') {
+                        suggestionNum = window.__cell9ComputeSuggestion(posIdx, cell9MultiValues, inputs, rows, consec.checked);
+                    }
+                } catch (e) { }
                 const maxRows = 8;
                 for (let row = maxRows - 1; row >= 0; row--) {
                     for (let col = 0; col < 6; col++) {
@@ -10878,6 +10886,12 @@
                         cell.dataset.num = num;
                         const selected = cell9MultiValues[posIdx];
                         if (selected.has(num)) cell.classList.add('mv-selected');
+                        // Suggestion highlight (yellow bg, black text)
+                        if (num === suggestionNum && !selected.has(num)) {
+                            cell.style.background = '#f8f333';
+                            cell.style.color = '#000';
+                            cell.style.fontWeight = '900';
+                        }
                         cell.addEventListener('click', (e) => {
                             e.stopPropagation();
                             const set = cell9MultiValues[posIdx];
@@ -10891,11 +10905,37 @@
                             c9SyncInputFromMulti(posIdx);
                             c9UpdateMvBadge(posIdx);
                             if (run) run();
+                            // Realtime: update suggestion for current dropdown
+                            c9UpdateMvSuggestions(posIdx);
                         });
                         grid.appendChild(cell);
                     }
                 }
                 c9MvDropdown.appendChild(grid);
+            }
+
+            // Update suggestion highlights in the currently open Cell9 mvDropdown
+            function c9UpdateMvSuggestions(currentPosIdx) {
+                try {
+                    if (typeof window.__cell9ComputeSuggestion !== 'function') return;
+                    if (cell9ModeState !== 'number') return;
+                    const newSuggestion = window.__cell9ComputeSuggestion(currentPosIdx, cell9MultiValues, inputs, rows, consec.checked);
+                    const cells = c9MvDropdown.querySelectorAll('.mv-cell');
+                    cells.forEach(c => {
+                        const n = parseInt(c.dataset.num, 10);
+                        const isSelected = cell9MultiValues[currentPosIdx] && cell9MultiValues[currentPosIdx].has(n);
+                        if (n === newSuggestion && !isSelected) {
+                            c.style.background = '#f8f333';
+                            c.style.color = '#000';
+                            c.style.fontWeight = '900';
+                        } else {
+                            // Clear inline styles so CSS .mv-selected class takes effect immediately
+                            c.style.background = '';
+                            c.style.color = '';
+                            c.style.fontWeight = '';
+                        }
+                    });
+                } catch (e) { }
             }
 
             function c9SyncInputFromMulti(posIdx) {
@@ -12158,6 +12198,13 @@
                     [32, 33, 34, 35, 36, 37, 38],
                     [39, 40, 41, 42, 43, 44, 45]
                 ];
+                // Compute suggestion for this position
+                let suggestionNum = -1;
+                try {
+                    if (typeof window.__cell11ComputeSuggestion === 'function' && typeof getFilteredRows === 'function') {
+                        suggestionNum = window.__cell11ComputeSuggestion(posIdx, cell11MultiValues, inputs, getFilteredRows(), cell11Mode);
+                    }
+                } catch (e) { }
                 const maxRows = 8;
                 for (let row = maxRows - 1; row >= 0; row--) {
                     for (let col = 0; col < 6; col++) {
@@ -12174,6 +12221,12 @@
                         cell.dataset.num = num;
                         const selected = cell11MultiValues[posIdx];
                         if (selected.has(num)) cell.classList.add('mv-selected');
+                        // Apply suggestion highlight (yellow bg, black text) for best next number
+                        if (num === suggestionNum && !selected.has(num)) {
+                            cell.style.background = '#f8f333';
+                            cell.style.color = '#000';
+                            cell.style.fontWeight = '900';
+                        }
                         cell.addEventListener('click', (e) => {
                             e.stopPropagation();
                             const set = cell11MultiValues[posIdx];
@@ -12188,11 +12241,40 @@
                             syncInputFromMulti(posIdx);
                             updateMvBadge(posIdx);
                             if (run) run();
+                            // Realtime: update suggestion for current dropdown immediately
+                            updateMvSuggestions(posIdx);
                         });
                         grid.appendChild(cell);
                     }
                 }
                 mvDropdown.appendChild(grid);
+            }
+
+            // Update suggestion highlights in the currently open mvDropdown
+            function updateMvSuggestions(currentPosIdx) {
+                try {
+                    if (typeof window.__cell11ComputeSuggestion !== 'function') return;
+                    if (typeof getFilteredRows !== 'function') return;
+                    const filtered = getFilteredRows();
+                    // Recompute suggestion for the currently open dropdown
+                    const newSuggestion = window.__cell11ComputeSuggestion(currentPosIdx, cell11MultiValues, inputs, filtered, cell11Mode);
+                    // Update all cells in the grid
+                    const cells = mvDropdown.querySelectorAll('.mv-cell');
+                    cells.forEach(c => {
+                        const n = parseInt(c.dataset.num, 10);
+                        const isSelected = cell11MultiValues[currentPosIdx] && cell11MultiValues[currentPosIdx].has(n);
+                        if (n === newSuggestion && !isSelected) {
+                            c.style.background = '#f8f333';
+                            c.style.color = '#000';
+                            c.style.fontWeight = '900';
+                        } else {
+                            // Clear inline styles so CSS .mv-selected class takes effect immediately
+                            c.style.background = '';
+                            c.style.color = '';
+                            c.style.fontWeight = '';
+                        }
+                    });
+                } catch (e) { }
             }
 
             function syncInputFromMulti(posIdx) {
@@ -19191,6 +19273,8 @@
 
             try { window.__showDraft = showDraft; } catch (e) { }
             try { window.__hideDraft = hideDraft; } catch (e) { }
+            try { window.__draftCreateRecordRow = createRecordRow; } catch (e) { }
+            try { window.__draftEnsureAddRow = ensureAddRow; } catch (e) { }
 
             // Toggle with key 'a' — only when picker is open
             document.addEventListener('keydown', (e) => {
@@ -19227,22 +19311,26 @@
                 }
             });
 
-            // dblclick to read clipboard and append (skip if dblclick originated inside draft table)
+            // dblclick to read clipboard and append — only when dblclick is INSIDE draftPopup
             document.addEventListener('dblclick', async (ev) => {
                 try {
+                    // Only handle dblclick inside draftPopup area
+                    if (!ev.target || !ev.target.closest || !ev.target.closest('#draftPopup')) return;
                     // Skip if double-click is on a draft record row (handled separately for copy)
-                    if (ev.target && ev.target.closest && ev.target.closest('#draftTable tr:not(.draft-add-row-tr)')) return;
+                    if (ev.target.closest('#draftTable tr:not(.draft-add-row-tr)')) return;
                     if (!isPickerVisible()) return;
                     const text = await (navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : Promise.resolve(''));
                     const recs = parseClipboardText(text);
                     if (recs.length) {
                         const addRowEl = draftTableBody.querySelector('tr.draft-add-row-tr');
                         const existingCount = draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)').length;
+                        const frag = document.createDocumentFragment();
                         recs.forEach((nums, i) => {
                             const tr = createRecordRow(nums, existingCount + i);
-                            if (addRowEl) draftTableBody.insertBefore(tr, addRowEl);
-                            else draftTableBody.appendChild(tr);
+                            frag.appendChild(tr);
                         });
+                        if (addRowEl) draftTableBody.insertBefore(frag, addRowEl);
+                        else draftTableBody.appendChild(frag);
                         ensureAddRow();
                         updateScrollClass();
                         try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
@@ -19326,6 +19414,426 @@
             }
 
             // NO click-outside-close: draft only closes via 'a' key or when picker hides
+        })();
+    </script>
+
+    <!-- ═══ Toggle Order / Draft realtime save / Cell11 suggestion / Cross-tab draft sync ═══ -->
+    <script>
+        (function () {
+            'use strict';
+
+            // ══════════════════════════════════════════════════════════
+            // 1. TOGGLE ORDERED / NON-ORDERED RECORD DISPLAY
+            // ══════════════════════════════════════════════════════════
+            window.__nonOrderedMode = false;
+
+            function sortRecordPills() {
+                // Sort .pill spans inside result td cells of all table rows
+                const rows = document.querySelectorAll('tr[data-result]');
+                for (let i = 0; i < rows.length; i++) {
+                    const tr = rows[i];
+                    // Find the td that contains pill spans (typically 2nd column)
+                    const tds = tr.querySelectorAll('td');
+                    for (let j = 0; j < tds.length; j++) {
+                        const td = tds[j];
+                        const pills = Array.from(td.querySelectorAll('.pill, .cell5-pill'));
+                        if (pills.length < 2) continue;
+                        // Check if already sorted
+                        let alreadySorted = true;
+                        for (let k = 1; k < pills.length; k++) {
+                            const a = parseInt(pills[k - 1].textContent.trim(), 10) || 0;
+                            const b = parseInt(pills[k].textContent.trim(), 10) || 0;
+                            if (b < a) { alreadySorted = false; break; }
+                        }
+                        if (alreadySorted) continue;
+                        // Sort pills by numeric value, keeping their styles intact
+                        pills.sort((a, b) => {
+                            const na = parseInt(a.textContent.trim(), 10) || 0;
+                            const nb = parseInt(b.textContent.trim(), 10) || 0;
+                            return na - nb;
+                        });
+                        // Re-append in sorted order
+                        const frag = document.createDocumentFragment();
+                        pills.forEach((p, idx) => {
+                            frag.appendChild(p);
+                            // Add space between pills (matching original rendering)
+                            if (idx < pills.length - 1) frag.appendChild(document.createTextNode(' '));
+                        });
+                        // Clear td content that are pills/text nodes, keep other elements
+                        const children = Array.from(td.childNodes);
+                        children.forEach(c => {
+                            if (c.nodeType === Node.TEXT_NODE || (c.nodeType === Node.ELEMENT_NODE && (c.classList.contains('pill') || c.classList.contains('cell5-pill')))) {
+                                td.removeChild(c);
+                            }
+                        });
+                        td.appendChild(frag);
+                    }
+                }
+            }
+
+            function restoreRecordPills() {
+                // Restore original order from data-result attribute
+                const rows = document.querySelectorAll('tr[data-result]');
+                for (let i = 0; i < rows.length; i++) {
+                    const tr = rows[i];
+                    const originalNums = tr.dataset.result.split(',').map(s => parseInt(s.trim(), 10)).filter(Number.isFinite);
+                    if (originalNums.length < 2) continue;
+                    const tds = tr.querySelectorAll('td');
+                    for (let j = 0; j < tds.length; j++) {
+                        const td = tds[j];
+                        const pills = Array.from(td.querySelectorAll('.pill, .cell5-pill'));
+                        if (pills.length < 2 || pills.length !== originalNums.length) continue;
+                        // Build map: number -> pill element (with style)
+                        const pillMap = new Map();
+                        pills.forEach(p => {
+                            const n = parseInt(p.textContent.trim(), 10);
+                            if (!pillMap.has(n)) pillMap.set(n, []);
+                            pillMap.get(n).push(p);
+                        });
+                        // Reconstruct in original order
+                        const frag = document.createDocumentFragment();
+                        let valid = true;
+                        originalNums.forEach((n, idx) => {
+                            const arr = pillMap.get(n);
+                            if (!arr || !arr.length) { valid = false; return; }
+                            const p = arr.shift();
+                            frag.appendChild(p);
+                            if (idx < originalNums.length - 1) frag.appendChild(document.createTextNode(' '));
+                        });
+                        if (!valid) continue;
+                        const children = Array.from(td.childNodes);
+                        children.forEach(c => {
+                            if (c.nodeType === Node.TEXT_NODE || (c.nodeType === Node.ELEMENT_NODE && (c.classList.contains('pill') || c.classList.contains('cell5-pill')))) {
+                                td.removeChild(c);
+                            }
+                        });
+                        td.appendChild(frag);
+                    }
+                }
+            }
+
+            // Expose globally so render functions can call after mount
+            window.__sortRecordPills = sortRecordPills;
+
+            // MutationObserver on <main> to auto-sort pills when new content is added
+            let _sortDebounce = null;
+            const mainEl = document.querySelector('main');
+            if (mainEl) {
+                const observer = new MutationObserver(() => {
+                    if (!window.__nonOrderedMode) return;
+                    if (_sortDebounce) clearTimeout(_sortDebounce);
+                    _sortDebounce = setTimeout(sortRecordPills, 60);
+                });
+                observer.observe(mainEl, { childList: true, subtree: true });
+            }
+
+            // Toggle button
+            const orderBtn = document.getElementById('orderToggleBtn');
+            if (orderBtn) {
+                const updateBtnText = () => {
+                    if (window.__nonOrderedMode) {
+                        orderBtn.textContent = 'Non-ordered';
+                        orderBtn.style.background = '#f8f333';
+                        orderBtn.style.color = '#000';
+                    } else {
+                        orderBtn.textContent = 'Ordered \u2713';
+                        orderBtn.style.background = '';
+                        orderBtn.style.color = '';
+                    }
+                };
+
+                orderBtn.addEventListener('click', () => {
+                    window.__nonOrderedMode = !window.__nonOrderedMode;
+                    updateBtnText();
+                    if (window.__nonOrderedMode) {
+                        sortRecordPills();
+                    } else {
+                        restoreRecordPills();
+                    }
+                });
+
+                // Tab key to toggle
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Tab') {
+                        const tag = document.activeElement ? (document.activeElement.tagName || '').toLowerCase() : '';
+                        if (tag === 'input' || tag === 'textarea' || tag === 'select' || (document.activeElement && document.activeElement.isContentEditable)) return;
+                        e.preventDefault();
+                        window.__nonOrderedMode = !window.__nonOrderedMode;
+                        updateBtnText();
+                        if (window.__nonOrderedMode) {
+                            sortRecordPills();
+                        } else {
+                            restoreRecordPills();
+                        }
+                    }
+                });
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // 2. DRAFT POPUP: REALTIME LOCALSTORAGE SAVE & CROSS-TAB SYNC
+            // ══════════════════════════════════════════════════════════
+            function saveDraftToStorage() {
+                try {
+                    const draftTableBody = document.querySelector('#draftTable tbody');
+                    if (!draftTableBody) return;
+                    const rows = Array.from(draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)'));
+                    const lines = [];
+                    for (const r of rows) {
+                        const pills = Array.from(r.querySelectorAll('.pill'));
+                        if (pills.length === 6) {
+                            const vals = pills.map(sp => {
+                                const t = (sp.textContent || '').trim();
+                                return (t === '' || t === '__') ? '' : t;
+                            });
+                            // Always save the row (including fully empty ones) to preserve structure
+                            lines.push(vals.join(','));
+                        }
+                    }
+                    const data = lines.join('\n');
+                    // Avoid writing if unchanged
+                    try {
+                        if (localStorage.getItem('draftRecords') === data) return;
+                    } catch (e) { }
+                    localStorage.setItem('draftRecords', data);
+                } catch (e) { }
+            }
+
+            // Observe draftTable for any changes (pill edits, reorder, add, remove)
+            let _draftSaveDebounce = null;
+            const draftTbody = document.querySelector('#draftTable tbody');
+            if (draftTbody) {
+                const draftObserver = new MutationObserver(() => {
+                    if (_draftSaveDebounce) clearTimeout(_draftSaveDebounce);
+                    _draftSaveDebounce = setTimeout(saveDraftToStorage, 200);
+                });
+                draftObserver.observe(draftTbody, { childList: true, subtree: true, characterData: true, attributes: true });
+                draftTbody._draftObs = draftObserver; // store ref for cross-tab sync disconnect
+            }
+
+            // Cross-tab sync via storage event
+            window.addEventListener('storage', (e) => {
+                if (e.key !== 'draftRecords') return;
+                if (e.newValue === null) return;
+                try {
+                    const dp = document.getElementById('draftPopup');
+                    // Only sync if draft is currently visible or has content
+                    const tbody = document.querySelector('#draftTable tbody');
+                    if (!tbody) return;
+                    const newData = (e.newValue || '').trim();
+                    // Build current data string for comparison
+                    const currentRows = Array.from(tbody.querySelectorAll('tr:not(.draft-add-row-tr)'));
+                    const currentLines = [];
+                    for (const r of currentRows) {
+                        const pills = Array.from(r.querySelectorAll('.pill'));
+                        if (pills.length === 6) {
+                            const vals = pills.map(sp => {
+                                const t = (sp.textContent || '').trim();
+                                return (t === '' || t === '__') ? '' : t;
+                            });
+                            currentLines.push(vals.join(','));
+                        }
+                    }
+                    if (currentLines.join('\n') === newData) return; // already in sync
+
+                    // Parse and render new data using same approach (keep empty rows)
+                    const recs = newData.split('\n').map(line => {
+                        const parts = line.split(',');
+                        if (parts.length !== 6) return null;
+                        return parts.map(p => {
+                            const t = p.trim();
+                            if (t === '' || t === '__') return null;
+                            const n = parseInt(t, 10);
+                            return Number.isFinite(n) && n >= 1 && n <= 45 ? n : null;
+                        });
+                    }).filter(Boolean);
+
+                    // Use requestAnimationFrame to avoid blocking and reduce lag
+                    requestAnimationFrame(() => {
+                        try {
+                            // Temporarily disconnect the observer to avoid re-triggering save
+                            if (draftTbody && draftTbody._draftObs) {
+                                draftTbody._draftObs.disconnect();
+                            }
+                            // Build all rows in a DocumentFragment for a single DOM operation
+                            const frag = document.createDocumentFragment();
+                            if (typeof window.__draftCreateRecordRow === 'function') {
+                                recs.forEach((nums, idx) => {
+                                    frag.appendChild(window.__draftCreateRecordRow(nums, idx));
+                                });
+                            } else {
+                                recs.forEach((nums, idx) => {
+                                    const tr = document.createElement('tr');
+                                    const td = document.createElement('td');
+                                    td.classList.add('has-grabber');
+                                    const row = document.createElement('div');
+                                    row.className = 'record-row';
+                                    const pills = document.createElement('div');
+                                    pills.className = 'pills';
+                                    pills.style.flex = '1';
+                                    nums.forEach(n => {
+                                        const sp = document.createElement('span');
+                                        sp.className = 'pill';
+                                        if (n === null) { sp.textContent = '__'; sp.classList.add('pill-empty'); }
+                                        else sp.textContent = String(n);
+                                        pills.appendChild(sp);
+                                    });
+                                    const grabber = document.createElement('div');
+                                    grabber.className = 'grabber';
+                                    grabber.textContent = '\u2630';
+                                    row.appendChild(pills);
+                                    row.appendChild(grabber);
+                                    td.appendChild(row);
+                                    tr.appendChild(td);
+                                    tr.dataset.index = idx;
+                                    frag.appendChild(tr);
+                                });
+                            }
+                            tbody.innerHTML = '';
+                            tbody.appendChild(frag);
+                            // Re-add the add-row button
+                            try { if (typeof window.__draftEnsureAddRow === 'function') window.__draftEnsureAddRow(); } catch (e) { }
+                            // Reconnect observer immediately (no setTimeout delay)
+                            if (draftTbody) {
+                                try {
+                                    const obs = new MutationObserver(() => {
+                                        if (_draftSaveDebounce) clearTimeout(_draftSaveDebounce);
+                                        _draftSaveDebounce = setTimeout(saveDraftToStorage, 200);
+                                    });
+                                    obs.observe(draftTbody, { childList: true, subtree: true, characterData: true, attributes: true });
+                                    draftTbody._draftObs = obs;
+                                } catch (e) { }
+                            }
+                            try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
+                        } catch (e) { }
+                    }); // end requestAnimationFrame
+                } catch (e) { }
+            });
+
+            // ══════════════════════════════════════════════════════════
+            // 3. CELL11 MVDROPDOWN SUGGESTION (best next number)
+            // ══════════════════════════════════════════════════════════
+            // Expose a helper that the mvdropdown buildGrid can use
+            window.__cell11ComputeSuggestion = function (posIdx, cell11MultiValues, inputs, filteredRows, cell11Mode) {
+                if (cell11Mode !== 'pattern') return -1;
+                if (!filteredRows || !filteredRows.length) return -1;
+                try {
+                    // Build pattern for all positions
+                    const pattern = inputs.map((inp, i) => {
+                        const multiSet = cell11MultiValues[i];
+                        const merged = new Set(multiSet || []);
+                        const v = (inp.value || '').trim();
+                        if (v) { const n = parseInt(v, 10); if (n >= 1 && n <= 45) merged.add(n); }
+                        if (merged.size > 0) return merged;
+                        return '_';
+                    });
+
+                    // Pre-filter rows that match ALL other positions (not posIdx)
+                    const preFiltered = filteredRows.filter(r => {
+                        for (let i = 0; i < 6; i++) {
+                            if (i === posIdx) continue;
+                            const p = pattern[i];
+                            if (p === '_') continue;
+                            if (!p.has(r.nums[i])) return false;
+                        }
+                        return true;
+                    });
+
+                    if (!preFiltered.length) return -1;
+
+                    // Count frequency of each number at posIdx among pre-filtered rows
+                    const freq = new Map();
+                    const currentSet = pattern[posIdx] === '_' ? new Set() : pattern[posIdx];
+                    for (const r of preFiltered) {
+                        const v = r.nums[posIdx];
+                        if (currentSet.has(v)) continue; // already selected, skip
+                        freq.set(v, (freq.get(v) || 0) + 1);
+                    }
+
+                    if (!freq.size) return -1;
+
+                    // Find number with highest frequency
+                    let bestNum = -1, bestCount = 0;
+                    for (const [num, count] of freq) {
+                        if (count > bestCount || (count === bestCount && num < bestNum)) {
+                            bestNum = num;
+                            bestCount = count;
+                        }
+                    }
+                    return bestNum;
+                } catch (e) { return -1; }
+            };
+
+            // Compute suggestions for ALL 6 positions at once
+            window.__cell11ComputeAllSuggestions = function (cell11MultiValues, inputs, filteredRows, cell11Mode) {
+                const suggestions = [-1, -1, -1, -1, -1, -1];
+                if (cell11Mode !== 'pattern') return suggestions;
+                for (let i = 0; i < 6; i++) {
+                    suggestions[i] = window.__cell11ComputeSuggestion(i, cell11MultiValues, inputs, filteredRows, cell11Mode);
+                }
+                return suggestions;
+            };
+
+            // ══════════════════════════════════════════════════════════
+            // 4. CELL9 MVDROPDOWN SUGGESTION (best next number)
+            // ══════════════════════════════════════════════════════════
+            window.__cell9ComputeSuggestion = function (posIdx, cell9MultiValues, inputs, rows, isConsecutive) {
+                try {
+                    // Build union set from ALL positions (Cell9 is position-independent)
+                    const combinedSet = new Set();
+                    for (let i = 0; i < 6; i++) {
+                        const mvSet = cell9MultiValues[i];
+                        if (mvSet && mvSet.size > 0) mvSet.forEach(n => combinedSet.add(n));
+                        const v = parseInt(String(inputs[i].value).trim(), 10);
+                        if (Number.isFinite(v) && v >= 1 && v <= 45) combinedSet.add(v);
+                    }
+
+                    if (combinedSet.size === 0) return -1;
+                    // Pre-compute row number sets for efficiency
+                    const rowSets = rows.map(r => new Set(r.nums));
+
+                    let bestNum = -1, bestCount = -1;
+
+                    for (let n = 1; n <= 45; n++) {
+                        if (combinedSet.has(n)) continue; // already in union across all positions
+
+                        const hypoSet = new Set(combinedSet);
+                        hypoSet.add(n);
+                        const reqCount = Math.min(6, hypoSet.size);
+
+                        let count = 0;
+                        for (let ri = 0; ri < rows.length; ri++) {
+                            let mc = 0;
+                            for (const v of hypoSet) {
+                                if (rowSets[ri].has(v)) mc++;
+                            }
+                            if (mc < reqCount) continue;
+                            if (isConsecutive) {
+                                const r = rows[ri];
+                                const k = hypoSet.size;
+                                let found = false;
+                                for (let s = 0; s <= r.nums.length - k && !found; s++) {
+                                    const block = r.nums.slice(s, s + k);
+                                    let ok = true;
+                                    for (const sv of hypoSet) {
+                                        if (!block.includes(sv)) { ok = false; break; }
+                                    }
+                                    if (ok && new Set(block).size === hypoSet.size) found = true;
+                                }
+                                if (!found) continue;
+                            }
+                            count++;
+                        }
+
+                        if (count > bestCount || (count === bestCount && (bestNum === -1 || n < bestNum))) {
+                            bestNum = n;
+                            bestCount = count;
+                        }
+                    }
+
+                    return bestNum;
+                } catch (e) { return -1; }
+            };
+
         })();
     </script>
 </body>
