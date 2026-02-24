@@ -1429,10 +1429,57 @@
             background: #1a2a3a !important;
             color: #ffffff !important;
             box-shadow: none !important;
-            outline: 3px solid #ff8c00 !important;
-            outline-offset: -2px;
+            outline: 5px solid #ff8c00 !important;
+            outline-offset: -3px;
             position: relative;
             z-index: 1100;
+        }
+
+        /* Red inward gradient for next-trash number (unpair analysis hover) */
+        #numberPickerPopup #numberPickerTable td.unpair-next-trash {
+            box-shadow: inset 0 0 18px 6px rgba(255, 0, 0, 0.85), inset 0 0 6px 2px rgba(255, 60, 60, 1) !important;
+            position: relative;
+            z-index: 1101;
+        }
+
+        /* Yellow border on dblclicked analysis row */
+        #cell6_5_analysis_panel tr.anal-selected {
+            outline: 2px solid #FFD600;
+            outline-offset: -1px;
+        }
+
+        /* Fixed-width pills inside analysis panel (match cell5.5) */
+        #cell6_5_analysis_panel td.td-has-pill .pill,
+        #cell6_5_analysis_panel td.td-has-pill .cell5-pill {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 22px !important;
+            min-width: 22px !important;
+            height: 20px !important;
+            padding: 0 !important;
+            margin: 0 3px !important;
+            font-family: monospace !important;
+            font-size: 12px !important;
+            line-height: 1 !important;
+            box-sizing: border-box !important;
+            text-align: center !important;
+            white-space: nowrap !important;
+        }
+
+        #cell6_5_analysis_panel td.td-has-pill .pill:first-child,
+        #cell6_5_analysis_panel td.td-has-pill .cell5-pill:first-child {
+            margin-left: 0 !important;
+        }
+
+        #cell6_5_analysis_panel td.td-has-pill .pill:last-child,
+        #cell6_5_analysis_panel td.td-has-pill .cell5-pill:last-child {
+            margin-right: 0 !important;
+        }
+
+        #cell6_5_analysis_panel td.td-has-pill {
+            padding-left: 2px;
+            padding-right: 2px;
         }
 
         [data-theme="dark"] .pill {
@@ -6192,6 +6239,9 @@
                     // Skip dblclick inside Cell11 — Cell11 has its own handler
                     try { if (ev.target.closest('#cell11')) return; } catch (e) { }
 
+                    // Skip dblclick inside Cell9 — Cell9 uses dblclick for mvDropdown
+                    try { if (ev.target.closest('#cell9')) return; } catch (e) { }
+
                     // Only handle dblclick when user targets a place-box or one of the six input containers
                     const box = ev.target.closest('.place-box');
                     const inputContainer = ev.target.closest('.drag-input-container');
@@ -7706,8 +7756,8 @@
             unpairInputs.className = 'numtrash-wrapper';
             unpairInputs.style.display = 'none';
             unpairInputs.style.alignItems = 'center';
-            unpairInputs.style.gap = '6px';
-            unpairInputs.style.marginLeft = '6px';
+            unpairInputs.style.gap = '2px';
+            unpairInputs.style.marginLeft = '4px';
             // informational field that shows computed candidate and its dontmatch set in Unpair mode
             const unpairInfo = document.createElement('span');
             unpairInfo.className = 'numtrash-wrapper';
@@ -7759,7 +7809,7 @@
 
                 const container = document.createElement('div');
                 container.className = 'drag-input-container';
-                container.style.cssText = 'position:relative;display:inline-block;margin-right:6px;vertical-align:middle;';
+                container.style.cssText = 'position:relative;display:inline-block;margin-right:2px;vertical-align:middle;';
 
                 const dragHandle = document.createElement('div');
                 dragHandle.className = 'drag-handle';
@@ -7961,6 +8011,22 @@
                 unpairInputEls.push(inp);
             }
 
+            // Clear button after the 6 unpair inputs
+            const unpairClearBtn = document.createElement('button');
+            unpairClearBtn.type = 'button';
+            unpairClearBtn.textContent = '✕';
+            unpairClearBtn.title = 'Xóa tất cả 6 ô';
+            unpairClearBtn.style.cssText = 'padding:4px 8px;font-size:14px;font-weight:700;cursor:pointer;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);line-height:1;margin-left:2px;';
+            unpairClearBtn.addEventListener('click', () => {
+                try {
+                    unpairInputEls.forEach(el => { el.value = ''; el.dispatchEvent(new Event('input')); });
+                    try { if (typeof unpairInfo !== 'undefined' && unpairInfo) unpairInfo.innerHTML = ''; } catch (e) { }
+                    try { if (typeof window.clearAllTrash === 'function') window.clearAllTrash(); } catch (e) { }
+                    try { if (typeof window.setPlaceValues === 'function') window.setPlaceValues(['', '', '', '', '', '']); } catch (e) { }
+                } catch (e) { }
+            });
+            unpairInputs.appendChild(unpairClearBtn);
+
             // dblclick quickpaste for the unpair inputs: read clipboard or prompt and apply
             unpairInputs.addEventListener('dblclick', async (ev) => {
                 try {
@@ -8126,7 +8192,7 @@
                                                         numTd.classList.add('cell6-num-highlight');
                                                         numTd.classList.remove('cell6-num-in-trash');
                                                         r.classList.add('dragged-out');
-                                                        try { r.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+                                                        // No auto-scroll in unpair mode
                                                         try { r.animate([{ transform: 'scale(1.02)' }, { transform: 'scale(1)' }], { duration: 260 }); } catch (e) { }
                                                     }
                                                 } catch (e) { }
@@ -8191,7 +8257,7 @@
                                                 td0.classList.remove('cell6-num-in-trash');
                                                 r.classList.add('dragged-out');
                                             }
-                                            try { r.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+                                            // No auto-scroll in unpair mode
                                         }
                                     } catch (e) { }
                                 }
@@ -8895,6 +8961,393 @@
                 }
             } catch (e) { /* ignore */ }
 
+            // ═══ Persistent Analysis Panel + Pre-computed Rule Cache (Cell6.5 Unpair) ═══
+            let _analysisPanel = null;
+            let _pairCountsGlobal = null;
+            let _ruleCache = null;
+            let _dontmatchMapFull = null;
+            let _xGreaterCounts = null;
+            let _xRanking = null;
+            let _analRunAnalysis = null;
+
+            function _ensureAnalysisCache() {
+                if (_ruleCache) return;
+                _pairCountsGlobal = new Map();
+                rows.forEach(r => {
+                    const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                    for (let i = 0; i < nums.length; i++)
+                        for (let j = i + 1; j < nums.length; j++) {
+                            const key = `${nums[i]}-${nums[j]}`;
+                            _pairCountsGlobal.set(key, (_pairCountsGlobal.get(key) || 0) + 1);
+                        }
+                });
+                _dontmatchMapFull = new Map();
+                for (let xnum = 1; xnum <= 45; xnum++) {
+                    const others = [];
+                    for (let y = 1; y <= 45; y++) {
+                        if (y === xnum) continue;
+                        const a = Math.min(xnum, y), b = Math.max(xnum, y);
+                        others.push({ y, c: _pairCountsGlobal.get(`${a}-${b}`) || 0 });
+                    }
+                    others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                    _dontmatchMapFull.set(xnum, others.map(o => o.y));
+                }
+                _ruleCache = rows.map((r, idx) => {
+                    if (!Array.isArray(r.nums) || r.nums.length !== 6) return null;
+                    const userNums = r.nums.map(Number);
+                    let found = null;
+                    for (let nn = 44; nn >= 1; nn--) {
+                        for (const cand of userNums) {
+                            const oth = [];
+                            for (let y = 1; y <= 45; y++) {
+                                if (y === cand) continue;
+                                const a = Math.min(cand, y), b = Math.max(cand, y);
+                                oth.push({ y, c: _pairCountsGlobal.get(`${a}-${b}`) || 0 });
+                            }
+                            oth.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                            const pick = oth.slice(0, nn).map(o => o.y);
+                            const otherFive = userNums.filter(x => x !== cand);
+                            if (!pick.some(v => otherFive.includes(v))) { found = { nn, cand }; break; }
+                        }
+                        if (found) break;
+                    }
+                    if (!found) return null;
+                    const remaining = userNums.filter(x => x !== found.cand).sort((a, b) => a - b);
+                    return { cand: found.cand, bracket: found.nn, remaining, nums: userNums };
+                });
+                _xGreaterCounts = new Map();
+                _ruleCache.forEach(rc => {
+                    if (!rc) return;
+                    _xGreaterCounts.set(rc.cand, (_xGreaterCounts.get(rc.cand) || 0) + 1);
+                });
+                _xRanking = Array.from({ length: 45 }, (_, i) => i + 1)
+                    .sort((a, b) => (_xGreaterCounts.get(b) || 0) - (_xGreaterCounts.get(a) || 0) || a - b);
+            }
+
+            function _initAnalysisPanel() {
+                if (_analysisPanel) return;
+                _ensureAnalysisCache();
+
+                _analysisPanel = document.createElement('div');
+                _analysisPanel.id = 'cell6_5_analysis_panel';
+                _analysisPanel.style.cssText = 'width:600px;max-width:95vw;display:flex;flex-direction:column;gap:6px;font-size:13px;position:absolute;right:0;top:0;background:var(--panel,#fff);border:1px solid var(--border,#e0e0e0);border-radius:8px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:10;';
+                _analysisPanel.innerHTML = `
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                        <label style="font-weight:700;">num:</label>
+                        <input class="anal-num" type="number" min="1" max="45" style="width:56px;" value="">
+                        <label style="font-weight:700;margin-left:4px;">[]</label>
+                        <select class="anal-op" style="width:66px;"><option value=">=">>=</option><option value="=">=</option><option value="<="><=</option></select>
+                        <input class="anal-val" type="number" min="0" max="45" style="width:52px;" value="0">
+                        <select class="anal-recency" style="width:80px;"><option value="desc">Mới→Cũ</option><option value="asc">Cũ→Mới</option></select>
+                        <select class="anal-sort" style="width:58px;" title="Sắp xếp theo []"><option value="">—</option><option value="desc">[]↓</option><option value="asc">[]↑</option></select>
+                        <span class="anal-rank muted" style="margin-left:6px;"></span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;">
+                        <span><b>Total:</b> <span class="anal-total">0</span></span>
+                        <span><b>Average:</b> <span class="anal-avg">0</span></span>
+                        <span><b>Dist:</b> <span class="anal-dist-summary">0&lt;&gt;0</span></span>
+                    </div>
+                    <div style="font-size:12px;cursor:pointer;" class="anal-missing-wrap" title="Dblclick to union into trash"><b>Missing:</b> <span class="anal-missing"></span></div>
+                    <div style="font-size:12px;cursor:pointer;" class="anal-consider-wrap" title="Dblclick to replace fav"><b>Consider:</b> <span class="anal-consider"></span></div>
+                    <div style="display:flex;gap:4px;align-items:center;">
+                        <button type="button" class="anal-prev lienket-prev-btn">◀</button>
+                        <span class="anal-page-info muted" style="font-size:11px;"></span>
+                        <button type="button" class="anal-next lienket-next-btn">▶</button>
+                    </div>
+                    <div class="anal-table-wrap" style="overflow-x:visible;"></div>
+                `;
+
+                const analNum = _analysisPanel.querySelector('.anal-num');
+                const analOp = _analysisPanel.querySelector('.anal-op');
+                const analVal = _analysisPanel.querySelector('.anal-val');
+                const analRank = _analysisPanel.querySelector('.anal-rank');
+                const analTotal = _analysisPanel.querySelector('.anal-total');
+                const analAvg = _analysisPanel.querySelector('.anal-avg');
+                const analDistSummary = _analysisPanel.querySelector('.anal-dist-summary');
+                const analMissing = _analysisPanel.querySelector('.anal-missing');
+                const analConsider = _analysisPanel.querySelector('.anal-consider');
+                const analMissingWrap = _analysisPanel.querySelector('.anal-missing-wrap');
+                const analConsiderWrap = _analysisPanel.querySelector('.anal-consider-wrap');
+                const analPrev = _analysisPanel.querySelector('.anal-prev');
+                const analNext = _analysisPanel.querySelector('.anal-next');
+                const analPageInfo = _analysisPanel.querySelector('.anal-page-info');
+                const analTableWrap = _analysisPanel.querySelector('.anal-table-wrap');
+                const analRecency = _analysisPanel.querySelector('.anal-recency');
+                const analSort = _analysisPanel.querySelector('.anal-sort');
+
+                let analPage = 0;
+                const ANAL_PAGE_SIZE = 20;
+                let analResults = [];
+                let analMissingNums = [];
+                let analConsiderNums = [];
+                let _analSelectedResult = null; // persist yellow border across re-renders
+
+                function runAnalysis() {
+                    try {
+                        const x = parseInt((analNum.value || '').trim(), 10);
+                        const op = analOp.value;
+                        const kVal = parseInt((analVal.value || '').trim(), 10);
+                        if (!Number.isFinite(x) || x < 1 || x > 45 || !Number.isFinite(kVal)) {
+                            analResults = [];
+                            analTotal.textContent = '0';
+                            analAvg.textContent = '0';
+                            analDistSummary.textContent = '0<>0';
+                            analMissing.textContent = '';
+                            analConsider.textContent = '';
+                            analRank.textContent = '';
+                            analTableWrap.innerHTML = '';
+                            analPageInfo.textContent = '';
+                            return;
+                        }
+
+                        const rankIdx = _xRanking.indexOf(x);
+                        const xCount = _xGreaterCounts.get(x) || 0;
+                        analRank.textContent = rankIdx >= 0 ? `H\u1EA1ng ${rankIdx + 1}/45 — ${xCount} k\u1EF3` : '';
+
+                        const appearedSet = new Set();
+                        const bracketValues = [];
+                        const matched = [];
+
+                        _ruleCache.forEach((rc, i) => {
+                            if (!rc || rc.cand !== x) return;
+                            let pass = false;
+                            if (op === '>=') pass = rc.bracket >= kVal;
+                            else if (op === '<=') pass = rc.bracket <= kVal;
+                            else pass = rc.bracket === kVal;
+                            if (!pass) return;
+
+                            const dm = _dontmatchMapFull.get(x) || [];
+                            const trashSet = new Set();
+                            const distArr = [];
+                            const resultNums = rc.nums.filter(v => v !== x);
+                            const resultSet = new Set(resultNums);
+                            for (let di = 0; di < dm.length; di++) {
+                                trashSet.add(dm[di]);
+                                if (resultSet.has(dm[di]) && !distArr.some(d => d.num === dm[di])) {
+                                    distArr.push({ num: dm[di], checkpoint: di });
+                                }
+                                if (distArr.length === resultNums.length) break;
+                            }
+                            distArr.sort((a, b) => a.checkpoint - b.checkpoint);
+                            const distByResult = distArr.map(d => String(d.checkpoint)).join(',');
+
+                            matched.push({
+                                date: rows[i].date,
+                                result: rc.nums.join(','),
+                                nums: rc.nums,
+                                dist: distByResult,
+                                cand: rc.cand,
+                                remaining: rc.remaining,
+                                bracket: rc.bracket
+                            });
+                            rc.remaining.forEach(v => appearedSet.add(v));
+                            bracketValues.push(rc.bracket);
+                        });
+
+                        analResults = matched;
+                        analTotal.textContent = String(matched.length);
+                        const avgBracket = bracketValues.length ? bracketValues.reduce((s, v) => s + v, 0) / bracketValues.length : 0;
+                        analAvg.textContent = avgBracket.toFixed(2);
+                        const less = bracketValues.filter(v => v < avgBracket).length;
+                        const geq = bracketValues.filter(v => v >= avgBracket).length;
+                        analDistSummary.textContent = `${less}<>${geq}`;
+
+                        const highUnion = new Set();
+                        matched.forEach(m => {
+                            if (m.bracket >= avgBracket) {
+                                m.remaining.forEach(v => highUnion.add(v));
+                            }
+                        });
+
+                        const fullSet = new Set(Array.from({ length: 45 }, (_, i) => i + 1));
+                        fullSet.delete(x);
+                        analMissingNums = Array.from(fullSet).filter(v => !appearedSet.has(v)).sort((a, b) => a - b);
+                        analMissing.textContent = analMissingNums.join(', ');
+
+                        analConsiderNums = Array.from(highUnion).sort((a, b) => a - b);
+                        analConsider.textContent = analConsiderNums.join(', ');
+
+                        // Sort based on selected sort mode
+                        const sortMode = analSort ? analSort.value : '';
+                        if (sortMode === 'desc') {
+                            matched.sort((a, b) => b.bracket - a.bracket);
+                        } else if (sortMode === 'asc') {
+                            matched.sort((a, b) => a.bracket - b.bracket);
+                        } else {
+                            // Default: sort by dist sum ascending
+                            matched.sort((a, b) => {
+                                const sumA = a.dist.split(',').reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                                const sumB = b.dist.split(',').reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                                return sumA - sumB;
+                            });
+                        }
+                        // Apply recency order
+                        if (analRecency && analRecency.value === 'asc') matched.reverse();
+                        analResults = matched;
+
+                        analPage = 0;
+                        renderAnalPage();
+                    } catch (e) { console.warn('analysis error', e); }
+                }
+
+                function renderAnalPage() {
+                    try {
+                        const total = analResults.length;
+                        const totalPages = Math.max(1, Math.ceil(total / ANAL_PAGE_SIZE));
+                        if (analPage >= totalPages) analPage = totalPages - 1;
+                        if (analPage < 0) analPage = 0;
+                        analPageInfo.textContent = `${analPage + 1}/${totalPages} (${total} k\u1EF3)`;
+
+                        const start = analPage * ANAL_PAGE_SIZE;
+                        const pageItems = analResults.slice(start, start + ANAL_PAGE_SIZE);
+
+                        if (!pageItems.length) {
+                            analTableWrap.innerHTML = '<div class="muted">Kh\u00F4ng c\u00F3 d\u1EEF li\u1EC7u</div>';
+                            return;
+                        }
+
+                        const avgBracket = parseFloat(analAvg.textContent) || 0;
+
+                        let tbl = `<table class="no-sticky" style="width:100%"><thead><tr><th>Ng\u00E0y</th><th>K\u1EBFt qu\u1EA3</th><th>dist</th><th>rule</th></tr></thead><tbody>`;
+                        const analX = parseInt((analNum.value || '').trim(), 10);
+                        pageItems.forEach(item => {
+                            const numsHtml = item.nums.map(v => {
+                                if (v === analX) return `<span class='pill cell5-pill' style='background:#2e7d32;color:#fff'>${v}</span>`;
+                                return `<span class='pill cell5-pill' style='background:#fffbea;color:#000'>${v}</span>`;
+                            }).join('');
+                            const bracketSpan = item.bracket >= avgBracket
+                                ? `<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 4px;border-radius:4px">[${item.bracket}]</span>`
+                                : `[${item.bracket}]`;
+                            const ruleHtml = `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${item.cand}</span>>{${item.remaining.join(',')}}${bracketSpan}`;
+
+                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td></tr>`;
+                        });
+                        tbl += '</tbody></table>';
+                        analTableWrap.innerHTML = tbl;
+
+                        const analTbody = analTableWrap.querySelector('tbody');
+                        if (analTbody) {
+                            analTbody.querySelectorAll('tr').forEach(tr => {
+                                tr.addEventListener('dblclick', (ev) => {
+                                    try {
+                                        const res = tr.dataset.result || '';
+                                        const nums = res.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                                        if (nums.length !== 6) return;
+                                        (async () => { try { await navigator.clipboard.writeText(nums.join(',')); } catch (e) { } })();
+                                        try { for (let k = 0; k < 6; k++) { unpairInputEls[k].value = String(nums[k]); unpairInputEls[k].dispatchEvent(new Event('input')); } } catch (e) { }
+                                        // Replace place box values in popup (permanent until next dblclick)
+                                        try {
+                                            if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n)));
+                                            window.__prevPlaceValues = nums.map(n => String(n));
+                                        } catch (e) { }
+                                        // Yellow border on dblclicked row, clear previous
+                                        try { analTableWrap.querySelectorAll('tr.anal-selected').forEach(r => r.classList.remove('anal-selected')); tr.classList.add('anal-selected'); _analSelectedResult = tr.dataset.result || null; } catch (e) { }
+                                        try { tr.animate([{ transform: 'scale(1.02)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
+                                    } catch (e) { }
+                                });
+                                tr.addEventListener('mouseenter', () => {
+                                    try {
+                                        const res = tr.dataset.result || '';
+                                        const nums = res.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n));
+                                        if (typeof applyPopupHighlights === 'function') applyPopupHighlights(nums);
+                                        try { _showNextTrashBorder(nums); } catch (e) { }
+                                    } catch (e) { }
+                                });
+                                tr.addEventListener('mouseleave', () => {
+                                    try {
+                                        if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                                        try { _clearNextTrashBorder(); } catch (e) { }
+                                    } catch (e) { }
+                                });
+                            });
+                        }
+                        // Re-apply yellow border for persisted dblclick selection
+                        if (_analSelectedResult) {
+                            const selTr = analTableWrap.querySelector('tr[data-result="' + _analSelectedResult + '"]');
+                            if (selTr) selTr.classList.add('anal-selected');
+                        }
+                    } catch (e) { }
+                }
+
+                function _showNextTrashBorder(resultNums) {
+                    try {
+                        _clearNextTrashBorder();
+                        const x = parseInt((analNum.value || '').trim(), 10);
+                        if (!Number.isFinite(x) || x < 1 || x > 45) return;
+                        const dm = _dontmatchMapFull.get(x) || [];
+                        const resultSet = new Set(resultNums.filter(v => v !== x));
+                        const trashSet = new Set();
+                        let nextTrashNum = null;
+                        for (let i = 0; i < dm.length; i++) {
+                            trashSet.add(dm[i]);
+                            let allFound = true;
+                            for (const rn of resultSet) {
+                                if (!trashSet.has(rn)) { allFound = false; break; }
+                            }
+                            if (allFound) {
+                                if (i + 1 < dm.length) nextTrashNum = dm[i + 1];
+                                break;
+                            }
+                        }
+                        if (nextTrashNum !== null) {
+                            const pt = document.getElementById('numberPickerTable');
+                            if (pt) {
+                                const td = pt.querySelector('td[data-number="' + nextTrashNum + '"]');
+                                if (td) td.classList.add('unpair-next-trash');
+                            }
+                        }
+                    } catch (e) { }
+                }
+
+                function _clearNextTrashBorder() {
+                    try {
+                        const pt = document.getElementById('numberPickerTable');
+                        if (pt) pt.querySelectorAll('td.unpair-next-trash').forEach(td => td.classList.remove('unpair-next-trash'));
+                    } catch (e) { }
+                }
+
+                window.__cell6_5_showNextTrashBorder = _showNextTrashBorder;
+                window.__cell6_5_clearNextTrashBorder = _clearNextTrashBorder;
+                window.__cell6_5_analDontmatchMap = _dontmatchMapFull;
+                window.__cell6_5_analNum = analNum;
+
+                if (analMissingWrap) {
+                    analMissingWrap.addEventListener('dblclick', () => {
+                        try {
+                            if (!analMissingNums.length) return;
+                            document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: analMissingNums.slice() }, bubbles: true, composed: true }));
+                            try { analMissingWrap.animate([{ transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
+                        } catch (e) { }
+                    });
+                }
+
+                if (analConsiderWrap) {
+                    analConsiderWrap.addEventListener('dblclick', () => {
+                        try {
+                            if (!analConsiderNums.length) return;
+                            try { if (typeof window.clearAllFav === 'function') window.clearAllFav(); } catch (e) { }
+                            analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
+                            try { analConsiderWrap.animate([{ transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
+                        } catch (e) { }
+                    });
+                }
+
+                analPrev.addEventListener('click', () => { if (analPage > 0) { analPage--; renderAnalPage(); } });
+                analNext.addEventListener('click', () => { const tp = Math.ceil(analResults.length / ANAL_PAGE_SIZE); if (analPage < tp - 1) { analPage++; renderAnalPage(); } });
+
+                analNum.addEventListener('input', () => {
+                    // Reset anal-val to 0, op to >=, sort to default when num changes
+                    try { analVal.value = '0'; analOp.value = '>='; if (analSort) analSort.value = ''; } catch (e) { }
+                    runAnalysis();
+                });
+                analOp.addEventListener('change', runAnalysis);
+                analVal.addEventListener('input', runAnalysis);
+                analRecency.addEventListener('change', runAnalysis);
+                analSort.addEventListener('change', runAnalysis);
+
+                _analRunAnalysis = runAnalysis;
+            }
+
             function group() {
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
@@ -8958,7 +9411,17 @@
                         html += `<tr><td>${xnum}</td><td>${pick}</td></tr>`;
                     }
                     html += "</tbody></table></div>";
-                    try { wrap.innerHTML = html; } catch (e) { }
+                    // Show persistent analysis panel (created once, survives numtrash changes)
+                    try { _initAnalysisPanel(); } catch (e) { }
+                    try { if (_analysisPanel && _analysisPanel.parentNode) _analysisPanel.remove(); } catch (e) { }
+                    try {
+                        wrap.style.position = 'relative';
+                        const _savedScrollY = window.scrollY;
+                        wrap.innerHTML = html;
+                        if (_analysisPanel) { _analysisPanel.style.display = ''; wrap.appendChild(_analysisPanel); }
+                        if (_analRunAnalysis) try { _analRunAnalysis(); } catch (e) { }
+                        requestAnimationFrame(() => window.scrollTo(0, _savedScrollY));
+                    } catch (e) { }
                     try {
                         // Attach drag handlers to each unpair table row so users can drag
                         // a row out to add its `dontmatch` numbers into the trash popup.
@@ -8992,6 +9455,22 @@
                                         // we're in Unpair mode, temporarily replace trash with
                                         // this row's `dontmatch` numbers. Restore on leave.
                                         tr.addEventListener('mouseenter', (ev) => {
+                                            // Red gradient: predict next dontmatch number on numberPickerTable
+                                            try {
+                                                try { if (typeof window.__cell6_5_clearNextTrashBorder === 'function') window.__cell6_5_clearNextTrashBorder(); } catch (e) { }
+                                                const hovNum = parseInt((tr.children[0] || {}).textContent || '', 10);
+                                                if (Number.isFinite(hovNum) && hovNum >= 1 && hovNum <= 45 && _dontmatchMapFull) {
+                                                    const dm = _dontmatchMapFull.get(hovNum);
+                                                    if (dm && dm.length > n) {
+                                                        const nextTrashNum = dm[n];
+                                                        const pt = document.getElementById('numberPickerTable');
+                                                        if (pt) {
+                                                            const td = pt.querySelector('td[data-number="' + nextTrashNum + '"]');
+                                                            if (td) td.classList.add('unpair-next-trash');
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e) { }
                                             try {
                                                 const popup = document.getElementById('numberPickerPopup');
                                                 if (!popup) return;
@@ -9056,6 +9535,7 @@
                                         });
 
                                         tr.addEventListener('mouseleave', (ev) => {
+                                            try { if (typeof window.__cell6_5_clearNextTrashBorder === 'function') window.__cell6_5_clearNextTrashBorder(); } catch (e) { }
                                             try {
                                                 if (!window.__hoverActive) return;
                                                 const related = ev.relatedTarget;
@@ -9167,8 +9647,20 @@
                                     } catch (e) { }
                                     try { renderTrash(); } catch (e) { }
                                     try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                                    // Green highlight on num cell
+                                    // Highlight on num cell (fffbea + red gradient)
                                     try { targetRow.children[0].classList.add('cell6-num-highlight'); } catch (e) { }
+                                    // Also show red gradient for predicted next trash number on numberPickerTable
+                                    try {
+                                        if (typeof window.__cell6_5_clearNextTrashBorder === 'function') window.__cell6_5_clearNextTrashBorder();
+                                        if (_dontmatchMapFull) {
+                                            const dm = _dontmatchMapFull.get(targetNum);
+                                            if (dm && dm.length > n) {
+                                                const nextTrashNum = dm[n];
+                                                const pt2 = document.getElementById('numberPickerTable');
+                                                if (pt2) { const td2 = pt2.querySelector('td[data-number="' + nextTrashNum + '"]'); if (td2) td2.classList.add('unpair-next-trash'); }
+                                            }
+                                        }
+                                    } catch (e) { }
                                     // Add candidate to fav so popup shows yellow
                                     try {
                                         if (typeof window.addToFav === 'function') {
@@ -9178,8 +9670,7 @@
                                             window.__cell6_5_hoverFavCand = targetNum;
                                         }
                                     } catch (e) { }
-                                    // Scroll to row
-                                    try { requestAnimationFrame(() => { try { targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { } }); } catch (e) { }
+                                    // No auto-scroll in unpair mode — keep user's current scroll position
                                 }
                             }
                         }
@@ -11133,22 +11624,15 @@
                     container.appendChild(dragHandle);
                     container.dataset.index = idx;
 
-                    // Right-click: open multi-value picker (number mode only)
-                    const onC9RightMouseDown = (e) => {
-                        if (e.button !== 2) return;
+                    // Dblclick: open multi-value picker (number mode only) — replaces right-click
+                    const onC9Dblclick = (e) => {
                         if (cell9ModeState !== 'number') return;
                         e.stopPropagation();
+                        e.preventDefault();
                         c9ShowMvDropdown(idx, container);
                     };
-                    const onC9ContextMenu = (e) => {
-                        if (cell9ModeState !== 'number') return;
-                        e.preventDefault();
-                        e.stopPropagation();
-                    };
-                    inp.addEventListener('mousedown', onC9RightMouseDown);
-                    container.addEventListener('mousedown', onC9RightMouseDown);
-                    inp.addEventListener('contextmenu', onC9ContextMenu);
-                    container.addEventListener('contextmenu', onC9ContextMenu);
+                    inp.addEventListener('dblclick', onC9Dblclick);
+                    container.addEventListener('dblclick', onC9Dblclick);
 
                     // Commit input value into multi-value set on Enter/blur, then clear input
                     const c9CommitInputToMulti = () => {
@@ -12476,23 +12960,15 @@
                     container.appendChild(dragHandle);
                     container.dataset.index = idx;
 
-                    // Right-click: open multi-value picker (pattern mode only)
-                    // Use mousedown button===2 for reliable detection + contextmenu for preventDefault
-                    const onRightMouseDown = (e) => {
-                        if (e.button !== 2) return;
+                    // Dblclick: open multi-value picker (pattern mode only) — replaces right-click
+                    const onC11Dblclick = (e) => {
                         if (cell11Mode !== 'pattern') return;
                         e.stopPropagation();
+                        e.preventDefault();
                         showMvDropdown(idx, container);
                     };
-                    const onContextMenu = (e) => {
-                        if (cell11Mode !== 'pattern') return;
-                        e.preventDefault();
-                        e.stopPropagation();
-                    };
-                    inp.addEventListener('mousedown', onRightMouseDown);
-                    container.addEventListener('mousedown', onRightMouseDown);
-                    inp.addEventListener('contextmenu', onContextMenu);
-                    container.addEventListener('contextmenu', onContextMenu);
+                    inp.addEventListener('dblclick', onC11Dblclick);
+                    container.addEventListener('dblclick', onC11Dblclick);
 
                     // Commit input value into multi-value set on Enter/blur, then clear input
                     const commitInputToMulti = () => {
@@ -19247,25 +19723,7 @@
             }
 
             function hideDraft(skipRemember) {
-                // Save current records to localStorage before hiding
-                try {
-                    const rows = Array.from(draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)'));
-                    const lines = [];
-                    for (const r of rows) {
-                        const pills = Array.from(r.querySelectorAll('.pill'));
-                        if (pills.length === 6) {
-                            const vals = pills.map(sp => {
-                                const t = (sp.textContent || '').trim();
-                                return (t === '' || t === '__') ? '' : t;
-                            });
-                            // Only save rows that have at least one value
-                            if (vals.some(v => v !== '')) {
-                                lines.push(vals.join(','));
-                            }
-                        }
-                    }
-                    localStorage.setItem('draftRecords', lines.join('\n'));
-                } catch (e) { }
+                // localStorage save disabled for performance
                 draftPopup.style.display = 'none';
                 draftPopup.setAttribute('aria-hidden', 'true');
                 try { if (!skipRemember) window.__prevDraftVisible = false; } catch (e) { }
@@ -19456,8 +19914,6 @@
                         const frag = document.createDocumentFragment();
                         pills.forEach((p, idx) => {
                             frag.appendChild(p);
-                            // Add space between pills (matching original rendering)
-                            if (idx < pills.length - 1) frag.appendChild(document.createTextNode(' '));
                         });
                         // Clear td content that are pills/text nodes, keep other elements
                         const children = Array.from(td.childNodes);
@@ -19498,7 +19954,6 @@
                             if (!arr || !arr.length) { valid = false; return; }
                             const p = arr.shift();
                             frag.appendChild(p);
-                            if (idx < originalNums.length - 1) frag.appendChild(document.createTextNode(' '));
                         });
                         if (!valid) continue;
                         const children = Array.from(td.childNodes);
@@ -19570,144 +20025,13 @@
             }
 
             // ══════════════════════════════════════════════════════════
-            // 2. DRAFT POPUP: REALTIME LOCALSTORAGE SAVE & CROSS-TAB SYNC
+            // 2. DRAFT POPUP: LOCALSTORAGE SAVE & CROSS-TAB SYNC REMOVED (lag fix)
             // ══════════════════════════════════════════════════════════
-            function saveDraftToStorage() {
-                try {
-                    const draftTableBody = document.querySelector('#draftTable tbody');
-                    if (!draftTableBody) return;
-                    const rows = Array.from(draftTableBody.querySelectorAll('tr:not(.draft-add-row-tr)'));
-                    const lines = [];
-                    for (const r of rows) {
-                        const pills = Array.from(r.querySelectorAll('.pill'));
-                        if (pills.length === 6) {
-                            const vals = pills.map(sp => {
-                                const t = (sp.textContent || '').trim();
-                                return (t === '' || t === '__') ? '' : t;
-                            });
-                            // Always save the row (including fully empty ones) to preserve structure
-                            lines.push(vals.join(','));
-                        }
-                    }
-                    const data = lines.join('\n');
-                    // Avoid writing if unchanged
-                    try {
-                        if (localStorage.getItem('draftRecords') === data) return;
-                    } catch (e) { }
-                    localStorage.setItem('draftRecords', data);
-                } catch (e) { }
-            }
-
-            // Observe draftTable for any changes (pill edits, reorder, add, remove)
+            function saveDraftToStorage() { /* disabled — no-op */ }
             let _draftSaveDebounce = null;
             const draftTbody = document.querySelector('#draftTable tbody');
-            if (draftTbody) {
-                const draftObserver = new MutationObserver(() => {
-                    if (_draftSaveDebounce) clearTimeout(_draftSaveDebounce);
-                    _draftSaveDebounce = setTimeout(saveDraftToStorage, 200);
-                });
-                draftObserver.observe(draftTbody, { childList: true, subtree: true, characterData: true, attributes: true });
-                draftTbody._draftObs = draftObserver; // store ref for cross-tab sync disconnect
-            }
 
-            // Cross-tab sync via storage event
-            window.addEventListener('storage', (e) => {
-                if (e.key !== 'draftRecords') return;
-                if (e.newValue === null) return;
-                try {
-                    const dp = document.getElementById('draftPopup');
-                    // Only sync if draft is currently visible or has content
-                    const tbody = document.querySelector('#draftTable tbody');
-                    if (!tbody) return;
-                    const newData = (e.newValue || '').trim();
-                    // Build current data string for comparison
-                    const currentRows = Array.from(tbody.querySelectorAll('tr:not(.draft-add-row-tr)'));
-                    const currentLines = [];
-                    for (const r of currentRows) {
-                        const pills = Array.from(r.querySelectorAll('.pill'));
-                        if (pills.length === 6) {
-                            const vals = pills.map(sp => {
-                                const t = (sp.textContent || '').trim();
-                                return (t === '' || t === '__') ? '' : t;
-                            });
-                            currentLines.push(vals.join(','));
-                        }
-                    }
-                    if (currentLines.join('\n') === newData) return; // already in sync
-
-                    // Parse and render new data using same approach (keep empty rows)
-                    const recs = newData.split('\n').map(line => {
-                        const parts = line.split(',');
-                        if (parts.length !== 6) return null;
-                        return parts.map(p => {
-                            const t = p.trim();
-                            if (t === '' || t === '__') return null;
-                            const n = parseInt(t, 10);
-                            return Number.isFinite(n) && n >= 1 && n <= 45 ? n : null;
-                        });
-                    }).filter(Boolean);
-
-                    // Use requestAnimationFrame to avoid blocking and reduce lag
-                    requestAnimationFrame(() => {
-                        try {
-                            // Temporarily disconnect the observer to avoid re-triggering save
-                            if (draftTbody && draftTbody._draftObs) {
-                                draftTbody._draftObs.disconnect();
-                            }
-                            // Build all rows in a DocumentFragment for a single DOM operation
-                            const frag = document.createDocumentFragment();
-                            if (typeof window.__draftCreateRecordRow === 'function') {
-                                recs.forEach((nums, idx) => {
-                                    frag.appendChild(window.__draftCreateRecordRow(nums, idx));
-                                });
-                            } else {
-                                recs.forEach((nums, idx) => {
-                                    const tr = document.createElement('tr');
-                                    const td = document.createElement('td');
-                                    td.classList.add('has-grabber');
-                                    const row = document.createElement('div');
-                                    row.className = 'record-row';
-                                    const pills = document.createElement('div');
-                                    pills.className = 'pills';
-                                    pills.style.flex = '1';
-                                    nums.forEach(n => {
-                                        const sp = document.createElement('span');
-                                        sp.className = 'pill';
-                                        if (n === null) { sp.textContent = '__'; sp.classList.add('pill-empty'); }
-                                        else sp.textContent = String(n);
-                                        pills.appendChild(sp);
-                                    });
-                                    const grabber = document.createElement('div');
-                                    grabber.className = 'grabber';
-                                    grabber.textContent = '\u2630';
-                                    row.appendChild(pills);
-                                    row.appendChild(grabber);
-                                    td.appendChild(row);
-                                    tr.appendChild(td);
-                                    tr.dataset.index = idx;
-                                    frag.appendChild(tr);
-                                });
-                            }
-                            tbody.innerHTML = '';
-                            tbody.appendChild(frag);
-                            // Re-add the add-row button
-                            try { if (typeof window.__draftEnsureAddRow === 'function') window.__draftEnsureAddRow(); } catch (e) { }
-                            // Reconnect observer immediately (no setTimeout delay)
-                            if (draftTbody) {
-                                try {
-                                    const obs = new MutationObserver(() => {
-                                        if (_draftSaveDebounce) clearTimeout(_draftSaveDebounce);
-                                        _draftSaveDebounce = setTimeout(saveDraftToStorage, 200);
-                                    });
-                                    obs.observe(draftTbody, { childList: true, subtree: true, characterData: true, attributes: true });
-                                    draftTbody._draftObs = obs;
-                                } catch (e) { }
-                            }
-                            try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
-                        } catch (e) { }
-                    }); // end requestAnimationFrame
-                } catch (e) { }
-            });
+            // Cross-tab sync removed (disabled for performance)
 
             // ══════════════════════════════════════════════════════════
             // 3. CELL11 MVDROPDOWN SUGGESTION (best next number)
