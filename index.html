@@ -1442,6 +1442,73 @@
             z-index: 1101;
         }
 
+        /* Ensure red gradient overlay renders on top of place (in-trash-dim) and fav backgrounds */
+        #numberPickerPopup #numberPickerTable td.unpair-next-trash::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 1102;
+            pointer-events: none;
+            box-shadow: inset 0 0 18px 6px rgba(255, 0, 0, 0.85), inset 0 0 6px 2px rgba(255, 60, 60, 1);
+            border-radius: inherit;
+        }
+
+        /* Override in-trash-dim and in-fav ::before when unpair-next-trash is active */
+        #numberPickerPopup #numberPickerTable td.unpair-next-trash.in-trash-dim::before,
+        #numberPickerPopup #numberPickerTable td.unpair-next-trash.in-fav::before {
+            z-index: 1100 !important;
+        }
+
+        /* Striped green inward border for count-ranked popup cells (toggle via Count label).
+           Uses ::after so it doesn't conflict with ::before used by in-fav / in-trash overlays. */
+        #numberPickerPopup #numberPickerTable td.count-border {
+            position: relative;
+        }
+
+        #numberPickerPopup #numberPickerTable td.count-border::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 5px;
+            border-radius: 10px;
+            background: repeating-linear-gradient(-45deg,
+                    #28A745, #28A745 4px,
+                    #E8F5E9 4px, #E8F5E9 8px);
+            -webkit-mask:
+                linear-gradient(#fff 0 0) content-box,
+                linear-gradient(#fff 0 0);
+            -webkit-mask-composite: destination-out;
+            mask:
+                linear-gradient(#fff 0 0) content-box,
+                linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            z-index: 2100;
+            pointer-events: none;
+        }
+
+        /* Ensure number/badge content stays on top of the stripe overlay */
+        #numberPickerPopup #numberPickerTable td.count-border>span {
+            position: relative;
+            z-index: 2200;
+        }
+
+        /* When popup-number-highlight (1a2a3a) and count-border coexist, keep highlight z-index */
+        #numberPickerPopup #numberPickerTable td.count-border.popup-number-highlight {
+            z-index: 1100;
+        }
+
+        /* When unpair-next-trash and count-border coexist on ::after, reset stripe mask
+           so the red gradient (box-shadow from unpair-next-trash) shows fully. */
+        #numberPickerPopup #numberPickerTable td.count-border.unpair-next-trash::after {
+            -webkit-mask: none !important;
+            mask: none !important;
+            padding: 0 !important;
+            background: none !important;
+        }
+
         /* Yellow border on dblclicked analysis row */
         #cell6_5_analysis_panel tr.anal-selected {
             outline: 2px solid #FFD600;
@@ -2668,6 +2735,7 @@
         .number-picker-popup #numberPickerTable td.in-fav[style].selected-number {
             position: relative !important;
             z-index: 2000 !important;
+            background: #1a2a3a !important;
         }
 
         #numberPickerPopup #numberPickerTable td.in-fav.popup-number-highlight::before,
@@ -3573,10 +3641,10 @@
                     </div>
                 </div>
                 <div class="mode-row" id="modeRowTop">
-                    <label style="font-size: 12px;">Mode:</label>
-                    <button id="modeSelector"
-                        style="width: 100px; font-size: 12px; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);">Số
-                        (1-45)</button>
+                    <label id="countToggleLabel" style="font-size: 12px;cursor:pointer;user-select:none;"
+                        title="Toggle viền nổi bật cho top count trên popup">Count:</label>
+                    <input id="countInput" type="number" min="0" max="45" value="0"
+                        style="width:56px;font-size:12px;padding:6px 4px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);text-align:center;">
                     <button id="clearPlaceBtn" class="clear-btn" title="Xóa toàn bộ place"
                         style="padding: 6px 10px; font-size: 12px;">Xóa</button>
                     <label style="margin-left:6px;font-size:12px;">Rank:</label>
@@ -3868,6 +3936,7 @@
         const MATCH_STYLE = "background:#2e7d32;color:#fff;"; // dark green with white text for matched values
 
         // Helpers to highlight numbers inside the number-picker popup
+        // Cached lookup map: data-number -> td element (rebuilt when table changes)
         function clearPopupHighlights() {
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
@@ -3889,10 +3958,6 @@
             nums.forEach(n => {
                 try {
                     const td = tbl.querySelector(`td[data-number="${n}"]`);
-                    // Allow highlighting for trashed numbers too so the popup can
-                    // render a split overlay (left dark / right red).
-                    // Also allow highlighting disabled cells so group-hover
-                    // highlights remain visible even when numbers are disabled.
                     if (td) {
                         td.classList.add('popup-number-highlight');
                     }
@@ -4013,10 +4078,8 @@
         // Global listener to catch all dynamic tables
         document.addEventListener('dblclick', handleRowCopyDblClick, true);
 
-        // Global mouseover: apply popup highlights when hovering any record row
-        // and clear when moving to a different card. This centralizes the
-        // hover->popup behavior so all cells (cell6, cell6.5, cell6.6, etc.)
-        // behave consistently.
+        // Global mouseover: apply popup highlights when hovering record rows.
+        // Matches day.html: gated by trash/fav toggle mode.
         document.addEventListener('mouseover', (ev) => {
             try {
                 const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
@@ -4245,13 +4308,17 @@
             return showSection;
         }
 
-        // Clear popup highlights when switching sections so stale orange outlines
-        // from the previous section (e.g. Cell6.5) don't persist on the popup.
+        // Clear popup highlights and unpair-next-trash red gradient when switching sections
+        // so stale styles from Cell6.5 don't persist on the popup.
         document.addEventListener('sectionchange', () => {
             try {
                 clearPopupHighlights();
                 window.__popupHighlights = null;
                 window.__popupHighlightSource = null;
+            } catch (e) { }
+            // Clear unpair-next-trash red gradient overlay (only applies in Cell6.5 unpair)
+            try {
+                if (typeof window.__cell6_5_clearNextTrashBorder === 'function') window.__cell6_5_clearNextTrashBorder();
             } catch (e) { }
         });
 
@@ -4500,6 +4567,7 @@
             const decimalSel = document.createElement("select");
             [[0, "0 chữ số"], [1, "1 chữ số"], [2, "2 chữ số"], [3, "3 chữ số"], [4, "4 chữ số"], [5, "5 chữ số"], [6, "6 chữ số"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; decimalSel.appendChild(o); });
             decimalSel.value = "2";
+            let __cell5RuleSortKey = 'count-desc';
             controls.append("Hiển thị:", topSel, "Độ chính xác:", decimalSel);
             body.appendChild(controls);
             const wrap = document.createElement("div");
@@ -4573,7 +4641,103 @@
                 }
                 html += "</tbody></table></div>";
 
+                // ═══ Bảng xếp hạng số 1-45 (count / appear) — logic giống a.py ═══
+                if (!window.__cell5RuleData) {
+                    const pc = new Map();
+                    rows.forEach(r => {
+                        const ns = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                        for (let i = 0; i < ns.length; i++)
+                            for (let j = i + 1; j < ns.length; j++) {
+                                const key = `${ns[i]}-${ns[j]}`;
+                                pc.set(key, (pc.get(key) || 0) + 1);
+                            }
+                    });
+                    const cntMap = {}, bktVals = {}, appMap = {};
+                    for (let x = 1; x <= 45; x++) { cntMap[x] = 0; bktVals[x] = []; appMap[x] = 0; }
+                    rows.forEach(r => { r.nums.forEach(v => { if (v >= 1 && v <= 45) appMap[v]++; }); });
+                    rows.forEach(r => {
+                        if (!Array.isArray(r.nums) || r.nums.length !== 6) return;
+                        const un = r.nums.map(Number);
+                        let found = null;
+                        for (let nn = 44; nn >= 1; nn--) {
+                            for (const cand of un) {
+                                const oth = [];
+                                for (let y = 1; y <= 45; y++) {
+                                    if (y === cand) continue;
+                                    const a = Math.min(cand, y), b = Math.max(cand, y);
+                                    oth.push({ y, c: pc.get(`${a}-${b}`) || 0 });
+                                }
+                                oth.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                const pick = oth.slice(0, nn).map(o => o.y);
+                                const of5 = un.filter(x => x !== cand);
+                                if (!pick.some(v => of5.includes(v))) { found = { nn, cand }; break; }
+                            }
+                            if (found) break;
+                        }
+                        if (found) { cntMap[found.cand]++; bktVals[found.cand].push(found.nn); }
+                    });
+                    const _entries = [];
+                    for (let x = 1; x <= 45; x++) {
+                        const vs = bktVals[x];
+                        let avg = 0, dist = '0<>0', ratio = 0;
+                        if (vs.length) {
+                            avg = vs.reduce((s, v) => s + v, 0) / vs.length;
+                            const less = vs.filter(v => v < avg).length;
+                            const geq = vs.filter(v => v >= avg).length;
+                            dist = `${less}<>${geq}`;
+                        }
+                        ratio = appMap[x] > 0 ? cntMap[x] / appMap[x] : 0;
+                        _entries.push({ num: x, count: cntMap[x], appear: appMap[x], ratio, avg, dist });
+                    }
+                    window.__cell5RuleData = _entries;
+                }
+                const ruleEntries = window.__cell5RuleData.slice();
+                const sortKey = __cell5RuleSortKey;
+                if (sortKey === 'count-desc') ruleEntries.sort((a, b) => b.count - a.count || a.num - b.num);
+                else if (sortKey === 'ratio-desc') ruleEntries.sort((a, b) => b.ratio - a.ratio || a.num - b.num);
+                // Expose globally for popup #count badges
+                window.__cell5CountRanked = ruleEntries;
+                // Build O(1) lookup map: num -> rank index
+                window.__cell5CountRankMap = new Map();
+                ruleEntries.forEach((e, i) => window.__cell5CountRankMap.set(e.num, i));
+
+                const decimalsR = parseInt(decimalSel.value, 10);
+                const makeRuleTable = (entries, offset) => {
+                    const isCountSort = __cell5RuleSortKey.startsWith('count');
+                    let t = '<table style="flex:1;min-width:0;font-size:12px;"><thead><tr>';
+                    t += '<th>#</th><th>num</th>';
+                    t += `<th class="cell5-sort-th" data-sort="count" style="cursor:pointer;user-select:none;${isCountSort ? 'background:var(--accent);color:#fff;' : ''}">count${isCountSort ? ' ↓' : ''}</th>`;
+                    t += '<th>appear</th>';
+                    t += `<th class="cell5-sort-th" data-sort="ratio" style="cursor:pointer;user-select:none;${!isCountSort ? 'background:var(--accent);color:#fff;' : ''}">c/a${!isCountSort ? ' ↓' : ''}</th>`;
+                    t += '<th>avg_bkt</th><th>dist</th>';
+                    t += '</tr></thead><tbody>';
+                    entries.forEach((e, i) => {
+                        const bg = i % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
+                        t += `<tr style="background:${bg}"><td>#${offset + i + 1}</td><td><strong>${e.num}</strong></td><td>${e.count}</td><td>${e.appear}</td><td>${e.ratio.toFixed(decimalsR)}</td><td>${e.avg.toFixed(decimalsR)}</td><td>${e.dist}</td></tr>`;
+                    });
+                    t += '</tbody></table>';
+                    return t;
+                };
+                const half1 = ruleEntries.slice(0, 23);
+                const half2 = ruleEntries.slice(23);
+                html += `<h3 style="margin-top:24px;margin-bottom:12px;">Xếp hạng số 1-45 (count / appear)</h3>`;
+                html += `<div style="display:flex;gap:16px;overflow-x:auto;">`;
+                html += makeRuleTable(half1, 0);
+                html += makeRuleTable(half2, 23);
+                html += `</div>`;
+
                 wrap.innerHTML = html;
+                // Wire clickable sort headers
+                wrap.querySelectorAll('.cell5-sort-th').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const col = th.dataset.sort;
+                        if (col === 'count') __cell5RuleSortKey = 'count-desc';
+                        else if (col === 'ratio') __cell5RuleSortKey = 'ratio-desc';
+                        draw();
+                        // Also refresh popup count badges when sort changes
+                        try { if (typeof window.__generateNumberPickerTable === 'function') { window.__generateNumberPickerTable(); window.__setupNumberCellDragDrop(); } } catch (e) { }
+                    });
+                });
             }
             topSel.onchange = decimalSel.onchange = draw;
             draw();
@@ -5450,39 +5614,11 @@
                             }
                         }
                     } catch (e) { /* ignore reapply errors */ }
-                    // attach hover handler to tbody so hovering a row will
-                    // read the card header <strong> (e.g. {18,29}) and
-                    // highlight corresponding numbers in the popup table (same as Cell6.5)
-                    (function attachRowHoverToPopup() {
+                    // Cell5.5: attach Ctrl+click handler to tbody so Ctrl+click marks row + applies to Cell6.6
+                    (function attachRowHoverAndCtrlClick() {
                         try {
                             const _tbody = body.querySelector('tbody');
                             if (!_tbody) return;
-
-                            function parseStrongNumbers(text) {
-                                if (!text) return [];
-                                return text.replace(/[{}]/g, '')
-                                    .split(/[^0-9]+/)
-                                    .map(s => parseInt(s, 10))
-                                    .filter(n => Number.isFinite(n));
-                            }
-
-                            _tbody.addEventListener('mouseover', (ev) => {
-                                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
-                                if (!tr) return;
-                                const cardEl = tr.closest('.card');
-                                if (!cardEl) return;
-                                const s = cardEl.querySelector('strong');
-                                if (!s) return;
-                                const nums = parseStrongNumbers(s.textContent.trim());
-                                if (nums.length) {
-                                    try {
-                                        window.__popupHighlights = nums.slice();
-                                        window.__popupHighlightSource = cardEl;
-                                    } catch (e) { }
-                                    applyPopupHighlights(nums);
-                                }
-                            });
-
                             _tbody.addEventListener('mouseout', (ev) => {
                                 // Persist highlights until another record hover updates them.
                                 return;
@@ -9034,12 +9170,12 @@
                 _analysisPanel.innerHTML = `
                     <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
                         <label style="font-weight:700;">num:</label>
-                        <input class="anal-num" type="number" min="1" max="45" style="width:56px;" value="">
+                        <input class="anal-num" type="number" min="1" max="45" style="width:56px;background:#2e7d32;color:#fff;font-weight:700;" value="">
                         <label style="font-weight:700;margin-left:4px;">[]</label>
                         <select class="anal-op" style="width:66px;"><option value=">=">>=</option><option value="=">=</option><option value="<="><=</option></select>
-                        <input class="anal-val" type="number" min="0" max="45" style="width:52px;" value="0">
-                        <select class="anal-recency" style="width:80px;"><option value="desc">Mới→Cũ</option><option value="asc">Cũ→Mới</option></select>
-                        <select class="anal-sort" style="width:58px;" title="Sắp xếp theo []"><option value="">—</option><option value="desc">[]↓</option><option value="asc">[]↑</option></select>
+                        <span class="anal-val-wrap" style="position:relative;display:inline-block;vertical-align:middle;"><input class="anal-val" type="number" min="0" max="45" style="width:88px;padding-right:36px;box-sizing:border-box;background:#d32f2f;color:#fff;font-weight:700;" value="0"><span class="anal-val-btns" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;z-index:3;pointer-events:auto;width:28px;align-items:center;"><button type="button" class="anal-val-up arrow-up" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;" title="Tăng 1">▲</button><button type="button" class="anal-val-down arrow-down" style="width:22px;height:12px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:10px;line-height:12px;text-align:center;font-weight:700;" title="Giảm 1">▼</button></span></span>
+                        <button type="button" class="anal-recency-toggle nav-btn" style="min-width:62px;font-size:12px;padding:4px 8px;" title="Toggle Mới↔Cũ">Mới→Cũ</button>
+                        <button type="button" class="anal-sort-toggle nav-btn" style="min-width:42px;font-size:12px;padding:4px 8px;" title="Toggle [] sort">—</button>
                         <span class="anal-rank muted" style="margin-left:6px;"></span>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;">
@@ -9047,14 +9183,19 @@
                         <span><b>Average:</b> <span class="anal-avg">0</span></span>
                         <span><b>Dist:</b> <span class="anal-dist-summary">0&lt;&gt;0</span></span>
                     </div>
-                    <div style="font-size:12px;cursor:pointer;" class="anal-missing-wrap" title="Dblclick to union into trash"><b>Missing:</b> <span class="anal-missing"></span></div>
-                    <div style="font-size:12px;cursor:pointer;" class="anal-consider-wrap" title="Dblclick to replace fav"><b>Consider:</b> <span class="anal-consider"></span></div>
+                    <div style="font-size:12px;cursor:pointer;" class="anal-missing-wrap" title="Dblclick to toggle trash"><b>Missing:</b> <span class="anal-missing"></span></div>
+                    <div style="font-size:12px;cursor:pointer;" class="anal-consider-wrap" title="Dblclick to toggle fav"><b>Consider:</b> <span class="anal-consider"></span></div>
                     <div style="display:flex;gap:4px;align-items:center;">
                         <button type="button" class="anal-prev lienket-prev-btn">◀</button>
                         <span class="anal-page-info muted" style="font-size:11px;"></span>
                         <button type="button" class="anal-next lienket-next-btn">▶</button>
                     </div>
                     <div class="anal-table-wrap" style="overflow-x:visible;"></div>
+                    <div style="display:flex;gap:4px;align-items:center;" class="anal-bottom-nav">
+                        <button type="button" class="anal-prev2 lienket-prev-btn">◀</button>
+                        <span class="anal-page-info2 muted" style="font-size:11px;"></span>
+                        <button type="button" class="anal-next2 lienket-next-btn">▶</button>
+                    </div>
                 `;
 
                 const analNum = _analysisPanel.querySelector('.anal-num');
@@ -9071,16 +9212,65 @@
                 const analPrev = _analysisPanel.querySelector('.anal-prev');
                 const analNext = _analysisPanel.querySelector('.anal-next');
                 const analPageInfo = _analysisPanel.querySelector('.anal-page-info');
+                const analPrev2 = _analysisPanel.querySelector('.anal-prev2');
+                const analNext2 = _analysisPanel.querySelector('.anal-next2');
+                const analPageInfo2 = _analysisPanel.querySelector('.anal-page-info2');
                 const analTableWrap = _analysisPanel.querySelector('.anal-table-wrap');
-                const analRecency = _analysisPanel.querySelector('.anal-recency');
-                const analSort = _analysisPanel.querySelector('.anal-sort');
+                const analRecencyToggle = _analysisPanel.querySelector('.anal-recency-toggle');
+                const analSortToggle = _analysisPanel.querySelector('.anal-sort-toggle');
+
+                // Toggle states (replacing dropdowns)
+                let _recencyMode = 'desc'; // 'desc' = Mới→Cũ (record 0 = latest), 'asc' = Cũ→Mới
+                let _sortMode = ''; // '' = —, 'desc' = []↓, 'asc' = []↑
+                const _sortCycle = ['', 'desc', 'asc'];
+                const _sortLabels = { '': '—', 'desc': '[]↓', 'asc': '[]↑' };
+
+                analRecencyToggle.addEventListener('click', () => {
+                    _recencyMode = _recencyMode === 'desc' ? 'asc' : 'desc';
+                    analRecencyToggle.textContent = _recencyMode === 'desc' ? 'Mới→Cũ' : 'Cũ→Mới';
+                    runAnalysis();
+                });
+                analSortToggle.addEventListener('click', () => {
+                    const idx = _sortCycle.indexOf(_sortMode);
+                    _sortMode = _sortCycle[(idx + 1) % _sortCycle.length];
+                    analSortToggle.textContent = _sortLabels[_sortMode];
+                    runAnalysis();
+                });
 
                 let analPage = 0;
                 const ANAL_PAGE_SIZE = 20;
                 let analResults = [];
                 let analMissingNums = [];
                 let analConsiderNums = [];
-                let _analSelectedResult = null; // persist yellow border across re-renders
+                let _analSelectedResult = null;
+                let _missingInTrash = false; // toggle state for missing->trash
+                let _considerInFav = false; // toggle state for consider->fav
+                // Track the last focused num for the num|dontmatch table
+                let _lastFocusedUnpairNum = null;
+                // Persistent red gradient: track next-trash number to keep it visible
+                let _persistentNextTrash = null;
+
+                function _applyPersistentNextTrash() {
+                    try {
+                        _clearNextTrashBorder();
+                        if (_persistentNextTrash !== null) {
+                            const pt = document.getElementById('numberPickerTable');
+                            if (pt) {
+                                const td = pt.querySelector('td[data-number="' + _persistentNextTrash + '"]');
+                                if (td) td.classList.add('unpair-next-trash');
+                            }
+                        }
+                    } catch (e) { }
+                }
+
+                function _computeNextTrashForNum(targetNum, n) {
+                    try {
+                        if (!_dontmatchMapFull) return null;
+                        const dm = _dontmatchMapFull.get(targetNum);
+                        if (dm && dm.length > n) return dm[n];
+                    } catch (e) { }
+                    return null;
+                }
 
                 function runAnalysis() {
                     try {
@@ -9104,9 +9294,12 @@
                         const xCount = _xGreaterCounts.get(x) || 0;
                         analRank.textContent = rankIdx >= 0 ? `H\u1EA1ng ${rankIdx + 1}/45 — ${xCount} k\u1EF3` : '';
 
-                        const appearedSet = new Set();
                         const bracketValues = [];
                         const matched = [];
+
+                        // Get current numtrash value for consider/missing calculation
+                        let currentNumtrash = 3;
+                        try { currentNumtrash = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 3)); } catch (e) { }
 
                         _ruleCache.forEach((rc, i) => {
                             if (!rc || rc.cand !== x) return;
@@ -9136,15 +9329,15 @@
                                 result: rc.nums.join(','),
                                 nums: rc.nums,
                                 dist: distByResult,
+                                distArr: distArr, // keep for tooltip
                                 cand: rc.cand,
                                 remaining: rc.remaining,
-                                bracket: rc.bracket
+                                bracket: rc.bracket,
+                                origIndex: i // keep original row index for date ordering
                             });
-                            rc.remaining.forEach(v => appearedSet.add(v));
                             bracketValues.push(rc.bracket);
                         });
 
-                        analResults = matched;
                         analTotal.textContent = String(matched.length);
                         const avgBracket = bracketValues.length ? bracketValues.reduce((s, v) => s + v, 0) / bracketValues.length : 0;
                         analAvg.textContent = avgBracket.toFixed(2);
@@ -9152,37 +9345,42 @@
                         const geq = bracketValues.filter(v => v >= avgBracket).length;
                         analDistSummary.textContent = `${less}<>${geq}`;
 
-                        const highUnion = new Set();
+                        // Consider = union of numbers in result column (excluding x) across ALL matched records
+                        const considerSet = new Set();
                         matched.forEach(m => {
-                            if (m.bracket >= avgBracket) {
-                                m.remaining.forEach(v => highUnion.add(v));
-                            }
+                            m.remaining.forEach(v => considerSet.add(v));
                         });
 
+                        // Missing = 45 numbers - numtrash numbers - consider numbers
+                        const dm = _dontmatchMapFull.get(x) || [];
+                        const numtrashSet = new Set(dm.slice(0, currentNumtrash));
+                        numtrashSet.add(x); // exclude x itself
                         const fullSet = new Set(Array.from({ length: 45 }, (_, i) => i + 1));
-                        fullSet.delete(x);
-                        analMissingNums = Array.from(fullSet).filter(v => !appearedSet.has(v)).sort((a, b) => a - b);
-                        analMissing.textContent = analMissingNums.join(', ');
-
-                        analConsiderNums = Array.from(highUnion).sort((a, b) => a - b);
+                        analConsiderNums = Array.from(considerSet).filter(v => v !== x).sort((a, b) => a - b);
                         analConsider.textContent = analConsiderNums.join(', ');
 
-                        // Sort based on selected sort mode
-                        const sortMode = analSort ? analSort.value : '';
-                        if (sortMode === 'desc') {
-                            matched.sort((a, b) => b.bracket - a.bracket);
-                        } else if (sortMode === 'asc') {
-                            matched.sort((a, b) => a.bracket - b.bracket);
-                        } else {
-                            // Default: sort by dist sum ascending
+                        analMissingNums = Array.from(fullSet).filter(v => !numtrashSet.has(v) && !considerSet.has(v)).sort((a, b) => a - b);
+                        analMissing.textContent = analMissingNums.join(', ');
+
+                        // Sort: [] grouping has priority, then recency within each group
+                        const sortMode = _sortMode;
+                        if (sortMode === 'desc' || sortMode === 'asc') {
+                            // Primary sort by bracket, secondary by date order
                             matched.sort((a, b) => {
-                                const sumA = a.dist.split(',').reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-                                const sumB = b.dist.split(',').reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-                                return sumA - sumB;
+                                const cmp = sortMode === 'desc' ? b.bracket - a.bracket : a.bracket - b.bracket;
+                                if (cmp !== 0) return cmp;
+                                // Within same bracket, apply recency
+                                return _recencyMode === 'desc' ? (b.origIndex - a.origIndex) : (a.origIndex - b.origIndex);
+                            });
+                        } else {
+                            // No [] sort: pure recency order
+                            // rows[0] is oldest; rows[last] is newest (data.json order)
+                            // "Mới→Cũ" (desc) means newest first = high origIndex first
+                            // "Cũ→Mới" (asc) means oldest first = low origIndex first
+                            matched.sort((a, b) => {
+                                return _recencyMode === 'desc' ? (b.origIndex - a.origIndex) : (a.origIndex - b.origIndex);
                             });
                         }
-                        // Apply recency order
-                        if (analRecency && analRecency.value === 'asc') matched.reverse();
                         analResults = matched;
 
                         analPage = 0;
@@ -9197,6 +9395,7 @@
                         if (analPage >= totalPages) analPage = totalPages - 1;
                         if (analPage < 0) analPage = 0;
                         analPageInfo.textContent = `${analPage + 1}/${totalPages} (${total} k\u1EF3)`;
+                        if (analPageInfo2) analPageInfo2.textContent = analPageInfo.textContent;
 
                         const start = analPage * ANAL_PAGE_SIZE;
                         const pageItems = analResults.slice(start, start + ANAL_PAGE_SIZE);
@@ -9219,8 +9418,10 @@
                                 ? `<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 4px;border-radius:4px">[${item.bracket}]</span>`
                                 : `[${item.bracket}]`;
                             const ruleHtml = `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${item.cand}</span>>{${item.remaining.join(',')}}${bracketSpan}`;
+                            // Encode distArr for tooltip
+                            const distArrJson = item.distArr ? encodeURIComponent(JSON.stringify(item.distArr)) : '';
 
-                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td></tr>`;
+                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" data-dist-arr="${distArrJson}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td></tr>`;
                         });
                         tbl += '</tbody></table>';
                         analTableWrap.innerHTML = tbl;
@@ -9234,37 +9435,163 @@
                                         const nums = res.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
                                         if (nums.length !== 6) return;
                                         (async () => { try { await navigator.clipboard.writeText(nums.join(',')); } catch (e) { } })();
-                                        try { for (let k = 0; k < 6; k++) { unpairInputEls[k].value = String(nums[k]); unpairInputEls[k].dispatchEvent(new Event('input')); } } catch (e) { }
-                                        // Replace place box values in popup (permanent until next dblclick)
+                                        try {
+                                            // Set all 6 values first WITHOUT dispatching events,
+                                            // then dispatch input only once on the last one.
+                                            // This avoids calling computeAndApplyUnpairBest 6 times
+                                            // which progressively corrupts fav via trash exclusivity.
+                                            for (let k = 0; k < 6; k++) {
+                                                unpairInputEls[k].value = String(nums[k]);
+                                                try { if (unpairInputEls[k].parentElement && unpairInputEls[k].parentElement.updateDraggable) unpairInputEls[k].parentElement.updateDraggable(); } catch (e2) { }
+                                            }
+                                            unpairInputEls[5].dispatchEvent(new Event('input'));
+                                        } catch (e) { }
                                         try {
                                             if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n)));
                                             window.__prevPlaceValues = nums.map(n => String(n));
                                         } catch (e) { }
-                                        // Yellow border on dblclicked row, clear previous
                                         try { analTableWrap.querySelectorAll('tr.anal-selected').forEach(r => r.classList.remove('anal-selected')); tr.classList.add('anal-selected'); _analSelectedResult = tr.dataset.result || null; } catch (e) { }
                                         try { tr.animate([{ transform: 'scale(1.02)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
                                     } catch (e) { }
                                 });
-                                tr.addEventListener('mouseenter', () => {
+                                // Ctrl+click: navigate to cell6_6 and paste numbers
+                                tr.addEventListener('click', (ev) => {
+                                    try {
+                                        if (!ev || !ev.ctrlKey) return;
+                                        const res = tr.dataset.result || '';
+                                        const nums = typeof parseSixNumbersFromString === 'function' ? parseSixNumbersFromString(res) : null;
+                                        if (!nums) return;
+                                        ev.preventDefault();
+                                        try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                        tr.classList.add('ctrl-selected');
+                                        try { localStorage.setItem('cell5_5_ctrl_selected', res); } catch (e) { }
+                                        try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                                        const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                                        if (navBtn) {
+                                            setTimeout(() => {
+                                                try { navBtn.click(); } catch (e) { }
+                                                setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220);
+                                            }, 200);
+                                        } else {
+                                            setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 260);
+                                        }
+                                    } catch (e) { }
+                                });
+                                tr.addEventListener('mouseenter', (ev) => {
                                     try {
                                         const res = tr.dataset.result || '';
                                         const nums = res.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n));
                                         if (typeof applyPopupHighlights === 'function') applyPopupHighlights(nums);
                                         try { _showNextTrashBorder(nums); } catch (e) { }
+                                        // Tooltip: show 5 numbers at dist checkpoints
+                                        try {
+                                            const distArrRaw = tr.dataset.distArr;
+                                            if (distArrRaw) {
+                                                const distArr = JSON.parse(decodeURIComponent(distArrRaw));
+                                                if (Array.isArray(distArr) && distArr.length) {
+                                                    const tipParts = distArr.map(d => String(d.num));
+                                                    const tipText = tipParts.join(',');
+                                                    // Use the existing instant tooltip system
+                                                    const tooltip = document.getElementById('instantTooltip');
+                                                    if (tooltip) {
+                                                        tooltip.textContent = tipText;
+                                                        tooltip.style.display = 'block';
+                                                        const pad = 12; const w = tooltip.offsetWidth || 80; const h = tooltip.offsetHeight || 20;
+                                                        let tx = ev.clientX + 12, ty = ev.clientY + 12;
+                                                        if (tx + w + pad > window.innerWidth) tx = Math.max(8, ev.clientX - w - 12);
+                                                        if (ty + h + pad > window.innerHeight) ty = Math.max(8, ev.clientY - h - 12);
+                                                        tooltip.style.left = tx + 'px'; tooltip.style.top = ty + 'px';
+                                                    }
+                                                }
+                                            }
+                                        } catch (e) { }
+                                    } catch (e) { }
+                                });
+                                tr.addEventListener('mousemove', (ev) => {
+                                    try {
+                                        const tooltip = document.getElementById('instantTooltip');
+                                        if (tooltip && tooltip.style.display !== 'none') {
+                                            const pad = 12; const w = tooltip.offsetWidth || 80; const h = tooltip.offsetHeight || 20;
+                                            let tx = ev.clientX + 12, ty = ev.clientY + 12;
+                                            if (tx + w + pad > window.innerWidth) tx = Math.max(8, ev.clientX - w - 12);
+                                            if (ty + h + pad > window.innerHeight) ty = Math.max(8, ev.clientY - h - 12);
+                                            tooltip.style.left = tx + 'px'; tooltip.style.top = ty + 'px';
+                                        }
                                     } catch (e) { }
                                 });
                                 tr.addEventListener('mouseleave', () => {
                                     try {
                                         if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
                                         try { _clearNextTrashBorder(); } catch (e) { }
+                                        // Re-apply persistent next-trash red gradient
+                                        _applyPersistentNextTrash();
+                                        // Hide tooltip
+                                        try { const tooltip = document.getElementById('instantTooltip'); if (tooltip) tooltip.style.display = 'none'; } catch (e) { }
+                                        // Re-focus the user's num on the unpair table
+                                        _refocusUnpairNum();
                                     } catch (e) { }
                                 });
                             });
                         }
-                        // Re-apply yellow border for persisted dblclick selection
                         if (_analSelectedResult) {
                             const selTr = analTableWrap.querySelector('tr[data-result="' + _analSelectedResult + '"]');
                             if (selTr) selTr.classList.add('anal-selected');
+                        }
+                    } catch (e) { }
+                }
+
+                // Focus/hover logic for the num|dontmatch table
+                function _refocusUnpairNum() {
+                    try {
+                        const numVal = parseInt((analNum.value || '').trim(), 10);
+                        if (Number.isFinite(numVal) && numVal >= 1 && numVal <= 45) {
+                            _focusUnpairRow(numVal);
+                        } else if (_lastFocusedUnpairNum) {
+                            _focusUnpairRow(_lastFocusedUnpairNum);
+                        }
+                    } catch (e) { }
+                }
+
+                function _focusUnpairRow(targetNum) {
+                    try {
+                        const tbody = wrap.querySelector('table tbody');
+                        if (!tbody) return;
+                        const targetRow = Array.from(tbody.querySelectorAll('tr')).find(r => {
+                            return r.children[0] && parseInt(r.children[0].textContent, 10) === targetNum;
+                        });
+                        if (targetRow) {
+                            // Simulate the mouseenter behavior to show dontmatch in trash
+                            const dTd = targetRow.children[1];
+                            const dRaw = dTd ? dTd.textContent.trim() : '';
+                            const dNums = dRaw ? dRaw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                            const dUniq = Array.from(new Set(dNums));
+                            try { if (typeof window.clearAllTrash === 'function') window.clearAllTrash(); } catch (e) { }
+                            if (dUniq.length) {
+                                try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: dUniq }, bubbles: true, composed: true })); } catch (e) { }
+                            }
+                            try {
+                                const pt = document.getElementById('numberPickerTable');
+                                if (pt) {
+                                    pt.querySelectorAll('td.in-trash').forEach(c => { c.classList.remove('in-trash'); c.classList.remove('in-trash-dim'); });
+                                    const __plV = (window.getPlaceValues ? window.getPlaceValues() : []).map(Number);
+                                    dUniq.forEach(dn => { try { const td = pt.querySelector('td[data-number="' + dn + '"]'); if (td) { td.classList.add('in-trash'); if (__plV.includes(dn)) td.classList.add('in-trash-dim'); } } catch (e) { } });
+                                }
+                            } catch (e) { }
+                            try { renderTrash(); } catch (e) { }
+                            try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
+                            // Update persistent next-trash
+                            const n = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 3));
+                            _persistentNextTrash = _computeNextTrashForNum(targetNum, n);
+                            _applyPersistentNextTrash();
+                            // Add candidate to fav
+                            try {
+                                if (typeof window.addToFav === 'function') {
+                                    const __prevHF = window.__cell6_5_hoverFavCand;
+                                    if (__prevHF != null && __prevHF !== targetNum && typeof window.removeFromFav === 'function') window.removeFromFav(__prevHF);
+                                    window.addToFav(targetNum);
+                                    window.__cell6_5_hoverFavCand = targetNum;
+                                }
+                            } catch (e) { }
                         }
                     } catch (e) { }
                 }
@@ -9310,40 +9637,133 @@
                 window.__cell6_5_clearNextTrashBorder = _clearNextTrashBorder;
                 window.__cell6_5_analDontmatchMap = _dontmatchMapFull;
                 window.__cell6_5_analNum = analNum;
+                window.__cell6_5_applyPersistentNextTrash = _applyPersistentNextTrash;
+                window.__cell6_5_refocusUnpairNum = _refocusUnpairNum;
 
+                // Dblclick on missing: toggle adding missing nums to trash
                 if (analMissingWrap) {
                     analMissingWrap.addEventListener('dblclick', () => {
                         try {
                             if (!analMissingNums.length) return;
-                            document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: analMissingNums.slice() }, bubbles: true, composed: true }));
+                            _missingInTrash = !_missingInTrash;
+                            if (_missingInTrash) {
+                                document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: analMissingNums.slice() }, bubbles: true, composed: true }));
+                                analMissingWrap.style.opacity = '0.5';
+                            } else {
+                                document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: analMissingNums.slice() }, bubbles: true, composed: true }));
+                                analMissingWrap.style.opacity = '1';
+                            }
                             try { analMissingWrap.animate([{ transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
                         } catch (e) { }
                     });
                 }
 
+                // Dblclick on consider: toggle adding consider nums to fav
                 if (analConsiderWrap) {
                     analConsiderWrap.addEventListener('dblclick', () => {
                         try {
                             if (!analConsiderNums.length) return;
-                            try { if (typeof window.clearAllFav === 'function') window.clearAllFav(); } catch (e) { }
-                            analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
+                            _considerInFav = !_considerInFav;
+                            if (_considerInFav) {
+                                analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
+                                analConsiderWrap.style.opacity = '0.5';
+                            } else {
+                                analConsiderNums.forEach(num => { try { if (typeof window.removeFromFav === 'function') window.removeFromFav(num); } catch (e) { } });
+                                analConsiderWrap.style.opacity = '1';
+                            }
                             try { analConsiderWrap.animate([{ transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 200 }); } catch (e) { }
                         } catch (e) { }
                     });
                 }
 
-                analPrev.addEventListener('click', () => { if (analPage > 0) { analPage--; renderAnalPage(); } });
-                analNext.addEventListener('click', () => { const tp = Math.ceil(analResults.length / ANAL_PAGE_SIZE); if (analPage < tp - 1) { analPage++; renderAnalPage(); } });
+                // Wrap-around pagination
+                function _analGoPrev() {
+                    const tp = Math.max(1, Math.ceil(analResults.length / ANAL_PAGE_SIZE));
+                    analPage = analPage > 0 ? analPage - 1 : tp - 1;
+                    renderAnalPage();
+                }
+                function _analGoNext() {
+                    const tp = Math.max(1, Math.ceil(analResults.length / ANAL_PAGE_SIZE));
+                    analPage = analPage < tp - 1 ? analPage + 1 : 0;
+                    renderAnalPage();
+                }
+                analPrev.addEventListener('click', _analGoPrev);
+                analNext.addEventListener('click', _analGoNext);
+                if (analPrev2) analPrev2.addEventListener('click', _analGoPrev);
+                if (analNext2) analNext2.addEventListener('click', _analGoNext);
 
                 analNum.addEventListener('input', () => {
-                    // Reset anal-val to 0, op to >=, sort to default when num changes
-                    try { analVal.value = '0'; analOp.value = '>='; if (analSort) analSort.value = ''; } catch (e) { }
+                    try { analVal.value = '0'; analOp.value = '>='; _sortMode = ''; analSortToggle.textContent = '—'; } catch (e) { }
+                    // Sync to numtrash (one-way: anal-num does NOT affect numtrash, but anal-val does via separate handler)
                     runAnalysis();
+                    // Auto-add consider to fav
+                    _autoAddConsiderToFav();
+                    // Focus the num on num|dontmatch table
+                    const numVal = parseInt((analNum.value || '').trim(), 10);
+                    if (Number.isFinite(numVal) && numVal >= 1 && numVal <= 45) {
+                        _lastFocusedUnpairNum = numVal;
+                        _focusUnpairRow(numVal);
+                    }
                 });
+
                 analOp.addEventListener('change', runAnalysis);
-                analVal.addEventListener('input', runAnalysis);
-                analRecency.addEventListener('change', runAnalysis);
-                analSort.addEventListener('change', runAnalysis);
+
+                // Arrow up/down for anal-val
+                const analValUp = _analysisPanel.querySelector('.anal-val-up');
+                const analValDown = _analysisPanel.querySelector('.anal-val-down');
+                if (analValUp) analValUp.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let v = parseInt((analVal.value || '').trim(), 10);
+                    if (!Number.isFinite(v)) v = 0;
+                    v = v + 1;
+                    if (v > 45) v = 0;
+                    analVal.value = String(v);
+                    analVal.dispatchEvent(new Event('input'));
+                });
+                if (analValDown) analValDown.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let v = parseInt((analVal.value || '').trim(), 10);
+                    if (!Number.isFinite(v)) v = 0;
+                    v = v - 1;
+                    if (v < 0) v = 45;
+                    analVal.value = String(v);
+                    analVal.dispatchEvent(new Event('input'));
+                });
+
+                analVal.addEventListener('input', () => {
+                    // Sync anal-val to numtrash (one-way)
+                    try {
+                        const v = parseInt((analVal.value || '').trim(), 10);
+                        if (Number.isFinite(v) && v >= 0 && v <= 44) {
+                            numTrashInput.value = String(v);
+                            numTrashInput.dispatchEvent(new Event('input'));
+                        }
+                    } catch (e) { }
+                    runAnalysis();
+                    _autoAddConsiderToFav();
+                    // Re-focus the unpair row after group() re-renders the table
+                    setTimeout(() => { try { _refocusUnpairNum(); } catch (e) { } }, 80);
+                });
+
+                function _autoAddConsiderToFav() {
+                    try {
+                        // Replace fav with consider nums (clear old fav first, then add new)
+                        // 1) Remove all current fav items
+                        try {
+                            const oldFavs = (typeof window.getFavItems === 'function') ? (window.getFavItems() || []) : [];
+                            oldFavs.forEach(num => { try { if (typeof window.removeFromFav === 'function') window.removeFromFav(num); } catch (e) { } });
+                        } catch (e) { }
+                        // 2) Add consider nums as new fav
+                        if (analConsiderNums.length) {
+                            _considerInFav = true;
+                            analConsiderWrap.style.opacity = '0.5';
+                            analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
+                        } else {
+                            _considerInFav = false;
+                            analConsiderWrap.style.opacity = '1';
+                        }
+                    } catch (e) { }
+                }
 
                 _analRunAnalysis = runAnalysis;
             }
@@ -9536,6 +9956,10 @@
 
                                         tr.addEventListener('mouseleave', (ev) => {
                                             try { if (typeof window.__cell6_5_clearNextTrashBorder === 'function') window.__cell6_5_clearNextTrashBorder(); } catch (e) { }
+                                            // Re-apply persistent next-trash red gradient
+                                            try { if (typeof window.__cell6_5_applyPersistentNextTrash === 'function') window.__cell6_5_applyPersistentNextTrash(); } catch (e) { }
+                                            // Re-focus the user's num on num|dontmatch table
+                                            try { if (typeof window.__cell6_5_refocusUnpairNum === 'function') window.__cell6_5_refocusUnpairNum(); } catch (e) { }
                                             try {
                                                 if (!window.__hoverActive) return;
                                                 const related = ev.relatedTarget;
@@ -10465,7 +10889,6 @@
 
                             function parseStrongNumbers(text) {
                                 if (!text) return [];
-                                // remove braces and split on non-digits
                                 return text.replace(/[{}]/g, '')
                                     .split(/[^0-9]+/)
                                     .map(s => parseInt(s, 10))
@@ -10481,11 +10904,8 @@
                                 if (!s) return;
                                 const nums = parseStrongNumbers(s.textContent.trim());
                                 if (nums.length) {
-                                    // remember current highlights so regenerating the popup can reapply
                                     try {
                                         window.__popupHighlights = nums.slice();
-                                        // store the card element that produced these highlights so
-                                        // we can clear them when the user hovers a different record
                                         window.__popupHighlightSource = cardEl;
                                     } catch (e) { }
                                     applyPopupHighlights(nums);
@@ -13889,12 +14309,37 @@
                             // while keeping the number centered.
                             const rankToggleEl = document.getElementById('rankToggle');
                             const rankEnabled = !!rankToggleEl && rankToggleEl.textContent.trim() === 'rank';
-                            if (rankEnabled) {
+
+                            // Check count input; when > 0, show count-rank badge on right side
+                            const countInputEl = document.getElementById('countInput');
+                            const countVal = countInputEl ? parseInt(countInputEl.value, 10) : 0;
+                            const countEnabled = Number.isFinite(countVal) && countVal > 0;
+                            let countBadgeHtml = '';
+                            let countBorderClass = '';
+                            if (countEnabled && Array.isArray(window.__cell5CountRanked)) {
+                                const idx = window.__cell5CountRankMap ? (window.__cell5CountRankMap.get(num) ?? -1) : -1;
+                                if (idx !== -1 && idx < countVal) {
+                                    const cRank = idx + 1;
+                                    let cColor = 'var(--muted)';
+                                    if (cRank >= 1 && cRank <= 9) cColor = '#08eb56';
+                                    else if (cRank >= 10 && cRank <= 18) cColor = '#00E5FF';
+                                    else if (cRank >= 19 && cRank <= 27) cColor = '#1a62ea';
+                                    else if (cRank >= 28 && cRank <= 36) cColor = '#ea3ade';
+                                    else if (cRank >= 37 && cRank <= 45) cColor = '#ea0313';
+                                    countBadgeHtml = `<span class="count-in-cell" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:0.92em;font-weight:900;color:${cColor};background:transparent;opacity:1;z-index:2;-webkit-text-stroke:0.4px rgba(0,0,0,0.6);text-shadow:0 0 1px rgba(0,0,0,0.22);letter-spacing:0.6px;">#${cRank}</span>`;
+                                    // Apply striped border when toggle is active
+                                    if (typeof __countBorderEnabled !== 'undefined' && __countBorderEnabled) {
+                                        countBorderClass = ' count-border';
+                                    }
+                                }
+                            }
+
+                            if (rankEnabled || countEnabled) {
                                 const rankMap = window.rankByTotal || {};
                                 const r = rankMap[num] ?? '';
-                                // Only render badge when we have a rank value
+                                // Only render rank badge when rank toggle is enabled and we have a value
                                 let badgeHtml = '';
-                                if (r !== '' && r !== null && r !== undefined) {
+                                if (rankEnabled && r !== '' && r !== null && r !== undefined) {
                                     const rankNum = Number(r);
                                     let color = 'var(--muted)';
                                     if (!isNaN(rankNum)) {
@@ -13906,12 +14351,13 @@
                                     }
                                     badgeHtml = `<span class="rank-in-cell" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:0.92em;font-weight:900;color:${color};background:transparent;opacity:1;z-index:2;-webkit-text-stroke:0.4px rgba(0,0,0,0.6);text-shadow:0 0 1px rgba(0,0,0,0.22);letter-spacing:0.6px;">#${rankNum}</span>`;
                                 }
-                                html += `<td class="number-cell${disabledClass}${inTrashClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
+                                html += `<td class="number-cell${disabledClass}${inTrashClass}${countBorderClass}" draggable="${draggable}" data-number="${num}" style="position:relative;min-height:44px;">` +
                                     `${badgeHtml}` +
                                     `<span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span>` +
+                                    `${countBadgeHtml}` +
                                     `</td>`;
                             } else {
-                                html += `<td class="number-cell${disabledClass}${inTrashClass}" draggable="${draggable}" data-number="${num}"><span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span></td>`;
+                                html += `<td class="number-cell${disabledClass}${inTrashClass}${countBorderClass}" draggable="${draggable}" data-number="${num}"><span style="display:block;text-align:center;font-weight:700;font-size:1em;padding:6px 0;">${num}</span></td>`;
                             }
                         }
                     }
@@ -14594,20 +15040,97 @@
                 }
             }
 
-            const modeSelector = document.getElementById('modeSelector');
+            // modeSelector removed — always number mode
             let modeState = 'number';
-            modeSelector.addEventListener('click', () => {
-                modeState = modeState === 'number' ? 'label' : 'number';
-                modeSelector.textContent = modeState === 'number' ? 'Số (1-45)' : 'Label (C1-C6)';
-                setNumberPickerMode(modeState, 'picker');
-            });
+
+            // Count input: when value > 0, show rankcount badges on popup cells
+            const countInput = document.getElementById('countInput');
+            let __countBorderEnabled = false;
+
+            // Ensure __cell5CountRanked is available even if Cell5 hasn't been rendered yet
+            function __ensureCell5CountRanked() {
+                if (Array.isArray(window.__cell5CountRanked) && window.__cell5CountRanked.length) return;
+                if (!rows || !rows.length) return;
+                if (!window.__cell5RuleData) {
+                    const pc = new Map();
+                    rows.forEach(r => {
+                        const ns = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                        for (let i = 0; i < ns.length; i++)
+                            for (let j = i + 1; j < ns.length; j++) {
+                                const key = `${ns[i]}-${ns[j]}`;
+                                pc.set(key, (pc.get(key) || 0) + 1);
+                            }
+                    });
+                    const cntMap = {}, bktVals = {}, appMap = {};
+                    for (let x = 1; x <= 45; x++) { cntMap[x] = 0; bktVals[x] = []; appMap[x] = 0; }
+                    rows.forEach(r => { r.nums.forEach(v => { if (v >= 1 && v <= 45) appMap[v]++; }); });
+                    rows.forEach(r => {
+                        if (!Array.isArray(r.nums) || r.nums.length !== 6) return;
+                        const un = r.nums.map(Number);
+                        let found = null;
+                        for (let nn = 44; nn >= 1; nn--) {
+                            for (const cand of un) {
+                                const oth = [];
+                                for (let y = 1; y <= 45; y++) {
+                                    if (y === cand) continue;
+                                    const a = Math.min(cand, y), b = Math.max(cand, y);
+                                    oth.push({ y, c: pc.get(`${a}-${b}`) || 0 });
+                                }
+                                oth.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                                const pick = oth.slice(0, nn).map(o => o.y);
+                                const of5 = un.filter(x => x !== cand);
+                                if (!pick.some(v => of5.includes(v))) { found = { nn, cand }; break; }
+                            }
+                            if (found) break;
+                        }
+                        if (found) { cntMap[found.cand]++; bktVals[found.cand].push(found.nn); }
+                    });
+                    const _entries = [];
+                    for (let x = 1; x <= 45; x++) {
+                        const vs = bktVals[x];
+                        let avg = 0, dist = '0<>0', ratio = 0;
+                        if (vs.length) {
+                            avg = vs.reduce((s, v) => s + v, 0) / vs.length;
+                            const less = vs.filter(v => v < avg).length;
+                            const geq = vs.filter(v => v >= avg).length;
+                            dist = `${less}<>${geq}`;
+                        }
+                        ratio = appMap[x] > 0 ? cntMap[x] / appMap[x] : 0;
+                        _entries.push({ num: x, count: cntMap[x], appear: appMap[x], ratio, avg, dist });
+                    }
+                    window.__cell5RuleData = _entries;
+                }
+                const ruleEntries = window.__cell5RuleData.slice();
+                ruleEntries.sort((a, b) => b.count - a.count || a.num - b.num);
+                window.__cell5CountRanked = ruleEntries;
+                // Build O(1) lookup map: num -> rank index
+                window.__cell5CountRankMap = new Map();
+                ruleEntries.forEach((e, i) => window.__cell5CountRankMap.set(e.num, i));
+            }
+
+            if (countInput) {
+                countInput.addEventListener('input', () => {
+                    try { __ensureCell5CountRanked(); } catch (e) { }
+                    try { generateNumberPickerTable(); setupNumberCellDragDrop(); } catch (e) { }
+                });
+            }
+            // Count label toggle: click to enable/disable striped border on top-count cells
+            const countToggleLabel = document.getElementById('countToggleLabel');
+            if (countToggleLabel) {
+                countToggleLabel.addEventListener('click', () => {
+                    __countBorderEnabled = !__countBorderEnabled;
+                    countToggleLabel.style.color = __countBorderEnabled ? '#28A745' : '';
+                    countToggleLabel.style.fontWeight = __countBorderEnabled ? '900' : '';
+                    try { __ensureCell5CountRanked(); } catch (e) { }
+                    try { generateNumberPickerTable(); setupNumberCellDragDrop(); } catch (e) { }
+                });
+            }
 
             const modeRows = document.getElementById('modeRows');
-            // Sync mode button when mode changes from external sources (cell9/10)
+            // Sync mode when mode changes from external sources (cell9/10)
             if (window.onNumberPickerModeChange) {
                 window.onNumberPickerModeChange((mode) => {
                     modeState = mode;
-                    modeSelector.textContent = mode === 'number' ? 'Số (1-45)' : 'Label (C1-C6)';
                 });
             }
 
@@ -14801,6 +15324,10 @@
             setupPlaceContainerListeners();
             setupNumberCellDragDrop();
             setupLabelCellDragDrop();
+
+            // Expose globally so code outside bootstrap() (e.g. Cell5 sort handler) can call them
+            window.__generateNumberPickerTable = generateNumberPickerTable;
+            window.__setupNumberCellDragDrop = setupNumberCellDragDrop;
 
             // Rank toggle handler: toggles between 'unnank' and 'rank' and re-renders the table
             const rankToggleBtn = document.getElementById('rankToggle');
@@ -15171,6 +15698,9 @@
                     if (typeof updateRankSummary === 'function') updateRankSummary();
                 } catch (e) { console.warn('regen number picker after rank compute', e); }
             } catch (e) { window.rankByTotal = {}; }
+
+            // Pre-compute Cell5 rule data once so popup count badges are instant
+            try { __ensureCell5CountRanked(); } catch (e) { }
 
             const showSection = createSectionSwitcher();
             // Renderer map for lazy section mounting
@@ -18647,6 +19177,52 @@
                 try { (trashPopup || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
             }
             try { window.clearAllTrash = clearAllTrash; } catch (e) { }
+
+            // Clamp all floating popups within viewport on resize/zoom
+            function clampPopupsToViewport() {
+                try {
+                    const vw = window.innerWidth, vh = window.innerHeight;
+                    ['numberPickerPopup', 'trashPopup', 'favPopup', 'draftPopup'].forEach(id => {
+                        try {
+                            const el = document.getElementById(id);
+                            if (!el || el.style.display === 'none') return;
+                            const r = el.getBoundingClientRect();
+                            if (r.width === 0 && r.height === 0) return;
+                            let left = parseFloat(el.style.left) || 0;
+                            let top = parseFloat(el.style.top) || 0;
+                            // clamp right edge
+                            if (r.right > vw) left = Math.max(4, left - (r.right - vw) - 4);
+                            // clamp bottom edge
+                            if (r.bottom > vh) top = Math.max(4, top - (r.bottom - vh) - 4);
+                            // clamp left edge
+                            if (left < 4) left = 4;
+                            // clamp top edge
+                            if (top < 4) top = 4;
+                            el.style.left = left + 'px';
+                            el.style.top = top + 'px';
+                        } catch (e) { }
+                    });
+                    // Also clamp the analysis panel (position:absolute inside its parent)
+                    try {
+                        const ap = document.getElementById('cell6_5_analysis_panel');
+                        if (ap && ap.offsetParent) {
+                            const ar = ap.getBoundingClientRect();
+                            if (ar.right > vw) {
+                                const curRight = parseFloat(ap.style.right) || 0;
+                                ap.style.right = Math.max(0, curRight + (ar.right - vw) + 4) + 'px';
+                            }
+                            if (ar.bottom > vh) {
+                                ap.style.maxHeight = Math.max(200, vh - ar.top - 8) + 'px';
+                                ap.style.overflowY = 'auto';
+                            } else {
+                                ap.style.maxHeight = '';
+                                ap.style.overflowY = '';
+                            }
+                        }
+                    } catch (e) { }
+                } catch (e) { }
+            }
+            window.addEventListener('resize', clampPopupsToViewport);
 
             // Shift-key toggle: when the main number picker popup is open, pressing
             // and releasing the Shift key will toggle the visibility of the trash popup.
