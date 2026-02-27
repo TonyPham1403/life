@@ -3,6 +3,8 @@
 
 <head>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="scores.js"></script>
+    <script src="combo_data.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Life Notebook → Web</title>
@@ -4568,6 +4570,7 @@
             [[0, "0 chữ số"], [1, "1 chữ số"], [2, "2 chữ số"], [3, "3 chữ số"], [4, "4 chữ số"], [5, "5 chữ số"], [6, "6 chữ số"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; decimalSel.appendChild(o); });
             decimalSel.value = "2";
             let __cell5RuleSortKey = 'count-desc';
+            window.__cell5RuleSortKey = __cell5RuleSortKey;
             controls.append("Hiển thị:", topSel, "Độ chính xác:", decimalSel);
             body.appendChild(controls);
             const wrap = document.createElement("div");
@@ -4713,7 +4716,7 @@
                     t += '</tr></thead><tbody>';
                     entries.forEach((e, i) => {
                         const bg = i % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
-                        t += `<tr style="background:${bg}"><td>#${offset + i + 1}</td><td><strong>${e.num}</strong></td><td>${e.count}</td><td>${e.appear}</td><td>${e.ratio.toFixed(decimalsR)}</td><td>${e.avg.toFixed(decimalsR)}</td><td>${e.dist}</td></tr>`;
+                        t += `<tr style="background:${bg}"><td>#${offset + i + 1}</td><td><strong>${e.num}</strong></td><td class="${isCountSort ? 'sort-active-col' : ''}">${e.count}</td><td>${e.appear}</td><td class="${!isCountSort ? 'sort-active-col' : ''}">${e.ratio.toFixed(decimalsR)}</td><td>${e.avg.toFixed(decimalsR)}</td><td>${e.dist}</td></tr>`;
                     });
                     t += '</tbody></table>';
                     return t;
@@ -4733,6 +4736,7 @@
                         const col = th.dataset.sort;
                         if (col === 'count') __cell5RuleSortKey = 'count-desc';
                         else if (col === 'ratio') __cell5RuleSortKey = 'ratio-desc';
+                        window.__cell5RuleSortKey = __cell5RuleSortKey;
                         draw();
                         // Also refresh popup count badges when sort changes
                         try { if (typeof window.__generateNumberPickerTable === 'function') { window.__generateNumberPickerTable(); window.__setupNumberCellDragDrop(); } } catch (e) { }
@@ -5007,6 +5011,9 @@
                     return true;
                 });
 
+                // Format string: show rule pattern using a,b,c,d... for non-x positions
+                let seqHtml = '';
+
                 const counts = new Array(46).fill(0);
                 filtered.forEach(r => {
                     const nums = r.nums || [];
@@ -5022,7 +5029,8 @@
                 if (infoSort === 'desc') items.sort((a, b) => b.c - a.c || a.n - b.n);
                 else if (infoSort === 'asc') items.sort((a, b) => a.c - b.c || a.n - b.n);
 
-                let html = `<div style="font-weight:700;margin-bottom:6px;">Thống kê xuất hiện (Năm: ${yearSel.value || 'Tất cả'} · Tháng: ${monthSel.value || 'Tất cả'})</div>`;
+                let html = seqHtml;
+                html += `<div style="font-weight:700;margin-bottom:6px;">Thống kê xuất hiện (Năm: ${yearSel.value || 'Tất cả'} · Tháng: ${monthSel.value || 'Tất cả'})</div>`;
                 html += `<div style="margin-bottom:8px;"><select id="infoSortSel" style="padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);"><option value="default">Mặc định</option><option value="desc">Giảm dần (số lần)</option><option value="asc">Tăng dần (số lần)</option></select></div>`;
                 // compute numbers that did NOT appear in the filtered set
                 const zeros = items.filter(it => it.c === 0).map(it => it.n).sort((a, b) => a - b);
@@ -5445,7 +5453,7 @@
                     const start = pIdx * pageSize;
                     const firstDate = page[0] ? page[0].date : '';
                     const lastDate = page[page.length - 1] ? page[page.length - 1].date : '';
-                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>rule</th></tr></thead><tbody>`;
+                    let table = `<table style="width:100%;"><thead><tr><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Ngày</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>Kết quả</th><th style='text-align:left;padding:6px;border-bottom:1px solid var(--border);'>rule</th><th style='text-align:center;padding:6px;border-bottom:1px solid var(--border);'>score</th></tr></thead><tbody>`;
                     // Use the global row-trash cache when available so k̄ is consistent
                     // across different display orders/views. Fall back to 0 when not ready.
                     try {
@@ -5561,7 +5569,7 @@
                             const compareAvg = (typeof window.__lastAvgK === 'number' && !Number.isNaN(window.__lastAvgK)) ? window.__lastAvgK : avg;
                             const cls = (rdat.t >= compareAvg) ? 'k-cyan' : 'k-yellow';
                             // keep data-k attribute for compatibility but show `rule` column
-                            table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:center'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${rdat.rule || ''}</td></tr>`;
+                            table += `<tr data-result="${rdat.result}" title="${tooltip}" data-k="${rdat.t}"><td style='padding:6px;text-align:left'>${rdat.date}</td><td style='padding:6px;text-align:center'>${rdat.numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${rdat.rule || ''}</td><td style='padding:6px;text-align:center'>${window.__scoreHtml ? window.__scoreHtml(rdat.result) : ''}</td></tr>`;
                         });
                     } catch (e) {
                         // fallback: render without tooltip
@@ -5586,7 +5594,7 @@
                                     fallbackRule = `${cand}>{${remaining.join(',')}}[1]`;
                                 }
                             } catch (e) { fallbackRule = ''; }
-                            table += `<tr data-result="${result}"${tooltip ? ` title="${tooltip}" data-k="${tFallback}"` : ''}><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:center'>${numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${fallbackRule}</td></tr>`;
+                            table += `<tr data-result="${result}"${tooltip ? ` title="${tooltip}" data-k="${tFallback}"` : ''}><td style='padding:6px;text-align:left'>${row.date}</td><td style='padding:6px;text-align:center'>${numsHtml}</td><td style='padding:6px;text-align:left;white-space:nowrap;'>${fallbackRule}</td><td style='padding:6px;text-align:center'>${window.__scoreHtml ? window.__scoreHtml(result) : ''}</td></tr>`;
                         });
                     }
                     table += '</tbody></table>';
@@ -6091,7 +6099,7 @@
                                 return `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${found.cand}</span>>{${remaining.join(',')}}<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 2px;border-radius:4px">[${found.n}]</span>`;
                             } catch (e) { return ''; }
                         };
-                        inner += "<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        inner += "<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                         slice.forEach(r => {
                             const label = labelOf(r.nums);
                             let labelHtml = "";
@@ -6111,10 +6119,11 @@
                             }
                             const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const ruleHtml = (Array.isArray(r.nums) && r.nums.length === 6) ? __c66_computeRule(r.nums) : '';
-                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                            const _scoreHtml = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
                         });
                         inner += "</tbody></table>";
-                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -6977,9 +6986,9 @@
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
 
-                        inner += `<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>`;
+                        inner += `<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>`;
                         if (slice.length === 0) {
-                            inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
+                            inner += `<tr><td colspan='5' class='muted'>Không có kết quả</td></tr>`;
                         } else {
                             // Build pairCounts & computeRule for rule column (same as Cell5.5 / Cell6.5)
                             const __c66b_pairCounts = new Map();
@@ -7099,10 +7108,11 @@
                                     if (gi !== null && rowFirstExcludedAt[gi] !== null) t = Math.max(0, rowFirstExcludedAt[gi] - 1);
                                 } catch (err) { }
 
-                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                                const _scoreHtml = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
                             });
                         }
-                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
@@ -7819,9 +7829,9 @@
             } catch (e) { /* ignore */ }
             const numTrashInput = document.createElement('input');
             numTrashInput.type = 'number';
-            numTrashInput.min = 1; numTrashInput.max = 44; numTrashInput.value = 3;
+            numTrashInput.min = 0; numTrashInput.max = 44; numTrashInput.value = 3;
             numTrashInput.style.width = '80px';
-            numTrashInput.title = 'Số lượng nhóm cuối cùng (1-44)';
+            numTrashInput.title = 'Số lượng nhóm cuối cùng (0-44)';
             // Create +/- buttons styled like the Số x control
             const numTrashContainer = document.createElement('div');
             numTrashContainer.style.cssText = 'position:relative;display:inline-block;vertical-align:middle;margin-right:8px;';
@@ -7836,10 +7846,9 @@
             numUpBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
-                if (!Number.isFinite(n)) n = 0;
+                if (!Number.isFinite(n)) n = -1;
                 n = n + 1;
-                if (n > 44) n = 1; // wrap
-                if (n < 1) n = 1;
+                if (n > 44) n = 0; // wrap
                 numTrashInput.value = String(n);
                 numTrashInput.dispatchEvent(new Event('input'));
                 if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
@@ -7847,10 +7856,9 @@
             numDownBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
-                if (!Number.isFinite(n)) n = 0;
+                if (!Number.isFinite(n)) n = 1;
                 n = n - 1;
-                if (n < 1) n = 44; // wrap
-                if (n > 44) n = 44;
+                if (n < 0) n = 44; // wrap
                 numTrashInput.value = String(n);
                 numTrashInput.dispatchEvent(new Event('input'));
                 if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
@@ -7978,6 +7986,7 @@
                     inp.value = String(n);
                     inp.dispatchEvent(new Event('input'));
                     try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                    setTimeout(() => { try { if (typeof _refocusUnpairNum === 'function') _refocusUnpairNum(); } catch (e) { } }, 200);
                 });
                 down.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -7988,6 +7997,7 @@
                     inp.value = String(n);
                     inp.dispatchEvent(new Event('input'));
                     try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                    setTimeout(() => { try { if (typeof _refocusUnpairNum === 'function') _refocusUnpairNum(); } catch (e) { } }, 200);
                 });
 
                 btnGroup.appendChild(up); btnGroup.appendChild(down);
@@ -8021,6 +8031,7 @@
                             if (el.value !== '' && vals.indexOf(el.value) !== vals.lastIndexOf(el.value)) el.style.borderColor = 'red'; else el.style.borderColor = '';
                         });
                         try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
+                        setTimeout(() => { try { if (typeof _refocusUnpairNum === 'function') _refocusUnpairNum(); } catch (e) { } }, 200);
                         // If all 6 inputs are filled with distinct numbers, compute best numTrash and num
                         try {
                             const filled = unpairInputEls.map(e => (e.value || '').trim()).filter(s => s !== '');
@@ -9299,7 +9310,7 @@
 
                         // Get current numtrash value for consider/missing calculation
                         let currentNumtrash = 3;
-                        try { currentNumtrash = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 3)); } catch (e) { }
+                        try { const _p1 = parseInt(String(numTrashInput.value || '').trim(), 10); currentNumtrash = Math.max(0, Math.min(44, Number.isFinite(_p1) ? _p1 : 3)); } catch (e) { }
 
                         _ruleCache.forEach((rc, i) => {
                             if (!rc || rc.cand !== x) return;
@@ -9407,7 +9418,7 @@
 
                         const avgBracket = parseFloat(analAvg.textContent) || 0;
 
-                        let tbl = `<table class="no-sticky" style="width:100%"><thead><tr><th>Ng\u00E0y</th><th>K\u1EBFt qu\u1EA3</th><th>dist</th><th>rule</th></tr></thead><tbody>`;
+                        let tbl = `<table class="no-sticky" style="width:100%"><thead><tr><th>Ng\u00E0y</th><th>K\u1EBFt qu\u1EA3</th><th>dist</th><th>rule</th><th>score</th></tr></thead><tbody>`;
                         const analX = parseInt((analNum.value || '').trim(), 10);
                         pageItems.forEach(item => {
                             const numsHtml = item.nums.map(v => {
@@ -9421,7 +9432,8 @@
                             // Encode distArr for tooltip
                             const distArrJson = item.distArr ? encodeURIComponent(JSON.stringify(item.distArr)) : '';
 
-                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" data-dist-arr="${distArrJson}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td></tr>`;
+                            const _scoreHtml7 = window.__scoreHtml ? window.__scoreHtml(item.result) : '';
+                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" data-dist-arr="${distArrJson}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${_scoreHtml7}</td></tr>`;
                         });
                         tbl += '</tbody></table>';
                         analTableWrap.innerHTML = tbl;
@@ -9580,7 +9592,7 @@
                             try { renderTrash(); } catch (e) { }
                             try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
                             // Update persistent next-trash
-                            const n = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 3));
+                            const _p2 = parseInt(String(numTrashInput.value || '').trim(), 10); const n = Math.max(0, Math.min(44, Number.isFinite(_p2) ? _p2 : 3));
                             _persistentNextTrash = _computeNextTrashForNum(targetNum, n);
                             _applyPersistentNextTrash();
                             // Add candidate to fav
@@ -9742,7 +9754,17 @@
                     runAnalysis();
                     _autoAddConsiderToFav();
                     // Re-focus the unpair row after group() re-renders the table
-                    setTimeout(() => { try { _refocusUnpairNum(); } catch (e) { } }, 80);
+                    // Use a longer delay (300ms) to ensure table is fully re-rendered,
+                    // and re-read analNum fresh to avoid stale focus target
+                    setTimeout(() => {
+                        try {
+                            const numVal = parseInt((analNum.value || '').trim(), 10);
+                            if (Number.isFinite(numVal) && numVal >= 1 && numVal <= 45) {
+                                _lastFocusedUnpairNum = numVal;
+                                _focusUnpairRow(numVal);
+                            }
+                        } catch (e) { }
+                    }, 300);
                 });
 
                 function _autoAddConsiderToFav() {
@@ -9794,7 +9816,7 @@
                 if (String(trashValue) === 'unpair' || (controls && controls.classList && controls.classList.contains('unpair-mode'))) {
                     // validate num
                     let n = 16;
-                    try { n = Math.max(1, Math.min(44, parseInt(String(numTrashInput.value || '').trim(), 10) || 16)); } catch (e) { n = 16; }
+                    try { const _p3 = parseInt(String(numTrashInput.value || '').trim(), 10); n = Math.max(0, Math.min(44, Number.isFinite(_p3) ? _p3 : 16)); } catch (e) { n = 16; }
 
                     // build pair counts
                     const pairCounts = new Map();
@@ -9827,7 +9849,7 @@
                         }
                         // sort ascending by count (least frequent first), tie-breaker by numeric
                         others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
-                        const pick = others.slice(0, n).map(o => String(o.y)).join(',');
+                        const pick = n === 0 ? '' : others.slice(0, n).map(o => String(o.y)).join(',');
                         html += `<tr><td>${xnum}</td><td>${pick}</td></tr>`;
                     }
                     html += "</tbody></table></div>";
@@ -10729,11 +10751,11 @@
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
                         inner = headerHtml + navHtml;
-                        inner += `<table style="width:100%"><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>`;
+                        inner += `<table style="width:100%"><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>`;
                         // If there are rows to render, compute per-row `k` using the same
                         // greedy trash-popup semantics so we can annotate each <tr>
                         if (slice.length === 0) {
-                            inner += `<tr><td colspan='4' class='muted'>Không có kết quả</td></tr>`;
+                            inner += `<tr><td colspan='5' class='muted'>Không có kết quả</td></tr>`;
                         } else {
                             // Build mapping from stable row key -> global indices
                             const rowKeyToIndices = new Map();
@@ -10852,10 +10874,11 @@
                                     if (gi !== null && rowFirstExcludedAt[gi] !== null) t = Math.max(0, rowFirstExcludedAt[gi] - 1);
                                 } catch (err) { }
 
-                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                                const _scoreHtml65 = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml65}</td></tr>`;
                             });
                         }
-                        if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='4' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
@@ -11528,18 +11551,24 @@
                 if (pattern.length !== 6) { wrap.innerHTML = "<div class='error'>Cần 6 ký tự</div>"; return; }
 
                 // Build pairCounts & computeRule for rule column (same as Cell6.5)
-                const __c8_pairCounts = new Map();
-                try {
-                    rows.forEach(rr => {
-                        try {
-                            const ns = Array.isArray(rr.nums) ? rr.nums.slice().sort((a, b) => a - b) : [];
-                            for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
-                                const key = `${ns[i]}-${ns[j]}`;
-                                __c8_pairCounts.set(key, (__c8_pairCounts.get(key) || 0) + 1);
-                            }
-                        } catch (e) { }
-                    });
-                } catch (e) { }
+                let __c8_pairCounts = null;
+                if (window.__globalPairCounts) {
+                    __c8_pairCounts = window.__globalPairCounts;
+                } else {
+                    __c8_pairCounts = new Map();
+                    try {
+                        rows.forEach(rr => {
+                            try {
+                                const ns = Array.isArray(rr.nums) ? rr.nums.slice().sort((a, b) => a - b) : [];
+                                for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+                                    const key = `${ns[i]}-${ns[j]}`;
+                                    __c8_pairCounts.set(key, (__c8_pairCounts.get(key) || 0) + 1);
+                                }
+                            } catch (e) { }
+                        });
+                        window.__globalPairCounts = __c8_pairCounts;
+                    } catch (e) { }
+                }
                 const __c8_computeRule = (sixNums) => {
                     try {
                         if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
@@ -11589,7 +11618,7 @@
                 let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < display.length; i += chunk) {
-                    html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                    html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                     display.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_"
                             ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
@@ -11597,7 +11626,8 @@
                         ).join(" ");
                         const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
                         const ruleHtml = (Array.isArray(r.nums) && r.nums.length === 6) ? __c8_computeRule(r.nums) : '';
-                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                        const _scoreHtml8 = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml8}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
@@ -12346,12 +12376,13 @@
                     let html = `<div class='muted'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, requiredCount, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
                             const ruleHtml = __c9_computeRule(r.nums);
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                            const _scoreHtml9a = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml9a}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -12491,7 +12522,7 @@
                     let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const labelStr = r.label;
                             let highlightPos = [];
@@ -12528,7 +12559,8 @@
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, highlightedNums, totalCount, consec.checked);
                             const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
                             const ruleHtml = __c9_computeRule(r.nums);
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                            const _scoreHtml9b = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml9b}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -13840,13 +13872,14 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
                             const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
                             const ruleHtml = __c11_computeRule(r.nums);
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                            const _scoreHtml11a = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml11a}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -13882,7 +13915,7 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · label ${patternStr}</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const highlightPositions = labelPattern.map((p, i) => p !== null ? i : -1).filter(i => i >= 0);
                             const nums = r.nums.map((v, idx) => {
@@ -13891,7 +13924,8 @@
                             }).join(" ");
                             const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
                             const ruleHtml = __c11_computeRule(r.nums);
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td></tr>`;
+                            const _scoreHtml11b = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml11b}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -15681,6 +15715,11 @@
 
             // Tải dữ liệu TRƯỚC khi render các cell
             await loadData();
+
+            // Compute score thresholds from pre-loaded window.SCORES (scores.js)
+            if (window.SCORES && typeof window.__computeScoreThresholds === 'function') window.__computeScoreThresholds();
+            // Inject threshold markers into status bar
+            if (typeof window.__updateStatusThresholds === 'function') window.__updateStatusThresholds();
 
             // Compute global rank (by total count) so popup can show ranks
             try {
@@ -20169,7 +20208,10 @@
             let _draftHoveredTr = null;
             try {
                 if (draftTableBody) {
+                    let _draftMouseoverTimer = 0;
                     draftTableBody.addEventListener('mouseover', (ev) => {
+                        if (_draftMouseoverTimer) return;
+                        _draftMouseoverTimer = setTimeout(() => { _draftMouseoverTimer = 0; }, 50);
                         try {
                             if (dragState) return; // don't highlight during row drag
                             const tr = ev.target && ev.target.closest ? ev.target.closest('tr') : null;
@@ -20199,7 +20241,7 @@
                                         const inHover = (window.getQuickPlaceMode && window.getQuickPlaceMode() === 'hover');
                                         if (inHover) {
                                             validNums.forEach(n => {
-                                                try { const td = tbl.querySelector('td[data-number=\"' + n + '\"]'); if (td) td.classList.add('popup-number-highlight'); } catch (e) { }
+                                                try { const td = tbl.querySelector('td[data-number="' + n + '"]'); if (td) td.classList.add('popup-number-highlight'); } catch (e) { }
                                             });
                                         }
                                     } catch (e) { }
@@ -20237,23 +20279,10 @@
                 if (atRecords) {
                     renderDraft(atRecords);
                 } else if (!draftTableBody.querySelector('tr:not(.draft-add-row-tr)')) {
-                    // No rows yet — try to load from localStorage
-                    try {
-                        const saved = localStorage.getItem('draftRecords');
-                        if (saved && saved.trim()) {
-                            const recs = saved.trim().split('\n').map(line => {
-                                const parts = line.split(',');
-                                if (parts.length !== 6) return null;
-                                return parts.map(p => {
-                                    const t = p.trim();
-                                    if (t === '' || t === '__') return null;
-                                    const n = parseInt(t, 10);
-                                    return Number.isFinite(n) && n >= 1 && n <= 45 ? n : null;
-                                });
-                            }).filter(Boolean);
-                            if (recs.length) renderDraft(recs);
-                        }
-                    } catch (e) { }
+                    // No rows yet — add one empty row
+                    const emptyNums = [null, null, null, null, null, null];
+                    const newRow = createRecordRow(emptyNums, 0);
+                    draftTableBody.appendChild(newRow);
                 }
                 if (!draftTableBody.querySelector('tr.draft-add-row-tr')) ensureAddRow();
                 draftPopup.style.display = 'block';
@@ -20375,7 +20404,17 @@
 
             // Clear button
             const clearBtn = document.getElementById('draftClearBtn');
-            if (clearBtn) clearBtn.addEventListener('click', () => { renderDraft([]); });
+            if (clearBtn) clearBtn.addEventListener('click', () => {
+                renderDraft([]);
+                // Add one empty row after clearing
+                const emptyNums = [null, null, null, null, null, null];
+                const idx = 0;
+                const newRow = createRecordRow(emptyNums, idx);
+                const addRowEl = draftTableBody.querySelector('tr.draft-add-row-tr');
+                if (addRowEl) draftTableBody.insertBefore(newRow, addRowEl);
+                else draftTableBody.appendChild(newRow);
+                updateScrollClass();
+            });
 
             // ── Scale handle for draftPopup (bottom-right corner) ──
             (function addDraftScaleHandle() {
@@ -20736,6 +20775,743 @@
 
         })();
     </script>
+
+    <!-- ═══ Score system (pre-computed via scores.js) ═══ -->
+    <script>
+        // ═══ Lightweight score helpers — all data from scores.js, NO runtime combo computation ═══
+        (function () {
+            'use strict';
+
+            /* ── Compute Q25/Q50/Q75/MIN/MAX from pre-loaded window.SCORES ── */
+            function computeScoreThresholds() {
+                if (!window.SCORES) return;
+                const allScores = Object.values(window.SCORES)
+                    .map(e => e.score10)
+                    .filter(v => typeof v === 'number' && Number.isFinite(v));
+                allScores.sort((a, b) => a - b);
+                const ns = allScores.length;
+                if (ns > 0) {
+                    window.__SCORE_Q25 = allScores[Math.floor(0.25 * (ns - 1))];
+                    window.__SCORE_Q50 = allScores[Math.floor(0.50 * (ns - 1))];
+                    window.__SCORE_Q75 = allScores[Math.floor(0.75 * (ns - 1))];
+                    window.__SCORE_MIN = allScores[0];
+                    window.__SCORE_MAX = allScores[ns - 1];
+                }
+                console.log('[score] Thresholds from scores.js:', ns, 'records. Q25=', window.__SCORE_Q25, 'Q50=', window.__SCORE_Q50, 'Q75=', window.__SCORE_Q75);
+            }
+            window.__computeScoreThresholds = computeScoreThresholds;
+
+            /* ── scoreInput: compute from COMBO_DATA (real-time), fallback to SCORES lookup ── */
+            function scoreInput(nums) {
+                if (!nums || nums.length !== 6) return null;
+                const sorted = nums.slice().map(Number).sort((a, b) => a - b);
+                // Try COMBO_DATA first (real-time computation for ANY 6 numbers)
+                if (window.COMBO_DATA) {
+                    try {
+                        const cd = window.COMBO_DATA;
+                        const w = cd.weights;
+                        let raw = 0;
+                        for (let k = 2; k <= 5; k++) {
+                            const pctMap = cd[String(k)];
+                            if (!pctMap) continue;
+                            const wk = Number(w[String(k)] || 0);
+                            // enumerate all C(6,k) combos from sorted
+                            const combos = [];
+                            const n = sorted.length;
+                            const idx = new Array(k);
+                            function gen(start, depth) {
+                                if (depth === k) { combos.push(idx.slice()); return; }
+                                for (let i = start; i < n; i++) { idx[depth] = i; gen(i + 1, depth + 1); }
+                            }
+                            gen(0, 0);
+                            let sumPct = 0;
+                            for (const ci of combos) {
+                                const key = ci.map(i => sorted[i]).join(',');
+                                sumPct += (pctMap[key] || 0);
+                            }
+                            const sk = combos.length > 0 ? sumPct / combos.length : 0;
+                            raw += wk * sk;
+                        }
+                        return Math.round(raw * 10 * 100) / 100; // score10 rounded to 2dp
+                    } catch (e) { console.warn('scoreInput COMBO_DATA error:', e); }
+                }
+                // Fallback: lookup in SCORES (only works for historical draws)
+                if (window.SCORES) {
+                    const key = sorted.join(',');
+                    const entry = window.SCORES[key];
+                    if (entry && typeof entry.score10 === 'number') return entry.score10;
+                }
+                return null;
+            }
+            window.__scoreInput = scoreInput;
+        })();
+    </script>
+    <style>
+        /* Score column colors — stronger contrast: bright yellow, dark orange, dark red */
+        .score-cell {
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            padding: 1px 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            min-width: 32px;
+            display: inline-block;
+        }
+
+        .score-red {
+            background: #c62828;
+        }
+
+        .score-orange {
+            background: #e65100;
+        }
+
+        .score-yellow {
+            background: #ffd600;
+            color: #000 !important;
+        }
+
+        .score-green {
+            background: #2e7d32;
+        }
+
+        /* Status bar score thresholds — show 0-25-50-75-100 scale */
+        #status .score-thresholds {
+            display: inline-flex;
+            gap: 3px;
+            justify-content: center;
+            margin-left: 10px;
+            vertical-align: middle;
+            align-items: center;
+        }
+
+        #status .score-thresholds .score-chip {
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 10px;
+            color: #fff;
+        }
+
+        #status .score-thresholds .score-label {
+            font-size: 10px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        /* Cell5.5 width fix: reduce padding, allow table to fill */
+        #cell5_5 .grid-centered>div {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        #cell5_5 .grid-centered {
+            gap: 4px !important;
+            padding: 0 !important;
+        }
+
+        #cell5_5 .card {
+            padding: 4px !important;
+        }
+
+        #cell5_5 .card.card-inner {
+            padding: 2px !important;
+        }
+
+        #cell5_5 .card-inner-child {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Cell5.5: smaller number pills */
+        #cell5_5 td.td-has-pill .pill,
+        #cell5_5 td.td-has-pill .cell5-pill {
+            width: 18px !important;
+            min-width: 18px !important;
+            height: 17px !important;
+            margin: 0 1px !important;
+            padding: 0 !important;
+            font-size: 10px !important;
+            border-radius: 3px !important;
+        }
+
+        #cell5_5 td.td-has-pill {
+            padding: 1px 1px !important;
+        }
+
+        /* Cell5.5 score column: narrower than other cells */
+        #cell5_5 table th:last-child,
+        #cell5_5 table td:last-child {
+            padding: 1px 2px !important;
+            white-space: nowrap;
+        }
+
+        #cell5_5 .score-cell {
+            font-size: 9px !important;
+            min-width: 26px !important;
+            padding: 1px 2px !important;
+        }
+
+        /* Cell4 equal square number boxes */
+        #cell4 td .pill,
+        #cell5 td strong {
+            display: inline-block;
+            width: 26px;
+            height: 26px;
+            line-height: 26px;
+            text-align: center;
+            border-radius: 6px;
+            padding: 0 !important;
+            font-size: 12px;
+        }
+
+        #cell5 .cell5-sort-th[data-sort] {
+            transition: background 0.15s;
+        }
+
+        /* Cell5 sort column highlight */
+        #cell5 .cell5-sort-th.sort-active {
+            background: var(--accent) !important;
+            color: #fff !important;
+        }
+
+        #cell5 table td.sort-active-col {
+            background: #414143 !important;
+            color: #fff !important;
+        }
+
+        /* Cell5 num column boxes */
+        #cell5 td strong {
+            background: #fffbea;
+            color: #000;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+
+        /* Draft popup score pill */
+        #draftPopup .draft-score {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-right: 4px;
+            color: #fff;
+            white-space: nowrap;
+            min-width: 30px;
+            display: inline-block;
+            text-align: center;
+        }
+
+        /* Cell6.5 unpair score display */
+        .unpair-score-display {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 5px;
+            color: #fff;
+            display: inline-block;
+            margin-top: 1px;
+        }
+
+        /* Cell6.5 unpair info: smaller dontmatch text */
+        #cell6_5 .controls.unpair-mode .numtrash-wrapper {
+            font-size: 11px !important;
+        }
+    </style>
+    <script>
+        (function () {
+            'use strict';
+
+            // ══════════ SCORE HELPERS ══════════
+            // Thresholds are computed dynamically by score.js — use fallback defaults until ready
+            function getQ25() { return typeof window.__SCORE_Q25 === 'number' ? window.__SCORE_Q25 : 8.59; }
+            function getQ50() { return typeof window.__SCORE_Q50 === 'number' ? window.__SCORE_Q50 : 8.75; }
+            function getQ75() { return typeof window.__SCORE_Q75 === 'number' ? window.__SCORE_Q75 : 8.90; }
+
+            function getScoreForResult(resultStr) {
+                if (!window.SCORES) return null;
+                const key = String(resultStr || '').trim();
+                const entry = window.SCORES[key];
+                if (entry && typeof entry.score10 === 'number') return entry.score10;
+                const sorted = key.split(',').map(s => s.trim()).sort((a, b) => Number(a) - Number(b)).join(',');
+                const entry2 = window.SCORES[sorted];
+                if (entry2 && typeof entry2.score10 === 'number') return entry2.score10;
+                return null;
+            }
+
+            function getScoreClass(score) {
+                if (score === null || score === undefined) return '';
+                if (score >= getQ75()) return 'score-green';
+                if (score >= getQ50()) return 'score-yellow';
+                if (score >= getQ25()) return 'score-orange';
+                return 'score-red';
+            }
+
+            function getScoreBg(score) {
+                if (score === null || score === undefined) return '';
+                if (score >= getQ75()) return '#2e7d32';
+                if (score >= getQ50()) return '#ffd600';
+                if (score >= getQ25()) return '#e65100';
+                return '#c62828';
+            }
+
+            function getScoreTextColor(score) {
+                if (score === null || score === undefined) return '#fff';
+                if (score >= getQ50() && score < getQ75()) return '#000';
+                return '#fff';
+            }
+
+            function scoreHtml(resultStr) {
+                const s = getScoreForResult(resultStr);
+                if (s === null) return '';
+                return '<span class="score-cell ' + getScoreClass(s) + '" title="Score: ' + s.toFixed(2) + '">' + s.toFixed(2) + '</span>';
+            }
+
+            window.__getScoreForResult = getScoreForResult;
+            window.__getScoreClass = getScoreClass;
+            window.__getScoreBg = getScoreBg;
+            window.__getScoreTextColor = getScoreTextColor;
+            window.__scoreHtml = scoreHtml;
+
+            // ══════════ STATUS BAR: 0-25-50-75-100 SCALE ══════════
+            function updateStatusThresholds() {
+                try {
+                    const status = document.getElementById('status');
+                    if (!status) return;
+                    // Remove old
+                    const old = status.querySelector('.score-thresholds');
+                    if (old) old.remove();
+                    const q25 = getQ25(), q50 = getQ50(), q75 = getQ75();
+                    const minS = typeof window.__SCORE_MIN === 'number' ? window.__SCORE_MIN : 7.0;
+                    const maxS = typeof window.__SCORE_MAX === 'number' ? window.__SCORE_MAX : 10.0;
+                    const threshDiv = document.createElement('span');
+                    threshDiv.className = 'score-thresholds';
+                    threshDiv.innerHTML =
+                        '<span class="score-chip" style="background:#c62828" title="MIN (percentile 0)">0: ' + minS.toFixed(2) + '</span>' +
+                        '<span class="score-chip" style="background:#e65100" title="Q25 (percentile 25)">25: ' + q25.toFixed(2) + '</span>' +
+                        '<span class="score-chip" style="background:#ffd600;color:#000" title="Q50 (percentile 50)">50: ' + q50.toFixed(2) + '</span>' +
+                        '<span class="score-chip" style="background:#2e7d32" title="Q75 (percentile 75)">75: ' + q75.toFixed(2) + '</span>' +
+                        '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>';
+                    status.appendChild(threshDiv);
+                } catch (e) { }
+            }
+            // ══════════ EXPOSE updateStatusThresholds globally ══════════
+            window.__updateStatusThresholds = updateStatusThresholds;
+            // Keep polling: re-inject thresholds whenever missing (status.innerHTML gets overwritten on data load)
+            setInterval(() => {
+                if (window.SCORES && Object.keys(window.SCORES).length > 0) {
+                    const statusEl = document.getElementById('status');
+                    if (statusEl && statusEl.textContent.includes('Đã tải') && !statusEl.querySelector('.score-thresholds')) {
+                        updateStatusThresholds();
+                    }
+                }
+            }, 500);
+
+            // ══════════ DRAFT POPUP: REMOVE localStorage PERSISTENCE ══════════
+            try { localStorage.removeItem('draftRecords'); } catch (e) { }
+
+            // ══════════ DRAFT POPUP: ADD SCORE TO EACH RECORD ROW ══════════
+            const origCreateRecordRow = window.__draftCreateRecordRow;
+            if (origCreateRecordRow) {
+                window.__draftCreateRecordRow = function (nums, idx) {
+                    const tr = origCreateRecordRow(nums, idx);
+                    try {
+                        const filled = (nums || []).filter(n => n !== null && n !== undefined);
+                        if (filled.length === 6) {
+                            const key = filled.join(',');
+                            let score = getScoreForResult(key);
+                            if (score === null && typeof window.__scoreInput === 'function') {
+                                score = window.__scoreInput(filled.map(Number));
+                            }
+                            if (score !== null) {
+                                const scoreSpan = document.createElement('span');
+                                scoreSpan.className = 'draft-score';
+                                scoreSpan.textContent = score.toFixed(2);
+                                scoreSpan.style.background = getScoreBg(score);
+                                scoreSpan.style.color = getScoreTextColor(score);
+                                const recordRow = tr.querySelector('.record-row');
+                                const grabber = tr.querySelector('.grabber');
+                                if (recordRow && grabber) recordRow.insertBefore(scoreSpan, grabber);
+                            }
+                        }
+                    } catch (e) { }
+                    return tr;
+                };
+            }
+
+            function patchDraftScores() {
+                try {
+                    const draftTbody = document.querySelector('#draftTable tbody');
+                    if (!draftTbody) return;
+                    draftTbody.querySelectorAll('tr:not(.draft-add-row-tr)').forEach(tr => {
+                        if (tr.querySelector('.draft-score')) return;
+                        const pills = Array.from(tr.querySelectorAll('.pill'));
+                        if (pills.length !== 6) return;
+                        const nums = pills.map(p => {
+                            const t = (p.textContent || '').trim();
+                            return (t === '' || t === '__') ? null : parseInt(t, 10);
+                        });
+                        const filled = nums.filter(n => n !== null && Number.isFinite(n));
+                        if (filled.length !== 6) return;
+                        const key = filled.join(',');
+                        let score = getScoreForResult(key);
+                        if (score === null && typeof window.__scoreInput === 'function') score = window.__scoreInput(filled);
+                        if (score === null) return;
+                        const scoreSpan = document.createElement('span');
+                        scoreSpan.className = 'draft-score';
+                        scoreSpan.textContent = score.toFixed(2);
+                        scoreSpan.style.background = getScoreBg(score);
+                        scoreSpan.style.color = getScoreTextColor(score);
+                        const recordRow = tr.querySelector('.record-row');
+                        const grabber = tr.querySelector('.grabber');
+                        if (recordRow && grabber) recordRow.insertBefore(scoreSpan, grabber);
+                    });
+                } catch (e) { }
+            }
+            try {
+                const draftTbody = document.querySelector('#draftTable tbody');
+                if (draftTbody) {
+                    const dObs = new MutationObserver(() => setTimeout(patchDraftScores, 50));
+                    dObs.observe(draftTbody, { childList: true, subtree: true });
+                }
+            } catch (e) { }
+
+            // ══════════ DRAFT POPUP: ENSURE EMPTY ROW ON OPEN/CLEAR ══════════
+            try {
+                const origShowDraft = window.__showDraft;
+                if (origShowDraft) {
+                    window.__showDraft = function (atRecords) {
+                        try { localStorage.removeItem('draftRecords'); } catch (e) { }
+                        origShowDraft(atRecords);
+                        setTimeout(patchDraftScores, 60);
+                        // Ensure at least one empty row exists
+                        try {
+                            const tb = document.querySelector('#draftTable tbody');
+                            if (tb) {
+                                const dataRows = tb.querySelectorAll('tr:not(.draft-add-row-tr)');
+                                if (dataRows.length === 0) {
+                                    // Add empty row
+                                    const emptyNums = [null, null, null, null, null, null];
+                                    const fn = window.__draftCreateRecordRow || origCreateRecordRow;
+                                    if (fn) {
+                                        const newRow = fn(emptyNums, 0);
+                                        const addRowEl = tb.querySelector('tr.draft-add-row-tr');
+                                        if (addRowEl) tb.insertBefore(newRow, addRowEl);
+                                        else tb.appendChild(newRow);
+                                    }
+                                }
+                            }
+                        } catch (e) { }
+                    };
+                }
+            } catch (e) { }
+
+            // Patch clear button to leave one empty row
+            try {
+                const clearBtn = document.getElementById('draftClearBtn');
+                if (clearBtn) {
+                    const origListeners = clearBtn.onclick;
+                    clearBtn.onclick = null;
+                    // Remove all event listeners by cloning
+                    const newClearBtn = clearBtn.cloneNode(true);
+                    clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
+                    newClearBtn.addEventListener('click', () => {
+                        try {
+                            const tb = document.querySelector('#draftTable tbody');
+                            if (tb) {
+                                // Remove all data rows
+                                tb.querySelectorAll('tr:not(.draft-add-row-tr)').forEach(tr => tr.remove());
+                                // Add one empty row
+                                const emptyNums = [null, null, null, null, null, null];
+                                const fn = window.__draftCreateRecordRow;
+                                if (fn) {
+                                    const newRow = fn(emptyNums, 0);
+                                    const addRowEl = tb.querySelector('tr.draft-add-row-tr');
+                                    if (addRowEl) tb.insertBefore(newRow, addRowEl);
+                                    else tb.appendChild(newRow);
+                                }
+                                if (typeof window.__draftEnsureAddRow === 'function') window.__draftEnsureAddRow();
+                            }
+                        } catch (e) { }
+                    });
+                }
+            } catch (e) { }
+
+            // ══════════ CELL6.5 UNPAIR: SCORE DISPLAY IN NUMTRASH WRAPPER ══════════
+            function updateUnpairScore() {
+                try {
+                    // Find first unpair input to verify cell6.5 is rendered
+                    const firstInp = document.getElementById('cell6_5_unpair_input_1');
+                    if (!firstInp) return;
+                    let scoreEl = document.getElementById('unpairScoreDisplay');
+                    if (!scoreEl) {
+                        scoreEl = document.createElement('span');
+                        scoreEl.id = 'unpairScoreDisplay';
+                        scoreEl.className = 'numtrash-wrapper unpair-score-display';
+                        scoreEl.style.cssText = 'display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;color:#fff;margin-left:6px;';
+                        // Navigate from input up to controls, insert BEFORE numTrashLabel
+                        const ctrl = firstInp.closest('.controls');
+                        if (!ctrl) return;
+                        const numTrashLbl = ctrl.querySelector('label.numtrash-wrapper');
+                        if (numTrashLbl) ctrl.insertBefore(scoreEl, numTrashLbl);
+                        else ctrl.appendChild(scoreEl);
+                    }
+                    const inputs = [];
+                    for (let i = 1; i <= 6; i++) {
+                        const inp = document.getElementById('cell6_5_unpair_input_' + i);
+                        if (inp) inputs.push(inp);
+                    }
+                    if (inputs.length !== 6) { scoreEl.textContent = ''; scoreEl.style.background = 'transparent'; return; }
+                    const filled = inputs.map(inp => parseInt((inp.value || '').trim(), 10)).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                    if (filled.length !== 6) { scoreEl.textContent = ''; scoreEl.style.background = 'transparent'; return; }
+                    // Sort for consistent key lookup
+                    filled.sort((a, b) => a - b);
+                    let score = (typeof window.__scoreInput === 'function') ? window.__scoreInput(filled) : null;
+                    if (score === null) {
+                        scoreEl.textContent = 'score: N/A';
+                        scoreEl.style.background = '#555';
+                        scoreEl.style.color = '#fff';
+                    } else {
+                        scoreEl.textContent = 'score: ' + score.toFixed(2);
+                        scoreEl.style.background = getScoreBg(score);
+                        scoreEl.style.color = getScoreTextColor(score);
+                    }
+                } catch (e) { console.warn('updateUnpairScore error:', e); }
+            }
+            // DOCUMENT-level event delegation: works even when cell6.5 is lazily rendered
+            document.addEventListener('input', (ev) => {
+                if (ev.target && ev.target.id && ev.target.id.startsWith('cell6_5_unpair_input_')) {
+                    setTimeout(updateUnpairScore, 50);
+                }
+            }, true);
+
+            // ══════════ CELL5.5 INFO POPUP: FIX FORMAT ══════════
+            // Remove the old full-sequence .info-sequence-str and replace with
+            // a compact format using a,b,c,d... for non-x positions. Dblclick to copy.
+            try {
+                const _origBuildCountsHtml = null; // we'll patch via MutationObserver
+                // Watch for info popup to appear and fix the sequence display
+                const allPopups = document.querySelectorAll('body > div');
+                for (const popup of allPopups) {
+                    if (popup.id === 'numberPickerPopup' || popup.id === 'trashPopup' || popup.id === 'favPopup' || popup.id === 'draftPopup') continue;
+                    const style = popup.getAttribute('style') || '';
+                    if (style.includes('z-index') && style.includes('position')) {
+                        // potential info popup
+                        const infoObs = new MutationObserver(() => {
+                            try {
+                                if (popup.style.display === 'none') return;
+                                // Remove all .info-sequence-str elements (the old unwanted full sequence)
+                                popup.querySelectorAll('.info-sequence-str').forEach(el => el.remove());
+                            } catch (e) { }
+                        });
+                        infoObs.observe(popup, { childList: true, subtree: true });
+                    }
+                }
+            } catch (e) { }
+
+            // ══════════ CELL8 LAG FIX ══════════
+            try {
+                if (!window.__globalPairCounts) {
+                    window.__globalPairCounts = null;
+                    window.__buildGlobalPairCounts = function () {
+                        if (window.__globalPairCounts) return window.__globalPairCounts;
+                        const pc = new Map();
+                        (window.rows || []).forEach(r => {
+                            try {
+                                const nums = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                for (let i = 0; i < nums.length; i++) for (let j = i + 1; j < nums.length; j++) {
+                                    const key = nums[i] + '-' + nums[j];
+                                    pc.set(key, (pc.get(key) || 0) + 1);
+                                }
+                            } catch (e) { }
+                        });
+                        window.__globalPairCounts = pc;
+                        return pc;
+                    };
+                }
+            } catch (e) { }
+
+            // ══════════ CELL6.5 UNPAIR: FIX ANALVAL FOCUS BUG ══════════
+            try {
+                const origRefocus = window.__cell6_5_refocusUnpairNum;
+                if (origRefocus) {
+                    window.__cell6_5_refocusUnpairNum = function () {
+                        setTimeout(() => {
+                            try {
+                                const analNum = window.__cell6_5_analNum;
+                                if (analNum) {
+                                    const numVal = parseInt((analNum.value || '').trim(), 10);
+                                    if (Number.isFinite(numVal) && numVal >= 1 && numVal <= 45) {
+                                        const tbody = document.querySelector('#cell6_5 .anal-table-wrap table tbody, #cell6_5 table tbody');
+                                        if (!tbody) return;
+                                        const targetRow = Array.from(tbody.querySelectorAll('tr')).find(r => {
+                                            return r.children[0] && parseInt(r.children[0].textContent, 10) === numVal;
+                                        });
+                                        if (targetRow) {
+                                            const numTd = targetRow.children[0];
+                                            if (numTd) {
+                                                tbody.querySelectorAll('td.cell6-num-highlight').forEach(td => td.classList.remove('cell6-num-highlight'));
+                                                numTd.classList.add('cell6-num-highlight');
+                                            }
+                                            const dTd = targetRow.children[1];
+                                            const dRaw = dTd ? dTd.textContent.trim() : '';
+                                            const dNums = dRaw ? dRaw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n)) : [];
+                                            const dUniq = Array.from(new Set(dNums));
+                                            try { if (typeof window.clearAllTrash === 'function') window.clearAllTrash(); } catch (e) { }
+                                            if (dUniq.length) {
+                                                try { document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: dUniq }, bubbles: true, composed: true })); } catch (e) { }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e) { }
+                        }, 200);
+                    };
+                }
+            } catch (e) { }
+
+            // ══════════ NUMTRASH=0: CLEAR DONTMATCH ══════════
+            try {
+                const numTrashInput = document.querySelector('#cell6_5 input[title*="nhóm cuối"]');
+                if (numTrashInput) {
+                    numTrashInput.addEventListener('input', () => {
+                        setTimeout(() => {
+                            try {
+                                const val = parseInt(String(numTrashInput.value || '').trim(), 10);
+                                if (val === 0) {
+                                    // Clear the unpairInfo display
+                                    const unpairInfo = document.querySelector('#cell6_5 .controls.unpair-mode > span.numtrash-wrapper');
+                                    if (unpairInfo) {
+                                        // Find the info span (not the score display)
+                                        const spans = unpairInfo.querySelectorAll('span:not(.unpair-score-display)');
+                                        // Clear dontmatch-related content
+                                    }
+                                    // Clear trash when numtrash = 0
+                                    try { if (typeof window.clearAllTrash === 'function') window.clearAllTrash(); } catch (e) { }
+                                    // Clear the unpair info text
+                                    try {
+                                        const infoSpans = document.querySelectorAll('#cell6_5 .numtrash-wrapper');
+                                        infoSpans.forEach(sp => {
+                                            if (sp.querySelector && !sp.querySelector('input') && !sp.querySelector('select') && !sp.querySelector('label')) {
+                                                // This is the unpairInfo span - check if it shows dontmatch
+                                                const txt = (sp.textContent || '').trim();
+                                                if (txt.includes('>') || txt.includes('{')) {
+                                                    sp.innerHTML = '';
+                                                }
+                                            }
+                                        });
+                                    } catch (e) { }
+                                }
+                                if (typeof window.__cell6_5_refocusUnpairNum === 'function') {
+                                    window.__cell6_5_refocusUnpairNum();
+                                }
+                                updateUnpairScore();
+                            } catch (e) { }
+                        }, 100);
+                    });
+                    numTrashInput.min = '0';
+                    // Fix up/down buttons to allow 0
+                    const upBtn = document.getElementById('cell6_5_numtrash_up');
+                    const downBtn = document.getElementById('cell6_5_numtrash_down');
+                    if (upBtn) {
+                        upBtn.onclick = null;
+                        upBtn.addEventListener('click', (e) => {
+                            e.preventDefault(); e.stopImmediatePropagation();
+                            let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = -1;
+                            n = n + 1;
+                            if (n > 44) n = 0;
+                            numTrashInput.value = String(n);
+                            numTrashInput.dispatchEvent(new Event('input'));
+                        }, true);
+                    }
+                    if (downBtn) {
+                        downBtn.onclick = null;
+                        downBtn.addEventListener('click', (e) => {
+                            e.preventDefault(); e.stopImmediatePropagation();
+                            let n = parseInt(String(numTrashInput.value ?? '').trim(), 10);
+                            if (!Number.isFinite(n)) n = 1;
+                            n = n - 1;
+                            if (n < 0) n = 44;
+                            numTrashInput.value = String(n);
+                            numTrashInput.dispatchEvent(new Event('input'));
+                        }, true);
+                    }
+                }
+            } catch (e) { }
+
+            // ══════════ CELL5 SORT COLUMN HIGHLIGHTING ══════════
+            function styleCell5() {
+                try {
+                    const cell5 = document.getElementById('cell5');
+                    if (!cell5) return;
+                    const tables = cell5.querySelectorAll('table');
+                    tables.forEach(tbl => {
+                        // Style num column cells as boxes
+                        tbl.querySelectorAll('tbody td:nth-child(2)').forEach(td => {
+                            const strong = td.querySelector('strong');
+                            if (strong && !strong.classList.contains('num-box-styled')) {
+                                strong.classList.add('num-box-styled');
+                                strong.style.cssText = 'display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:6px;background:#fffbea;color:#000;font-weight:700;padding:0;font-size:12px;';
+                            }
+                        });
+                        // Highlight active sort column
+                        const ths = tbl.querySelectorAll('thead th');
+                        ths.forEach(th => th.classList.remove('sort-active'));
+                        tbl.querySelectorAll('tbody td').forEach(td => td.classList.remove('sort-active-col'));
+                        ths.forEach((th, idx) => {
+                            if (th.classList.contains('cell5-sort-th')) {
+                                const sortKey = th.dataset.sort || '';
+                                const currentSort = window.__cell5RuleSortKey || 'count-desc';
+                                if (currentSort.startsWith(sortKey)) {
+                                    th.classList.add('sort-active');
+                                    // Highlight the corresponding column in tbody
+                                    tbl.querySelectorAll('tbody tr').forEach(tr => {
+                                        const tds = tr.querySelectorAll('td');
+                                        if (tds[idx]) tds[idx].classList.add('sort-active-col');
+                                    });
+                                }
+                            }
+                        });
+                    });
+                } catch (e) { }
+            }
+            try {
+                const cell5El = document.getElementById('cell5');
+                if (cell5El) {
+                    const c5obs = new MutationObserver(() => setTimeout(styleCell5, 100));
+                    c5obs.observe(cell5El, { childList: true, subtree: true });
+                    setTimeout(styleCell5, 300);
+                }
+            } catch (e) { }
+
+            // ══════════ CELL4 EQUAL SQUARE NUM BOXES ══════════
+            function styleCell4() {
+                try {
+                    const cell4 = document.getElementById('cell4');
+                    if (!cell4) return;
+                    cell4.querySelectorAll('tbody td .pill').forEach(pill => {
+                        if (!pill.classList.contains('cell4-box-styled')) {
+                            pill.classList.add('cell4-box-styled');
+                            pill.style.cssText += ';width:26px;height:26px;line-height:26px;text-align:center;padding:0;display:inline-block;';
+                        }
+                    });
+                } catch (e) { }
+            }
+            try {
+                const cell4El = document.getElementById('cell4');
+                if (cell4El) {
+                    const c4obs = new MutationObserver(() => setTimeout(styleCell4, 100));
+                    c4obs.observe(cell4El, { childList: true, subtree: true });
+                    setTimeout(styleCell4, 300);
+                }
+            } catch (e) { }
+
+        })();
+    </script>
+
 </body>
 
 </html>
