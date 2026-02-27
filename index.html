@@ -3,8 +3,9 @@
 
 <head>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="scores.js"></script>
-    <script src="combo_data.js"></script>
+    <script src="scores.js" onerror="console.log('[score] scores.js not found — will compute from data.json')"></script>
+    <script src="combo_data.js"
+        onerror="console.log('[score] combo_data.js not found — will compute from data.json')"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Life Notebook → Web</title>
@@ -3263,6 +3264,16 @@
 </head>
 <!-- Draft popup CSS inserted -->
 <style>
+    /* Quick overrides: remove padding for specific unpair label and widen numtrash input */
+    #cell6_5>div:nth-child(4)>div.controls.unpair-mode>label:nth-child(17) {
+        padding: 0 !important;
+    }
+
+    #cell6_5 .numtrash-wrapper input[type="number"] {
+        width: 70px !important;
+        min-width: 64px !important;
+    }
+
     /* Draft popup styles: reuse trash popup visuals but keep it attached to number picker */
     #draftPopup {
         position: fixed;
@@ -7830,11 +7841,11 @@
             const numTrashInput = document.createElement('input');
             numTrashInput.type = 'number';
             numTrashInput.min = 0; numTrashInput.max = 44; numTrashInput.value = 3;
-            numTrashInput.style.width = '80px';
+            numTrashInput.style.width = '56px';
             numTrashInput.title = 'Số lượng nhóm cuối cùng (0-44)';
             // Create +/- buttons styled like the Số x control
             const numTrashContainer = document.createElement('div');
-            numTrashContainer.style.cssText = 'position:relative;display:inline-block;vertical-align:middle;margin-right:8px;';
+            numTrashContainer.style.cssText = 'position:relative;display:inline-block;vertical-align:middle;margin-right:2px;';
             numTrashInput.style.paddingRight = '40px';
             numTrashInput.style.boxSizing = 'border-box';
             const numBtnGroup = document.createElement('div');
@@ -7873,7 +7884,7 @@
             numTrashLabel.className = 'flex';
             numTrashLabel.classList.add('numtrash-wrapper');
             numTrashLabel.style.alignItems = 'center';
-            numTrashLabel.style.gap = '6px';
+            numTrashLabel.style.gap = '2px';
             numTrashLabel.append(document.createTextNode('numtrash:'), numTrashContainer);
             // hidden by default; shown only when trashSel === 'unpair'
             numTrashLabel.style.display = 'none';
@@ -7882,7 +7893,7 @@
             const optChk = document.createElement('input'); optChk.type = 'checkbox'; optChk.id = 'cell6_5_optimize';
             const optLabel = document.createElement('label'); optLabel.className = 'flex';
             optLabel.classList.add('numtrash-wrapper'); // ensure visibility only in unpair-mode
-            optLabel.style.alignItems = 'center'; optLabel.style.gap = '6px';
+            optLabel.style.alignItems = 'center'; optLabel.style.gap = '2px';
             optLabel.append(optChk, document.createTextNode('Tối ưu'));
             // dropdown for optimize mode: 'nền xanh' (green) or 'nền đỏ' (red)
             const optSel = document.createElement('select');
@@ -8561,7 +8572,10 @@
             // Download rules button: exports visible history rows as Excel (.xlsx OOXML chuẩn)
             const ruleBtn = document.createElement('button');
             ruleBtn.type = 'button';
-            ruleBtn.textContent = 'Download rules';
+            ruleBtn.innerHTML = 'Download<br>rules';
+            // allow wrapping so the two words appear on separate lines
+            ruleBtn.style.whiteSpace = 'normal';
+            ruleBtn.style.textAlign = 'center';
             ruleBtn.title = 'Download visible history as rule.xlsx (OOXML format)';
             ruleBtn.style.marginLeft = '8px';
             ruleBtn.style.padding = '6px 10px';
@@ -15716,7 +15730,9 @@
             // Tải dữ liệu TRƯỚC khi render các cell
             await loadData();
 
-            // Compute score thresholds from pre-loaded window.SCORES (scores.js)
+            // Build SCORES + COMBO_DATA from loaded rows if external files (scores.js/combo_data.js) weren't loaded
+            if (typeof window.__buildScoresFromRows === 'function') window.__buildScoresFromRows();
+            // Compute score thresholds from window.SCORES
             if (window.SCORES && typeof window.__computeScoreThresholds === 'function') window.__computeScoreThresholds();
             // Inject threshold markers into status bar
             if (typeof window.__updateStatusThresholds === 'function') window.__updateStatusThresholds();
@@ -20778,11 +20794,136 @@
 
     <!-- ═══ Score system (pre-computed via scores.js) ═══ -->
     <script>
-        // ═══ Lightweight score helpers — all data from scores.js, NO runtime combo computation ═══
+        // ═══ Score engine — computes from loaded rows if scores.js/combo_data.js are absent ═══
         (function () {
             'use strict';
 
-            /* ── Compute Q25/Q50/Q75/MIN/MAX from pre-loaded window.SCORES ── */
+            /* ── Helper: percentile rank (fraction of values <= value) ── */
+            function pctRank(value, sortedArr) {
+                const n = sortedArr.length;
+                if (n === 0) return 0;
+                if (n === 1) return value > 0 ? 1 : 0;
+                let lo = 0, hi = n;
+                while (lo < hi) { const mid = (lo + hi) >>> 1; if (sortedArr[mid] <= value) lo = mid + 1; else hi = mid; }
+                return lo / n;
+            }
+
+            /* ── Build SCORES + COMBO_DATA from rows (self-contained, no external files) ── */
+            function buildScoresFromRows() {
+                if (!window.rows || !Array.isArray(window.rows) || window.rows.length === 0) return;
+                const t0 = performance.now();
+
+                // 1. Build combo counts for k=2..5
+                const comboCounts = { 2: new Map(), 3: new Map(), 4: new Map(), 5: new Map() };
+                const records = [];
+                for (const r of window.rows) {
+                    const nums = (r.nums && r.nums.length === 6) ? r.nums.slice().sort((a, b) => a - b) : [];
+                    records.push({ date: r.date || r.dateRaw || '', nums });
+                    if (nums.length !== 6) continue;
+                    for (let k = 2; k <= 5; k++) {
+                        const m = comboCounts[k];
+                        // enumerate C(6,k) combos inline
+                        const gen = (start, combo) => {
+                            if (combo.length === k) {
+                                const key = combo.join(',');
+                                m.set(key, (m.get(key) || 0) + 1);
+                                return;
+                            }
+                            for (let i = start; i < 6; i++) {
+                                combo.push(nums[i]);
+                                gen(i + 1, combo);
+                                combo.pop();
+                            }
+                        };
+                        gen(0, []);
+                    }
+                }
+
+                // 2. Compute percentile rank for each combo
+                const comboPct = {};
+                for (let k = 2; k <= 5; k++) {
+                    const m = comboCounts[k];
+                    const counts = Array.from(m.values());
+                    counts.sort((a, b) => a - b);
+                    const pctMap = {};
+                    for (const [key, cnt] of m) {
+                        pctMap[key] = Math.round(pctRank(cnt, counts) * 10000) / 10000;
+                    }
+                    comboPct[k] = pctMap;
+                }
+
+                // 3. Compute S_k for each record and variance-based weights
+                const skLists = { 2: [], 3: [], 4: [], 5: [] };
+                const recSk = [];
+                for (const rec of records) {
+                    const sk = {};
+                    if (rec.nums.length !== 6) { for (let k = 2; k <= 5; k++) { sk[k] = 0; skLists[k].push(0); } recSk.push(sk); continue; }
+                    for (let k = 2; k <= 5; k++) {
+                        let sum = 0, cnt = 0;
+                        const gen = (start, combo) => {
+                            if (combo.length === k) {
+                                const key = combo.join(',');
+                                sum += (comboPct[k][key] || 0);
+                                cnt++;
+                                return;
+                            }
+                            for (let i = start; i < 6; i++) {
+                                combo.push(rec.nums[i]);
+                                gen(i + 1, combo);
+                                combo.pop();
+                            }
+                        };
+                        gen(0, []);
+                        sk[k] = cnt > 0 ? sum / cnt : 0;
+                        skLists[k].push(sk[k]);
+                    }
+                    recSk.push(sk);
+                }
+
+                // Variance-based weights
+                const varK = {};
+                let totalVar = 0;
+                for (let k = 2; k <= 5; k++) {
+                    const vals = skLists[k];
+                    const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
+                    const v = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (vals.length || 1);
+                    varK[k] = v;
+                    totalVar += v;
+                }
+                const weights = {};
+                for (let k = 2; k <= 5; k++) weights[k] = totalVar > 0 ? varK[k] / totalVar : 0.25;
+
+                // 4. Build window.SCORES
+                if (!window.SCORES || Object.keys(window.SCORES).length === 0) {
+                    const scores = {};
+                    for (let i = 0; i < records.length; i++) {
+                        const rec = records[i];
+                        if (rec.nums.length !== 6) continue;
+                        const sk = recSk[i];
+                        let raw = 0;
+                        for (let k = 2; k <= 5; k++) raw += weights[k] * sk[k];
+                        const score10 = Math.round(raw * 10 * 100) / 100;
+                        const key = rec.nums.join(',');
+                        scores[key] = { date: rec.date, nums: rec.nums, S_k: sk, weights, raw: Math.round(raw * 10000) / 10000, score10 };
+                    }
+                    window.SCORES = scores;
+                    console.log('[score] Built SCORES from rows:', Object.keys(scores).length, 'entries in', Math.round(performance.now() - t0), 'ms');
+                }
+
+                // 5. Build window.COMBO_DATA
+                if (!window.COMBO_DATA) {
+                    const cd = { weights: {} };
+                    for (let k = 2; k <= 5; k++) {
+                        cd.weights[String(k)] = Math.round(weights[k] * 1000000) / 1000000;
+                        cd[String(k)] = comboPct[k];
+                    }
+                    window.COMBO_DATA = cd;
+                    console.log('[score] Built COMBO_DATA from rows');
+                }
+            }
+            window.__buildScoresFromRows = buildScoresFromRows;
+
+            /* ── Compute Q25/Q50/Q75/MIN/MAX from window.SCORES ── */
             function computeScoreThresholds() {
                 if (!window.SCORES) return;
                 const allScores = Object.values(window.SCORES)
@@ -20797,11 +20938,11 @@
                     window.__SCORE_MIN = allScores[0];
                     window.__SCORE_MAX = allScores[ns - 1];
                 }
-                console.log('[score] Thresholds from scores.js:', ns, 'records. Q25=', window.__SCORE_Q25, 'Q50=', window.__SCORE_Q50, 'Q75=', window.__SCORE_Q75);
+                console.log('[score] Thresholds:', ns, 'records. Q25=', window.__SCORE_Q25, 'Q50=', window.__SCORE_Q50, 'Q75=', window.__SCORE_Q75);
             }
             window.__computeScoreThresholds = computeScoreThresholds;
 
-            /* ── scoreInput: compute from COMBO_DATA (real-time), fallback to SCORES lookup ── */
+            /* ── scoreInput: compute from COMBO_DATA for ANY 6 numbers ── */
             function scoreInput(nums) {
                 if (!nums || nums.length !== 6) return null;
                 const sorted = nums.slice().map(Number).sort((a, b) => a - b);
@@ -20815,27 +20956,26 @@
                             const pctMap = cd[String(k)];
                             if (!pctMap) continue;
                             const wk = Number(w[String(k)] || 0);
-                            // enumerate all C(6,k) combos from sorted
-                            const combos = [];
-                            const n = sorted.length;
-                            const idx = new Array(k);
-                            function gen(start, depth) {
-                                if (depth === k) { combos.push(idx.slice()); return; }
-                                for (let i = start; i < n; i++) { idx[depth] = i; gen(i + 1, depth + 1); }
-                            }
-                            gen(0, 0);
-                            let sumPct = 0;
-                            for (const ci of combos) {
-                                const key = ci.map(i => sorted[i]).join(',');
-                                sumPct += (pctMap[key] || 0);
-                            }
-                            const sk = combos.length > 0 ? sumPct / combos.length : 0;
-                            raw += wk * sk;
+                            let sumPct = 0, cnt = 0;
+                            const gen = (start, combo) => {
+                                if (combo.length === k) {
+                                    sumPct += (pctMap[combo.join(',')] || 0);
+                                    cnt++;
+                                    return;
+                                }
+                                for (let i = start; i < 6; i++) {
+                                    combo.push(sorted[i]);
+                                    gen(i + 1, combo);
+                                    combo.pop();
+                                }
+                            };
+                            gen(0, []);
+                            raw += wk * (cnt > 0 ? sumPct / cnt : 0);
                         }
-                        return Math.round(raw * 10 * 100) / 100; // score10 rounded to 2dp
+                        return Math.round(raw * 10 * 100) / 100;
                     } catch (e) { console.warn('scoreInput COMBO_DATA error:', e); }
                 }
-                // Fallback: lookup in SCORES (only works for historical draws)
+                // Fallback: lookup in SCORES
                 if (window.SCORES) {
                     const key = sorted.join(',');
                     const entry = window.SCORES[key];
@@ -21004,20 +21144,35 @@
             text-align: center;
         }
 
-        /* Cell6.5 unpair score display */
+        /* Cell6.5 unpair score display — large centered number */
         .unpair-score-display {
-            font-size: 11px;
-            font-weight: 700;
-            padding: 1px 6px;
-            border-radius: 5px;
+            font-size: 28px;
+            font-weight: 900;
+            padding: 3px 14px;
+            border-radius: 7px;
             color: #fff;
-            display: inline-block;
-            margin-top: 1px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 70px;
+            text-align: center;
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+            vertical-align: middle;
         }
 
-        /* Cell6.5 unpair info: smaller dontmatch text */
-        #cell6_5 .controls.unpair-mode .numtrash-wrapper {
-            font-size: 11px !important;
+        /* Cell6.5 unpair info: keep large for purely informational spans */
+        #cell6_5 .controls.unpair-mode span.numtrash-wrapper {
+            font-size: 20px !important;
+            font-weight: 800 !important;
+        }
+
+        /* Smaller labels/buttons for controls (numtrash label, optimize label, download rules button) */
+        #cell6_5 .controls.unpair-mode label.numtrash-wrapper,
+        #cell6_5 .controls.unpair-mode button.numtrash-wrapper {
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            padding: 4px 8px;
         }
     </style>
     <script>
@@ -21146,7 +21301,6 @@
                     const draftTbody = document.querySelector('#draftTable tbody');
                     if (!draftTbody) return;
                     draftTbody.querySelectorAll('tr:not(.draft-add-row-tr)').forEach(tr => {
-                        if (tr.querySelector('.draft-score')) return;
                         const pills = Array.from(tr.querySelectorAll('.pill'));
                         if (pills.length !== 6) return;
                         const nums = pills.map(p => {
@@ -21154,26 +21308,47 @@
                             return (t === '' || t === '__') ? null : parseInt(t, 10);
                         });
                         const filled = nums.filter(n => n !== null && Number.isFinite(n));
-                        if (filled.length !== 6) return;
+                        const existing = tr.querySelector('.draft-score');
+                        if (filled.length !== 6) {
+                            // Not enough numbers — hide/remove existing score
+                            if (existing) { existing.textContent = ''; existing.style.background = 'transparent'; }
+                            return;
+                        }
                         const key = filled.join(',');
                         let score = getScoreForResult(key);
                         if (score === null && typeof window.__scoreInput === 'function') score = window.__scoreInput(filled);
-                        if (score === null) return;
-                        const scoreSpan = document.createElement('span');
-                        scoreSpan.className = 'draft-score';
-                        scoreSpan.textContent = score.toFixed(2);
-                        scoreSpan.style.background = getScoreBg(score);
-                        scoreSpan.style.color = getScoreTextColor(score);
-                        const recordRow = tr.querySelector('.record-row');
-                        const grabber = tr.querySelector('.grabber');
-                        if (recordRow && grabber) recordRow.insertBefore(scoreSpan, grabber);
+                        if (score === null) {
+                            if (existing) { existing.textContent = ''; existing.style.background = 'transparent'; }
+                            return;
+                        }
+                        if (existing) {
+                            // Update existing score span
+                            existing.textContent = score.toFixed(2);
+                            existing.style.background = getScoreBg(score);
+                            existing.style.color = getScoreTextColor(score);
+                        } else {
+                            // Create new score span
+                            const scoreSpan = document.createElement('span');
+                            scoreSpan.className = 'draft-score';
+                            scoreSpan.textContent = score.toFixed(2);
+                            scoreSpan.style.background = getScoreBg(score);
+                            scoreSpan.style.color = getScoreTextColor(score);
+                            const recordRow = tr.querySelector('.record-row');
+                            const grabber = tr.querySelector('.grabber');
+                            if (recordRow && grabber) recordRow.insertBefore(scoreSpan, grabber);
+                        }
                     });
                 } catch (e) { }
             }
             try {
                 const draftTbody = document.querySelector('#draftTable tbody');
                 if (draftTbody) {
-                    const dObs = new MutationObserver(() => setTimeout(patchDraftScores, 50));
+                    let _draftScoreTimer = null;
+                    const dObs = new MutationObserver(() => {
+                        // Debounce: coalesce rapid mutations (pill edits) into one run
+                        if (_draftScoreTimer) clearTimeout(_draftScoreTimer);
+                        _draftScoreTimer = setTimeout(() => { _draftScoreTimer = null; patchDraftScores(); }, 350);
+                    });
                     dObs.observe(draftTbody, { childList: true, subtree: true });
                 }
             } catch (e) { }
@@ -21250,7 +21425,7 @@
                         scoreEl = document.createElement('span');
                         scoreEl.id = 'unpairScoreDisplay';
                         scoreEl.className = 'numtrash-wrapper unpair-score-display';
-                        scoreEl.style.cssText = 'display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;color:#fff;margin-left:6px;';
+                        scoreEl.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;padding:3px 14px;border-radius:7px;color:#fff;margin-left:6px;min-width:70px;text-align:center;letter-spacing:0.5px;line-height:1.1;vertical-align:middle;';
                         // Navigate from input up to controls, insert BEFORE numTrashLabel
                         const ctrl = firstInp.closest('.controls');
                         if (!ctrl) return;
@@ -21270,11 +21445,11 @@
                     filled.sort((a, b) => a - b);
                     let score = (typeof window.__scoreInput === 'function') ? window.__scoreInput(filled) : null;
                     if (score === null) {
-                        scoreEl.textContent = 'score: N/A';
+                        scoreEl.textContent = 'N/A';
                         scoreEl.style.background = '#555';
                         scoreEl.style.color = '#fff';
                     } else {
-                        scoreEl.textContent = 'score: ' + score.toFixed(2);
+                        scoreEl.textContent = score.toFixed(2);
                         scoreEl.style.background = getScoreBg(score);
                         scoreEl.style.color = getScoreTextColor(score);
                     }
