@@ -3,9 +3,6 @@
 
 <head>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="scores.js" onerror="console.log('[score] scores.js not found — will compute from data.json')"></script>
-    <script src="combo_data.js"
-        onerror="console.log('[score] combo_data.js not found — will compute from data.json')"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Life Notebook → Web</title>
@@ -3937,6 +3934,11 @@
                     })
                     .filter(Boolean);
                 status.innerHTML = `<span class="success">Đã tải ${rows.length} dòng</span> · file: data.json`;
+                // Expose rows globally so score engine can access them
+                window.rows = rows;
+                // Store total raw record count (including invalid/empty Results)
+                // so score engine can pad S_k lists with zeros, matching score.py
+                window.__totalRawRecords = raw.length;
             } catch (err) {
                 status.innerHTML = `<span class="error">${err.message}</span><br/><span class="muted">Tạo file data.json từ Excel bằng script python: <code>python - <<'PY'\nimport pandas as pd, json\ndf = pd.read_excel('data.xlsx')\nout = df[['date','Result']]\nout.to_json('data.json', orient='records', force_ascii=False, indent=2)\nPY</code></span>`;
             }
@@ -15730,7 +15732,7 @@
             // Tải dữ liệu TRƯỚC khi render các cell
             await loadData();
 
-            // Build SCORES + COMBO_DATA from loaded rows if external files (scores.js/combo_data.js) weren't loaded
+            // Build SCORES + COMBO_DATA from loaded rows (computed from data.json)
             if (typeof window.__buildScoresFromRows === 'function') window.__buildScoresFromRows();
             // Compute score thresholds from window.SCORES
             if (window.SCORES && typeof window.__computeScoreThresholds === 'function') window.__computeScoreThresholds();
@@ -20792,9 +20794,9 @@
         })();
     </script>
 
-    <!-- ═══ Score system (pre-computed via scores.js) ═══ -->
+    <!-- ═══ Score system (computed from data.json) ═══ -->
     <script>
-        // ═══ Score engine — computes from loaded rows if scores.js/combo_data.js are absent ═══
+        // ═══ Score engine — computes from loaded rows (data.json) ═══
         (function () {
             'use strict';
 
@@ -20839,7 +20841,7 @@
                     }
                 }
 
-                // 2. Compute percentile rank for each combo
+                // 2. Compute percentile rank for each combo (full precision, matching score.py)
                 const comboPct = {};
                 for (let k = 2; k <= 5; k++) {
                     const m = comboCounts[k];
@@ -20847,7 +20849,7 @@
                     counts.sort((a, b) => a - b);
                     const pctMap = {};
                     for (const [key, cnt] of m) {
-                        pctMap[key] = Math.round(pctRank(cnt, counts) * 10000) / 10000;
+                        pctMap[key] = pctRank(cnt, counts);
                     }
                     comboPct[k] = pctMap;
                 }
@@ -20880,6 +20882,17 @@
                     recSk.push(sk);
                 }
 
+                // Pad S_k lists with zeros for invalid/empty records (matching score.py)
+                // score.py processes ALL data.json records; invalid ones get S_k=0 for all k.
+                // This is critical for correct variance-based weight computation.
+                const totalRaw = window.__totalRawRecords || records.length;
+                const nPad = totalRaw - records.length;
+                if (nPad > 0) {
+                    for (let k = 2; k <= 5; k++) {
+                        for (let p = 0; p < nPad; p++) skLists[k].push(0);
+                    }
+                }
+
                 // Variance-based weights
                 const varK = {};
                 let totalVar = 0;
@@ -20893,33 +20906,29 @@
                 const weights = {};
                 for (let k = 2; k <= 5; k++) weights[k] = totalVar > 0 ? varK[k] / totalVar : 0.25;
 
-                // 4. Build window.SCORES
-                if (!window.SCORES || Object.keys(window.SCORES).length === 0) {
-                    const scores = {};
-                    for (let i = 0; i < records.length; i++) {
-                        const rec = records[i];
-                        if (rec.nums.length !== 6) continue;
-                        const sk = recSk[i];
-                        let raw = 0;
-                        for (let k = 2; k <= 5; k++) raw += weights[k] * sk[k];
-                        const score10 = Math.round(raw * 10 * 100) / 100;
-                        const key = rec.nums.join(',');
-                        scores[key] = { date: rec.date, nums: rec.nums, S_k: sk, weights, raw: Math.round(raw * 10000) / 10000, score10 };
-                    }
-                    window.SCORES = scores;
-                    console.log('[score] Built SCORES from rows:', Object.keys(scores).length, 'entries in', Math.round(performance.now() - t0), 'ms');
+                // 4. Build window.SCORES (always from rows)
+                const scores = {};
+                for (let i = 0; i < records.length; i++) {
+                    const rec = records[i];
+                    if (rec.nums.length !== 6) continue;
+                    const sk = recSk[i];
+                    let raw = 0;
+                    for (let k = 2; k <= 5; k++) raw += weights[k] * sk[k];
+                    const score10 = Math.round(raw * 10 * 100) / 100;
+                    const key = rec.nums.join(',');
+                    scores[key] = { date: rec.date, nums: rec.nums, S_k: sk, weights, raw: Math.round(raw * 10000) / 10000, score10 };
                 }
+                window.SCORES = scores;
+                console.log('[score] Built SCORES from rows:', Object.keys(scores).length, 'entries in', Math.round(performance.now() - t0), 'ms');
 
-                // 5. Build window.COMBO_DATA
-                if (!window.COMBO_DATA) {
-                    const cd = { weights: {} };
-                    for (let k = 2; k <= 5; k++) {
-                        cd.weights[String(k)] = Math.round(weights[k] * 1000000) / 1000000;
-                        cd[String(k)] = comboPct[k];
-                    }
-                    window.COMBO_DATA = cd;
-                    console.log('[score] Built COMBO_DATA from rows');
+                // 5. Build window.COMBO_DATA (always from rows, full precision)
+                const cd = { weights: {} };
+                for (let k = 2; k <= 5; k++) {
+                    cd.weights[String(k)] = weights[k];
+                    cd[String(k)] = comboPct[k];
                 }
+                window.COMBO_DATA = cd;
+                console.log('[score] Built COMBO_DATA from rows');
             }
             window.__buildScoresFromRows = buildScoresFromRows;
 
@@ -20942,7 +20951,7 @@
             }
             window.__computeScoreThresholds = computeScoreThresholds;
 
-            /* ── scoreInput: compute from COMBO_DATA for ANY 6 numbers ── */
+            /* ── scoreInput: compute from COMBO_DATA for ANY 6 numbers (matches index.html) ── */
             function scoreInput(nums) {
                 if (!nums || nums.length !== 6) return null;
                 const sorted = nums.slice().map(Number).sort((a, b) => a - b);
@@ -20956,21 +20965,22 @@
                             const pctMap = cd[String(k)];
                             if (!pctMap) continue;
                             const wk = Number(w[String(k)] || 0);
-                            let sumPct = 0, cnt = 0;
-                            const gen = (start, combo) => {
-                                if (combo.length === k) {
-                                    sumPct += (pctMap[combo.join(',')] || 0);
-                                    cnt++;
-                                    return;
-                                }
-                                for (let i = start; i < 6; i++) {
-                                    combo.push(sorted[i]);
-                                    gen(i + 1, combo);
-                                    combo.pop();
-                                }
-                            };
-                            gen(0, []);
-                            raw += wk * (cnt > 0 ? sumPct / cnt : 0);
+                            // enumerate all C(6,k) combos from sorted (index-based, same as index.html)
+                            const combos = [];
+                            const n = sorted.length;
+                            const idx = new Array(k);
+                            function gen(start, depth) {
+                                if (depth === k) { combos.push(idx.slice()); return; }
+                                for (let i = start; i < n; i++) { idx[depth] = i; gen(i + 1, depth + 1); }
+                            }
+                            gen(0, 0);
+                            let sumPct = 0;
+                            for (const ci of combos) {
+                                const key = ci.map(i => sorted[i]).join(',');
+                                sumPct += (pctMap[key] || 0);
+                            }
+                            const sk = combos.length > 0 ? sumPct / combos.length : 0;
+                            raw += wk * sk;
                         }
                         return Math.round(raw * 10 * 100) / 100;
                     } catch (e) { console.warn('scoreInput COMBO_DATA error:', e); }
