@@ -3936,9 +3936,6 @@
                 status.innerHTML = `<span class="success">Đã tải ${rows.length} dòng</span> · file: data.json`;
                 // Expose rows globally so score engine can access them
                 window.rows = rows;
-                // Store total raw record count (including invalid/empty Results)
-                // so score engine can pad S_k lists with zeros, matching score.py
-                window.__totalRawRecords = raw.length;
             } catch (err) {
                 status.innerHTML = `<span class="error">${err.message}</span><br/><span class="muted">Tạo file data.json từ Excel bằng script python: <code>python - <<'PY'\nimport pandas as pd, json\ndf = pd.read_excel('data.xlsx')\nout = df[['date','Result']]\nout.to_json('data.json', orient='records', force_ascii=False, indent=2)\nPY</code></span>`;
             }
@@ -9800,10 +9797,15 @@
                             _considerInFav = false;
                             analConsiderWrap.style.opacity = '1';
                         }
+                        // 3) Re-add the current candidate to fav (consider excludes x, but candidate should stay yellow)
+                        try {
+                            const cand = window.__cell6_5_lastCand;
+                            if (cand != null && typeof window.addToFav === 'function') window.addToFav(Number(cand));
+                        } catch (e) { }
                     } catch (e) { }
                 }
 
-                _analRunAnalysis = runAnalysis;
+                _analRunAnalysis = () => { runAnalysis(); _autoAddConsiderToFav(); };
             }
 
             function group() {
@@ -20815,14 +20817,15 @@
                 if (!window.rows || !Array.isArray(window.rows) || window.rows.length === 0) return;
                 const t0 = performance.now();
 
-                // 1. Build combo counts for k=2..5
-                const comboCounts = { 2: new Map(), 3: new Map(), 4: new Map(), 5: new Map() };
+                // 1. Build combo counts for k=1..6
+                const comboCounts = {};
+                for (let k = 1; k <= 6; k++) comboCounts[k] = new Map();
                 const records = [];
                 for (const r of window.rows) {
                     const nums = (r.nums && r.nums.length === 6) ? r.nums.slice().sort((a, b) => a - b) : [];
                     records.push({ date: r.date || r.dateRaw || '', nums });
                     if (nums.length !== 6) continue;
-                    for (let k = 2; k <= 5; k++) {
+                    for (let k = 1; k <= 6; k++) {
                         const m = comboCounts[k];
                         // enumerate C(6,k) combos inline
                         const gen = (start, combo) => {
@@ -20843,7 +20846,7 @@
 
                 // 2. Compute percentile rank for each combo (full precision, matching score.py)
                 const comboPct = {};
-                for (let k = 2; k <= 5; k++) {
+                for (let k = 1; k <= 6; k++) {
                     const m = comboCounts[k];
                     const counts = Array.from(m.values());
                     counts.sort((a, b) => a - b);
@@ -20855,12 +20858,18 @@
                 }
 
                 // 3. Compute S_k for each record and variance-based weights
-                const skLists = { 2: [], 3: [], 4: [], 5: [] };
+                const skLists = {};
+                for (let k = 1; k <= 6; k++) skLists[k] = [];
                 const recSk = [];
                 for (const rec of records) {
                     const sk = {};
-                    if (rec.nums.length !== 6) { for (let k = 2; k <= 5; k++) { sk[k] = 0; skLists[k].push(0); } recSk.push(sk); continue; }
-                    for (let k = 2; k <= 5; k++) {
+                    if (rec.nums.length !== 6) {
+                        // Empty/invalid record: set sk=0 but do NOT include in skLists (matching score.py)
+                        for (let k = 1; k <= 6; k++) sk[k] = 0;
+                        recSk.push(sk);
+                        continue;
+                    }
+                    for (let k = 1; k <= 6; k++) {
                         let sum = 0, cnt = 0;
                         const gen = (start, combo) => {
                             if (combo.length === k) {
@@ -20877,34 +20886,25 @@
                         };
                         gen(0, []);
                         sk[k] = cnt > 0 ? sum / cnt : 0;
-                        skLists[k].push(sk[k]);
+                        // Only include valid records in variance calculation (exclude empty)
+                        if (cnt > 0) skLists[k].push(sk[k]);
                     }
                     recSk.push(sk);
                 }
 
-                // Pad S_k lists with zeros for invalid/empty records (matching score.py)
-                // score.py processes ALL data.json records; invalid ones get S_k=0 for all k.
-                // This is critical for correct variance-based weight computation.
-                const totalRaw = window.__totalRawRecords || records.length;
-                const nPad = totalRaw - records.length;
-                if (nPad > 0) {
-                    for (let k = 2; k <= 5; k++) {
-                        for (let p = 0; p < nPad; p++) skLists[k].push(0);
-                    }
-                }
-
-                // Variance-based weights
+                // Variance-based weights (k=1..6, only from non-empty records)
                 const varK = {};
                 let totalVar = 0;
-                for (let k = 2; k <= 5; k++) {
+                for (let k = 1; k <= 6; k++) {
                     const vals = skLists[k];
-                    const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
-                    const v = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (vals.length || 1);
+                    if (!vals.length) { varK[k] = 0; continue; }
+                    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+                    const v = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
                     varK[k] = v;
                     totalVar += v;
                 }
                 const weights = {};
-                for (let k = 2; k <= 5; k++) weights[k] = totalVar > 0 ? varK[k] / totalVar : 0.25;
+                for (let k = 1; k <= 6; k++) weights[k] = totalVar > 0 ? varK[k] / totalVar : 1 / 6;
 
                 // 4. Build window.SCORES (always from rows)
                 const scores = {};
@@ -20913,7 +20913,7 @@
                     if (rec.nums.length !== 6) continue;
                     const sk = recSk[i];
                     let raw = 0;
-                    for (let k = 2; k <= 5; k++) raw += weights[k] * sk[k];
+                    for (let k = 1; k <= 6; k++) raw += weights[k] * sk[k];
                     const score10 = Math.round(raw * 10 * 100) / 100;
                     const key = rec.nums.join(',');
                     scores[key] = { date: rec.date, nums: rec.nums, S_k: sk, weights, raw: Math.round(raw * 10000) / 10000, score10 };
@@ -20921,9 +20921,9 @@
                 window.SCORES = scores;
                 console.log('[score] Built SCORES from rows:', Object.keys(scores).length, 'entries in', Math.round(performance.now() - t0), 'ms');
 
-                // 5. Build window.COMBO_DATA (always from rows, full precision)
+                // 5. Build window.COMBO_DATA (always from rows, full precision, k=1..6)
                 const cd = { weights: {} };
-                for (let k = 2; k <= 5; k++) {
+                for (let k = 1; k <= 6; k++) {
                     cd.weights[String(k)] = weights[k];
                     cd[String(k)] = comboPct[k];
                 }
@@ -20961,7 +20961,7 @@
                         const cd = window.COMBO_DATA;
                         const w = cd.weights;
                         let raw = 0;
-                        for (let k = 2; k <= 5; k++) {
+                        for (let k = 1; k <= 6; k++) {
                             const pctMap = cd[String(k)];
                             if (!pctMap) continue;
                             const wk = Number(w[String(k)] || 0);
