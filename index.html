@@ -3936,6 +3936,8 @@
                 status.innerHTML = `<span class="success">Đã tải ${rows.length} dòng</span> · file: data.json`;
                 // Expose rows globally so score engine can access them
                 window.rows = rows;
+                // Store total record count (including empty/invalid) for score engine
+                window.__totalRecordCount = raw.length;
             } catch (err) {
                 status.innerHTML = `<span class="error">${err.message}</span><br/><span class="muted">Tạo file data.json từ Excel bằng script python: <code>python - <<'PY'\nimport pandas as pd, json\ndf = pd.read_excel('data.xlsx')\nout = df[['date','Result']]\nout.to_json('data.json', orient='records', force_ascii=False, indent=2)\nPY</code></span>`;
             }
@@ -4367,15 +4369,15 @@
                 if (!isUnpair) return;
                 // Clear trash
                 try { if (typeof window.clearAllTrash === 'function') window.clearAllTrash(); } catch (e) { }
-                // Clear fav: remove the computed candidate and any hover candidate
+                // Clear ALL fav items (consider nums + candidate + hover candidate)
                 try {
-                    const cand = window.__cell6_5_lastCand;
-                    if (cand != null && typeof window.removeFromFav === 'function') window.removeFromFav(Number(cand));
+                    const allFavs = (typeof window.getFavItems === 'function') ? (window.getFavItems() || []) : [];
+                    allFavs.forEach(num => { try { if (typeof window.removeFromFav === 'function') window.removeFromFav(Number(num)); } catch (e) { } });
+                } catch (e) { }
+                try {
                     window.__cell6_5_lastCand = null;
                 } catch (e) { }
                 try {
-                    const hfc = window.__cell6_5_hoverFavCand;
-                    if (hfc != null && typeof window.removeFromFav === 'function') window.removeFromFav(Number(hfc));
                     window.__cell6_5_hoverFavCand = null;
                 } catch (e) { }
                 // Reset hover state
@@ -8185,10 +8187,15 @@
             unpairInputs.appendChild(unpairClearBtn);
 
             // dblclick quickpaste for the unpair inputs: read clipboard or prompt and apply
+            // Ignore dblclick that originates from spin buttons (rapid +/- clicks on number inputs)
             unpairInputs.addEventListener('dblclick', async (ev) => {
                 try {
                     const popup = document.getElementById('numberPickerPopup');
                     if (popup && popup.contains(ev.target)) return;
+                } catch (e) { }
+                // If dblclick target is an input[type=number], ignore — user is clicking spin buttons
+                try {
+                    if (ev.target && (ev.target.tagName === 'INPUT' || (ev.target.closest && ev.target.closest('input[type="number"]')))) return;
                 } catch (e) { }
                 let text = null;
                 try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (e) { text = null; }
@@ -9306,8 +9313,8 @@
                             analTotal.textContent = '0';
                             analAvg.textContent = '0';
                             analDistSummary.textContent = '0<>0';
-                            analMissing.textContent = '';
-                            analConsider.textContent = '';
+                            analMissing.textContent = '[0]';
+                            analConsider.textContent = '[0]';
                             analRank.textContent = '';
                             analTableWrap.innerHTML = '';
                             analPageInfo.textContent = '';
@@ -9381,10 +9388,10 @@
                         numtrashSet.add(x); // exclude x itself
                         const fullSet = new Set(Array.from({ length: 45 }, (_, i) => i + 1));
                         analConsiderNums = Array.from(considerSet).filter(v => v !== x).sort((a, b) => a - b);
-                        analConsider.textContent = analConsiderNums.join(', ');
+                        analConsider.textContent = '[' + analConsiderNums.length + '] ' + analConsiderNums.join(', ');
 
                         analMissingNums = Array.from(fullSet).filter(v => !numtrashSet.has(v) && !considerSet.has(v)).sort((a, b) => a - b);
-                        analMissing.textContent = analMissingNums.join(', ');
+                        analMissing.textContent = '[' + analMissingNums.length + '] ' + analMissingNums.join(', ');
 
                         // Sort: [] grouping has priority, then recency within each group
                         const sortMode = _sortMode;
@@ -9507,7 +9514,8 @@
                                         const res = tr.dataset.result || '';
                                         const nums = res.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n));
                                         if (typeof applyPopupHighlights === 'function') applyPopupHighlights(nums);
-                                        try { _showNextTrashBorder(nums); } catch (e) { }
+                                        // Red gradient: only show based on current num|dontmatch, NOT per-record
+                                        try { _clearNextTrashBorder(); _applyPersistentNextTrash(); } catch (e) { }
                                         // Tooltip: show 5 numbers at dist checkpoints
                                         try {
                                             const distArrRaw = tr.dataset.distArr;
@@ -9782,26 +9790,44 @@
 
                 function _autoAddConsiderToFav() {
                     try {
-                        // Replace fav with consider nums (clear old fav first, then add new)
-                        // 1) Remove all current fav items
+                        // Only auto-add consider to fav when cell6_5 is the active section
                         try {
-                            const oldFavs = (typeof window.getFavItems === 'function') ? (window.getFavItems() || []) : [];
-                            oldFavs.forEach(num => { try { if (typeof window.removeFromFav === 'function') window.removeFromFav(num); } catch (e) { } });
+                            const sec = document.getElementById('cell6_5');
+                            if (!sec || sec.classList.contains('hidden')) return;
                         } catch (e) { }
-                        // 2) Add consider nums as new fav
-                        if (analConsiderNums.length) {
-                            _considerInFav = true;
-                            analConsiderWrap.style.opacity = '0.5';
-                            analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
-                        } else {
-                            _considerInFav = false;
-                            analConsiderWrap.style.opacity = '1';
+                        // Skip fav-trash exclusion during this operation to avoid removing
+                        // dontmatch numbers from trash when adding consider nums to fav
+                        const prevSkip = window.__skipFavTrashExclusion;
+                        window.__skipFavTrashExclusion = true;
+                        try {
+                            // Replace fav with consider nums (clear old fav first, then add new)
+                            // 1) Remove all current fav items
+                            try {
+                                const oldFavs = (typeof window.getFavItems === 'function') ? (window.getFavItems() || []) : [];
+                                oldFavs.forEach(num => { try { if (typeof window.removeFromFav === 'function') window.removeFromFav(num); } catch (e) { } });
+                            } catch (e) { }
+                            // 2) Add consider nums as new fav
+                            if (analConsiderNums.length) {
+                                _considerInFav = true;
+                                analConsiderWrap.style.opacity = '0.5';
+                                analConsiderNums.forEach(num => { try { if (typeof window.addToFav === 'function') window.addToFav(num); } catch (e) { } });
+                            } else {
+                                _considerInFav = false;
+                                analConsiderWrap.style.opacity = '1';
+                            }
+                            // 3) Re-add the current candidate to fav (consider excludes x, but candidate should stay yellow)
+                            try {
+                                const cand = window.__cell6_5_lastCand;
+                                if (cand != null && typeof window.addToFav === 'function') window.addToFav(Number(cand));
+                            } catch (e) { }
+                            // 4) Re-add hover candidate if present
+                            try {
+                                const hoverCand = window.__cell6_5_hoverFavCand;
+                                if (hoverCand != null && typeof window.addToFav === 'function') window.addToFav(Number(hoverCand));
+                            } catch (e) { }
+                        } finally {
+                            window.__skipFavTrashExclusion = prevSkip;
                         }
-                        // 3) Re-add the current candidate to fav (consider excludes x, but candidate should stay yellow)
-                        try {
-                            const cand = window.__cell6_5_lastCand;
-                            if (cand != null && typeof window.addToFav === 'function') window.addToFav(Number(cand));
-                        } catch (e) { }
                     } catch (e) { }
                 }
 
@@ -9820,7 +9846,7 @@
                 let externalTrashEl = null;
                 try { externalTrashEl = document.getElementById('cell6_6_trashSel'); } catch (e) { externalTrashEl = null; }
                 const trashValue = (externalTrashEl && externalTrashEl.value) ? externalTrashEl.value : (trashSel && trashSel.value ? String(trashSel.value) : 'include');
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${recencySel ? recencySel.value : ''}`;
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${recencySel ? recencySel.value : ''}|${numTrashInput ? numTrashInput.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -10079,11 +10105,22 @@
                             }
                         }
                     } catch (e) { }
-                    // After unpair re-render, re-apply hover state for last-hovered num
-                    // so w/s (numtrash +/-) updates trash for the same num
+                    // After unpair re-render, re-apply focus state for the current analNum
+                    // (prioritize analysis panel num over last-hovered table num)
                     try {
-                        if (window.__lastHoveredUnpairNum) {
-                            const targetNum = window.__lastHoveredUnpairNum;
+                        // Determine which num to focus: analNum from analysis panel takes priority
+                        let targetNum = null;
+                        try {
+                            const analNumEl = window.__cell6_5_analNum;
+                            if (analNumEl) {
+                                const av = parseInt((analNumEl.value || '').trim(), 10);
+                                if (Number.isFinite(av) && av >= 1 && av <= 45) targetNum = av;
+                            }
+                        } catch (e) { }
+                        if (targetNum === null && window.__lastHoveredUnpairNum) {
+                            targetNum = window.__lastHoveredUnpairNum;
+                        }
+                        if (targetNum !== null) {
                             const tbody = wrap.querySelector('table tbody');
                             if (tbody) {
                                 const targetRow = Array.from(tbody.querySelectorAll('tr')).find(r => {
@@ -10111,7 +10148,7 @@
                                     } catch (e) { }
                                     try { renderTrash(); } catch (e) { }
                                     try { (document.getElementById('trashPopup') || document.body).dispatchEvent(new CustomEvent('trashupdated', { bubbles: true, composed: true })); } catch (e) { }
-                                    // Highlight on num cell (fffbea + red gradient)
+                                    // Highlight on num cell (green)
                                     try { targetRow.children[0].classList.add('cell6-num-highlight'); } catch (e) { }
                                     // Also show red gradient for predicted next trash number on numberPickerTable
                                     try {
@@ -10125,6 +10162,12 @@
                                             }
                                         }
                                     } catch (e) { }
+                                    // Update persistent next-trash tracking
+                                    try {
+                                        if (typeof _persistentNextTrash !== 'undefined') {
+                                            _persistentNextTrash = _computeNextTrashForNum(targetNum, n);
+                                        }
+                                    } catch (e) { }
                                     // Add candidate to fav so popup shows yellow
                                     try {
                                         if (typeof window.addToFav === 'function') {
@@ -10133,6 +10176,10 @@
                                             window.addToFav(targetNum);
                                             window.__cell6_5_hoverFavCand = targetNum;
                                         }
+                                    } catch (e) { }
+                                    // Re-add consider nums to fav if analysis panel is active
+                                    try {
+                                        if (typeof _analRunAnalysis === 'function') _analRunAnalysis();
                                     } catch (e) { }
                                     // No auto-scroll in unpair mode — keep user's current scroll position
                                 }
@@ -15735,7 +15782,19 @@
             await loadData();
 
             // Build SCORES + COMBO_DATA from loaded rows (computed from data.json)
-            if (typeof window.__buildScoresFromRows === 'function') window.__buildScoresFromRows();
+            // Load saved score config from localStorage (default: bộ 2-5, all)
+            {
+                let _savedKs = [2, 3, 4, 5];
+                let _savedMode = 'all';
+                try {
+                    const cfg = JSON.parse(localStorage.getItem('scoreConfig') || 'null');
+                    if (cfg && Array.isArray(cfg.ks) && cfg.ks.length > 0) _savedKs = cfg.ks;
+                    if (cfg && (cfg.mode === 'non-empty' || cfg.mode === 'all')) _savedMode = cfg.mode;
+                } catch (e) { }
+                window.__scoreConfigKs = _savedKs;
+                window.__scoreConfigMode = _savedMode;
+                if (typeof window.__buildScoresFromRows === 'function') window.__buildScoresFromRows(_savedKs, _savedMode);
+            }
             // Compute score thresholds from window.SCORES
             if (window.SCORES && typeof window.__computeScoreThresholds === 'function') window.__computeScoreThresholds();
             // Inject threshold markers into status bar
@@ -20798,11 +20857,12 @@
 
     <!-- ═══ Score system (computed from data.json) ═══ -->
     <script>
-        // ═══ Score engine — computes from loaded rows (data.json) ═══
+        // ═══ Score engine — exact match with score.py ═══
         (function () {
             'use strict';
 
             /* ── Helper: percentile rank (fraction of values <= value) ── */
+            /* Matches score.py percentile_rank: bisect_right(sorted, value) / n */
             function pctRank(value, sortedArr) {
                 const n = sortedArr.length;
                 if (n === 0) return 0;
@@ -20812,123 +20872,138 @@
                 return lo / n;
             }
 
-            /* ── Build SCORES + COMBO_DATA from rows (self-contained, no external files) ── */
-            function buildScoresFromRows() {
+            /* ── Enumerate C(6,k) combos from sorted nums, return keys as "a,b,c" ── */
+            function enumCombos(nums, k) {
+                const results = [];
+                const n = nums.length;
+                const combo = [];
+                function gen(start) {
+                    if (combo.length === k) { results.push(combo.join(',')); return; }
+                    for (let i = start; i < n; i++) { combo.push(nums[i]); gen(i + 1); combo.pop(); }
+                }
+                gen(0);
+                return results;
+            }
+
+            /* ── Build SCORES + COMBO_DATA from rows ── */
+            /* selectedKs: array of k values (e.g. [2,3,4,5])
+               mode: 'all' = include empty records as S_k=0 in variance (matches score.py)
+                     'non-empty' = only include records with valid combos in variance */
+            function buildScoresFromRows(selectedKs, mode) {
                 if (!window.rows || !Array.isArray(window.rows) || window.rows.length === 0) return;
                 const t0 = performance.now();
+                const activeKs = (Array.isArray(selectedKs) && selectedKs.length > 0)
+                    ? selectedKs.filter(k => k >= 1 && k <= 6).sort((a, b) => a - b)
+                    : [2, 3, 4, 5];
+                const useAll = (mode === 'all');
 
-                // 1. Build combo counts for k=1..6
+                // 1. Parse records and count combos ONLY for activeKs
                 const comboCounts = {};
-                for (let k = 1; k <= 6; k++) comboCounts[k] = new Map();
+                for (const k of activeKs) comboCounts[k] = new Map();
                 const records = [];
                 for (const r of window.rows) {
                     const nums = (r.nums && r.nums.length === 6) ? r.nums.slice().sort((a, b) => a - b) : [];
                     records.push({ date: r.date || r.dateRaw || '', nums });
                     if (nums.length !== 6) continue;
-                    for (let k = 1; k <= 6; k++) {
+                    for (const k of activeKs) {
                         const m = comboCounts[k];
-                        // enumerate C(6,k) combos inline
-                        const gen = (start, combo) => {
-                            if (combo.length === k) {
-                                const key = combo.join(',');
-                                m.set(key, (m.get(key) || 0) + 1);
-                                return;
-                            }
-                            for (let i = start; i < 6; i++) {
-                                combo.push(nums[i]);
-                                gen(i + 1, combo);
-                                combo.pop();
-                            }
-                        };
-                        gen(0, []);
+                        const keys = enumCombos(nums, k);
+                        for (const key of keys) m.set(key, (m.get(key) || 0) + 1);
                     }
                 }
 
-                // 2. Compute percentile rank for each combo (full precision, matching score.py)
+                // 2. Percentile rank for each combo (only observed, no zero-padding)
                 const comboPct = {};
-                for (let k = 1; k <= 6; k++) {
+                for (const k of activeKs) {
                     const m = comboCounts[k];
-                    const counts = Array.from(m.values());
-                    counts.sort((a, b) => a - b);
+                    const counts = Array.from(m.values()).sort((a, b) => a - b);
                     const pctMap = {};
-                    for (const [key, cnt] of m) {
-                        pctMap[key] = pctRank(cnt, counts);
-                    }
+                    for (const [key, cnt] of m) pctMap[key] = pctRank(cnt, counts);
                     comboPct[k] = pctMap;
                 }
 
-                // 3. Compute S_k for each record and variance-based weights
+                // 3. Compute S_k per record, build variance lists
                 const skLists = {};
-                for (let k = 1; k <= 6; k++) skLists[k] = [];
+                for (const k of activeKs) skLists[k] = [];
                 const recSk = [];
                 for (const rec of records) {
                     const sk = {};
-                    if (rec.nums.length !== 6) {
-                        // Empty/invalid record: set sk=0 but do NOT include in skLists (matching score.py)
-                        for (let k = 1; k <= 6; k++) sk[k] = 0;
-                        recSk.push(sk);
-                        continue;
-                    }
-                    for (let k = 1; k <= 6; k++) {
-                        let sum = 0, cnt = 0;
-                        const gen = (start, combo) => {
-                            if (combo.length === k) {
-                                const key = combo.join(',');
-                                sum += (comboPct[k][key] || 0);
-                                cnt++;
-                                return;
-                            }
-                            for (let i = start; i < 6; i++) {
-                                combo.push(rec.nums[i]);
-                                gen(i + 1, combo);
-                                combo.pop();
-                            }
-                        };
-                        gen(0, []);
-                        sk[k] = cnt > 0 ? sum / cnt : 0;
-                        // Only include valid records in variance calculation (exclude empty)
-                        if (cnt > 0) skLists[k].push(sk[k]);
+                    const valid = (rec.nums.length === 6);
+                    for (const k of activeKs) {
+                        if (!valid) {
+                            sk[k] = 0;
+                        } else {
+                            const keys = enumCombos(rec.nums, k);
+                            let sum = 0;
+                            for (const key of keys) sum += (comboPct[k][key] || 0);
+                            sk[k] = keys.length > 0 ? sum / keys.length : 0;
+                        }
+                        // Variance list: 'all' = always push; 'non-empty' = only if valid
+                        if (useAll) {
+                            skLists[k].push(sk[k]);
+                        } else {
+                            if (valid) skLists[k].push(sk[k]);
+                        }
                     }
                     recSk.push(sk);
                 }
 
-                // Variance-based weights (k=1..6, only from non-empty records)
+                // 3b. Pad skLists with zeros for empty/invalid records in data.json
+                //     (matches score.py which includes ALL records, empty → S_k=0)
+                if (useAll && window.__totalRecordCount) {
+                    const emptyCount = window.__totalRecordCount - records.length;
+                    if (emptyCount > 0) {
+                        for (const k of activeKs) {
+                            for (let i = 0; i < emptyCount; i++) skLists[k].push(0);
+                        }
+                    }
+                }
+
+                // 4. Variance-based weights
                 const varK = {};
                 let totalVar = 0;
-                for (let k = 1; k <= 6; k++) {
+                for (const k of activeKs) {
                     const vals = skLists[k];
-                    if (!vals.length) { varK[k] = 0; continue; }
+                    if (!vals || !vals.length) { varK[k] = 0; continue; }
                     const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
                     const v = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
                     varK[k] = v;
                     totalVar += v;
                 }
                 const weights = {};
-                for (let k = 1; k <= 6; k++) weights[k] = totalVar > 0 ? varK[k] / totalVar : 1 / 6;
+                for (const k of activeKs) weights[k] = totalVar > 0 ? varK[k] / totalVar : 1 / activeKs.length;
 
-                // 4. Build window.SCORES (always from rows)
+                // 5. Build window.SCORES
                 const scores = {};
                 for (let i = 0; i < records.length; i++) {
                     const rec = records[i];
                     if (rec.nums.length !== 6) continue;
                     const sk = recSk[i];
                     let raw = 0;
-                    for (let k = 1; k <= 6; k++) raw += weights[k] * sk[k];
+                    for (const k of activeKs) raw += weights[k] * sk[k];
                     const score10 = Math.round(raw * 10 * 100) / 100;
                     const key = rec.nums.join(',');
                     scores[key] = { date: rec.date, nums: rec.nums, S_k: sk, weights, raw: Math.round(raw * 10000) / 10000, score10 };
                 }
                 window.SCORES = scores;
-                console.log('[score] Built SCORES from rows:', Object.keys(scores).length, 'entries in', Math.round(performance.now() - t0), 'ms');
+                window.__scoreActiveKs = activeKs.slice();
 
-                // 5. Build window.COMBO_DATA (always from rows, full precision, k=1..6)
+                // 6. Build window.COMBO_DATA (only activeKs)
                 const cd = { weights: {} };
-                for (let k = 1; k <= 6; k++) {
+                for (const k of activeKs) {
                     cd.weights[String(k)] = weights[k];
                     cd[String(k)] = comboPct[k];
                 }
                 window.COMBO_DATA = cd;
-                console.log('[score] Built COMBO_DATA from rows');
+
+                // Log details for debugging
+                const wStr = activeKs.map(k => 'k=' + k + ':' + weights[k].toFixed(6)).join(' ');
+                const vStr = activeKs.map(k => 'k=' + k + ':' + (varK[k] || 0).toFixed(8)).join(' ');
+                console.log('[score] Built SCORES:', Object.keys(scores).length, 'entries | ks=' + activeKs.join(','), '| mode=' + (useAll ? 'all' : 'non-empty'),
+                    '| skLists sizes:', activeKs.map(k => k + ':' + skLists[k].length).join(','),
+                    '| variance:', vStr,
+                    '| weights:', wStr,
+                    '| time:', Math.round(performance.now() - t0), 'ms');
             }
             window.__buildScoresFromRows = buildScoresFromRows;
 
@@ -20951,41 +21026,30 @@
             }
             window.__computeScoreThresholds = computeScoreThresholds;
 
-            /* ── scoreInput: compute from COMBO_DATA for ANY 6 numbers (matches index.html) ── */
+            /* ── scoreInput: compute score for ANY 6 numbers using COMBO_DATA ── */
             function scoreInput(nums) {
                 if (!nums || nums.length !== 6) return null;
                 const sorted = nums.slice().map(Number).sort((a, b) => a - b);
-                // Try COMBO_DATA first (real-time computation for ANY 6 numbers)
+                const activeKs = (Array.isArray(window.__scoreActiveKs) && window.__scoreActiveKs.length > 0)
+                    ? window.__scoreActiveKs : [2, 3, 4, 5];
                 if (window.COMBO_DATA) {
                     try {
                         const cd = window.COMBO_DATA;
                         const w = cd.weights;
                         let raw = 0;
-                        for (let k = 1; k <= 6; k++) {
+                        for (const k of activeKs) {
                             const pctMap = cd[String(k)];
                             if (!pctMap) continue;
                             const wk = Number(w[String(k)] || 0);
-                            // enumerate all C(6,k) combos from sorted (index-based, same as index.html)
-                            const combos = [];
-                            const n = sorted.length;
-                            const idx = new Array(k);
-                            function gen(start, depth) {
-                                if (depth === k) { combos.push(idx.slice()); return; }
-                                for (let i = start; i < n; i++) { idx[depth] = i; gen(i + 1, depth + 1); }
-                            }
-                            gen(0, 0);
+                            const keys = enumCombos(sorted, k);
                             let sumPct = 0;
-                            for (const ci of combos) {
-                                const key = ci.map(i => sorted[i]).join(',');
-                                sumPct += (pctMap[key] || 0);
-                            }
-                            const sk = combos.length > 0 ? sumPct / combos.length : 0;
+                            for (const key of keys) sumPct += (pctMap[key] || 0);
+                            const sk = keys.length > 0 ? sumPct / keys.length : 0;
                             raw += wk * sk;
                         }
                         return Math.round(raw * 10 * 100) / 100;
                     } catch (e) { console.warn('scoreInput COMBO_DATA error:', e); }
                 }
-                // Fallback: lookup in SCORES
                 if (window.SCORES) {
                     const key = sorted.join(',');
                     const entry = window.SCORES[key];
@@ -21025,6 +21089,18 @@
 
         .score-green {
             background: #2e7d32;
+        }
+
+        /* Status bar: flex layout so config wrap stays right-aligned */
+        #status {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+        }
+
+        #status .score-config-wrap {
+            margin-left: auto !important;
         }
 
         /* Status bar score thresholds — show 0-25-50-75-100 scale */
@@ -21240,12 +21316,12 @@
             window.__getScoreTextColor = getScoreTextColor;
             window.__scoreHtml = scoreHtml;
 
-            // ══════════ STATUS BAR: 0-25-50-75-100 SCALE ══════════
+            // ══════════ STATUS BAR: 0-25-50-75-100 SCALE + SCORE CONFIG ══════════
             function updateStatusThresholds() {
                 try {
                     const status = document.getElementById('status');
                     if (!status) return;
-                    // Remove old
+                    // Remove old thresholds
                     const old = status.querySelector('.score-thresholds');
                     if (old) old.remove();
                     const q25 = getQ25(), q50 = getQ50(), q75 = getQ75();
@@ -21259,7 +21335,149 @@
                         '<span class="score-chip" style="background:#ffd600;color:#000" title="Q50 (percentile 50)">50: ' + q50.toFixed(2) + '</span>' +
                         '<span class="score-chip" style="background:#2e7d32" title="Q75 (percentile 75)">75: ' + q75.toFixed(2) + '</span>' +
                         '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>';
-                    status.appendChild(threshDiv);
+                    // Insert thresholds before config wrap if it exists, to keep layout order
+                    const existingCfg = status.querySelector('.score-config-wrap');
+                    if (existingCfg) status.insertBefore(threshDiv, existingCfg);
+                    else status.appendChild(threshDiv);
+
+                    // ── Score config UI (only create once) ──
+                    if (!status.querySelector('.score-config-wrap')) {
+                        const wrap = document.createElement('span');
+                        wrap.className = 'score-config-wrap';
+                        wrap.style.cssText = 'display:inline-flex;gap:4px;align-items:center;vertical-align:middle;flex-wrap:nowrap;';
+
+                        // Multi-select dropdown for bộ 1-6
+                        const ksBtn = document.createElement('button');
+                        ksBtn.type = 'button';
+                        ksBtn.className = 'score-ks-btn';
+                        ksBtn.style.cssText = 'font-size:10px;padding:2px 6px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap;min-width:60px;';
+                        const savedKs = (Array.isArray(window.__scoreConfigKs) ? window.__scoreConfigKs : [2, 3, 4, 5]).slice();
+                        const _ksState = new Set(savedKs);
+                        function _updateKsLabel() {
+                            const arr = Array.from(_ksState).sort((a, b) => a - b);
+                            ksBtn.textContent = arr.length === 0 ? 'Bộ: --' : 'Bộ: ' + arr.join(',');
+                            ksBtn.title = 'Chọn bộ số (click để mở): ' + arr.join(',');
+                        }
+                        _updateKsLabel();
+
+                        // Dropdown popup for ks multi-select
+                        const ksPopup = document.createElement('div');
+                        ksPopup.style.cssText = 'display:none;position:absolute;z-index:10005;background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);padding:4px;';
+                        ksPopup.innerHTML = '';
+                        for (let k = 1; k <= 6; k++) {
+                            const lbl = document.createElement('label');
+                            lbl.style.cssText = 'display:flex;align-items:center;gap:3px;padding:2px 6px;cursor:pointer;font-size:11px;white-space:nowrap;';
+                            const cb = document.createElement('input');
+                            cb.type = 'checkbox';
+                            cb.value = String(k);
+                            cb.checked = _ksState.has(k);
+                            cb.style.cssText = 'width:14px;height:14px;cursor:pointer;';
+                            cb.addEventListener('change', () => {
+                                if (cb.checked) _ksState.add(k); else _ksState.delete(k);
+                                _updateKsLabel();
+                                // Auto-apply when checkbox changes
+                                clearTimeout(ksPopup.__debounce);
+                                ksPopup.__debounce = setTimeout(() => { if (_ksState.size > 0) applyBtn.click(); }, 400);
+                            });
+                            lbl.appendChild(cb);
+                            lbl.appendChild(document.createTextNode('Bộ ' + k));
+                            ksPopup.appendChild(lbl);
+                        }
+                        document.body.appendChild(ksPopup);
+                        ksBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (ksPopup.style.display === 'none') {
+                                const r = ksBtn.getBoundingClientRect();
+                                ksPopup.style.left = r.left + 'px';
+                                ksPopup.style.top = (r.bottom + 2) + 'px';
+                                ksPopup.style.display = 'block';
+                            } else { ksPopup.style.display = 'none'; }
+                        });
+                        document.addEventListener('click', (e) => { if (!ksPopup.contains(e.target) && e.target !== ksBtn) ksPopup.style.display = 'none'; });
+
+                        // Mode dropdown: non-empty / all
+                        const modeSel = document.createElement('select');
+                        modeSel.style.cssText = 'font-size:10px;padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);height:22px;';
+                        modeSel.title = 'Variance mode: non-empty (chỉ record có dữ liệu) / all (tất cả record)'
+                        const optNE = document.createElement('option'); optNE.value = 'non-empty'; optNE.textContent = 'non-empty'; modeSel.appendChild(optNE);
+                        const optAll = document.createElement('option'); optAll.value = 'all'; optAll.textContent = 'all'; modeSel.appendChild(optAll);
+                        modeSel.value = window.__scoreConfigMode || 'all';
+
+                        // Auto-apply on mode change
+                        modeSel.addEventListener('change', () => { applyBtn.click(); });
+
+                        // Apply button
+                        const applyBtn = document.createElement('button');
+                        applyBtn.type = 'button';
+                        applyBtn.textContent = 'Apply';
+                        applyBtn.style.cssText = 'font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-weight:700;';
+                        applyBtn.addEventListener('click', () => {
+                            try {
+                                const ks = Array.from(_ksState).sort((a, b) => a - b);
+                                if (ks.length === 0) { alert('Chọn ít nhất 1 bộ'); return; }
+                                const mode = modeSel.value;
+                                // Save to localStorage
+                                localStorage.setItem('scoreConfig', JSON.stringify({ ks, mode }));
+                                window.__scoreConfigKs = ks.slice();
+                                window.__scoreConfigMode = mode;
+                                // Rebuild scores
+                                if (typeof window.__buildScoresFromRows === 'function') window.__buildScoresFromRows(ks, mode);
+                                if (window.SCORES && typeof window.__computeScoreThresholds === 'function') window.__computeScoreThresholds();
+                                // Re-render thresholds (keep config wrap, only replace threshold chips)
+                                const oldTh = status.querySelector('.score-thresholds');
+                                if (oldTh) oldTh.remove();
+                                // Re-insert threshold chips before the config wrap
+                                const cfgWrap = status.querySelector('.score-config-wrap');
+                                const q25 = getQ25(), q50 = getQ50(), q75 = getQ75();
+                                const minS = typeof window.__SCORE_MIN === 'number' ? window.__SCORE_MIN : 7.0;
+                                const maxS = typeof window.__SCORE_MAX === 'number' ? window.__SCORE_MAX : 10.0;
+                                const threshDiv = document.createElement('span');
+                                threshDiv.className = 'score-thresholds';
+                                threshDiv.innerHTML =
+                                    '<span class="score-chip" style="background:#c62828" title="MIN (percentile 0)">0: ' + minS.toFixed(2) + '</span>' +
+                                    '<span class="score-chip" style="background:#e65100" title="Q25 (percentile 25)">25: ' + q25.toFixed(2) + '</span>' +
+                                    '<span class="score-chip" style="background:#ffd600;color:#000" title="Q50 (percentile 50)">50: ' + q50.toFixed(2) + '</span>' +
+                                    '<span class="score-chip" style="background:#2e7d32" title="Q75 (percentile 75)">75: ' + q75.toFixed(2) + '</span>' +
+                                    '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>';
+                                if (cfgWrap) status.insertBefore(threshDiv, cfgWrap);
+                                else status.appendChild(threshDiv);
+                                // Update all existing .score-cell elements in the DOM
+                                try {
+                                    document.querySelectorAll('.score-cell').forEach(el => {
+                                        try {
+                                            const tr = el.closest('tr');
+                                            if (!tr) return;
+                                            const resultStr = tr.dataset.result || tr.dataset.nums || '';
+                                            if (!resultStr) return;
+                                            let s = getScoreForResult(resultStr);
+                                            if (s === null && typeof window.__scoreInput === 'function') {
+                                                const nums = resultStr.split(',').map(x => parseInt(x.trim(), 10)).filter(Number.isFinite);
+                                                if (nums.length === 6) s = window.__scoreInput(nums);
+                                            }
+                                            if (s !== null) {
+                                                el.textContent = s.toFixed(2);
+                                                el.title = 'Score: ' + s.toFixed(2);
+                                                el.className = 'score-cell ' + getScoreClass(s);
+                                            }
+                                        } catch (e) { }
+                                    });
+                                } catch (e) { }
+                                // Update draft scores
+                                try { if (typeof patchDraftScores === 'function') patchDraftScores(); } catch (e) { }
+                                // Update unpair score display
+                                try { if (typeof updateUnpairScore === 'function') updateUnpairScore(); } catch (e) { }
+                                // Flash apply button as confirmation
+                                applyBtn.style.background = '#2e7d32';
+                                setTimeout(() => { applyBtn.style.background = 'var(--accent)'; }, 600);
+                                console.log('[score] Applied config: ks=' + ks.join(',') + ' mode=' + mode);
+                            } catch (e) { console.warn('score config apply error:', e); }
+                        });
+
+                        wrap.appendChild(ksBtn);
+                        wrap.appendChild(modeSel);
+                        wrap.appendChild(applyBtn);
+                        status.appendChild(wrap);
+                    }
                 } catch (e) { }
             }
             // ══════════ EXPOSE updateStatusThresholds globally ══════════
@@ -21693,6 +21911,49 @@
                     setTimeout(styleCell4, 300);
                 }
             } catch (e) { }
+
+            // ══════════ TRASH/FAV DROPDOWN COLOR STYLING ══════════
+            // Trash=exclude → red bg, Fav=include → green bg
+            function _styleTrashFavBtn(btn) {
+                try {
+                    if (!btn) return;
+                    if (btn.classList.contains('trash-toggle')) {
+                        if (btn.value === 'exclude') {
+                            btn.style.background = '#c62828';
+                            btn.style.color = '#fff';
+                            btn.style.borderColor = '#b71c1c';
+                        } else {
+                            btn.style.background = '';
+                            btn.style.color = '';
+                            btn.style.borderColor = '';
+                        }
+                    }
+                    if (btn.classList.contains('fav-toggle')) {
+                        if (btn.value === 'include') {
+                            btn.style.background = '#2e7d32';
+                            btn.style.color = '#fff';
+                            btn.style.borderColor = '#1b5e20';
+                        } else {
+                            btn.style.background = '';
+                            btn.style.color = '';
+                            btn.style.borderColor = '';
+                        }
+                    }
+                } catch (e) { }
+            }
+            // Delegate clicks to style all trash/fav toggle buttons
+            document.addEventListener('click', (ev) => {
+                try {
+                    const btn = ev.target.closest('.trash-toggle, .fav-toggle');
+                    if (btn) setTimeout(() => _styleTrashFavBtn(btn), 10);
+                } catch (e) { }
+            }, true);
+            // Style all existing buttons on load and when sections change
+            function _styleAllTrashFavBtns() {
+                try { document.querySelectorAll('.trash-toggle, .fav-toggle').forEach(_styleTrashFavBtn); } catch (e) { }
+            }
+            setTimeout(_styleAllTrashFavBtns, 500);
+            document.addEventListener('sectionchange', () => setTimeout(_styleAllTrashFavBtns, 200));
 
         })();
     </script>
