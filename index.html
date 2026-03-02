@@ -1193,9 +1193,10 @@
         }
 
         /* Tighten number pills for Cell5.5: fixed-size and perfectly centered digits
-           Includes .cell5-pill (inline-styled fallback) and .pill */
-        #cell5_5 td.td-has-pill .pill,
-        #cell5_5 td.td-has-pill .cell5-pill {
+           Includes .cell5-pill (inline-styled fallback) and .pill
+           Apply to ALL pills inside #cell5_5 td, not just td-has-pill */
+        #cell5_5 td .pill,
+        #cell5_5 td .cell5-pill {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -1203,7 +1204,7 @@
             min-width: 22px !important;
             height: 20px !important;
             padding: 0 !important;
-            margin: 0 3px !important;
+            margin: 0 1px !important;
             font-family: monospace !important;
             font-size: 12px !important;
             line-height: 1 !important;
@@ -1213,30 +1214,28 @@
         }
 
         /* Remove extra margin on the first/last pill so endpoint numbers don't add horizontal gaps */
-        #cell5_5 td.td-has-pill .pill:first-child,
-        #cell5_5 td.td-has-pill .cell5-pill:first-child {
+        #cell5_5 td .pill:first-child,
+        #cell5_5 td .cell5-pill:first-child {
             margin-left: 0 !important;
         }
 
-        #cell5_5 td.td-has-pill .pill:last-child,
-        #cell5_5 td.td-has-pill .cell5-pill:last-child {
+        #cell5_5 td .pill:last-child,
+        #cell5_5 td .cell5-pill:last-child {
             margin-right: 0 !important;
         }
 
         /* Reduce horizontal padding on the table cells that contain pills */
-        #cell5_5 .card .card-inner-child table td.td-has-pill {
-            padding-left: 2px;
-            padding-right: 2px;
+        #cell5_5 .card .card-inner-child table td.td-has-pill,
+        #cell5_5 table td:nth-child(2) {
+            padding-left: 2px !important;
+            padding-right: 2px !important;
         }
 
         /* Reduce left/right padding of the Result column to free table width */
-        #cell5_5 table th:nth-child(2),
-        #cell5_5 table td:nth-child(2) {
+        #cell5_5 table th:nth-child(2) {
             padding-left: 4px;
             padding-right: 4px;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         /* Ensure fav-marked pills keep their yellow background even when the row/card is hovered */
@@ -1751,6 +1750,13 @@
             align-items: flex-start !important;
         }
 
+        /* Cell6.5: max 2 tables per row (matching Cell6.6 layout) */
+        #cell6_5 .grid-centered>* {
+            flex: 0 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+            min-width: 280px;
+        }
+
         #cell6_5 .card.card-inner.single-child {
             justify-content: flex-start !important;
         }
@@ -1868,6 +1874,13 @@
         #cell6_6 .grid-centered {
             justify-content: flex-start !important;
             align-items: flex-start !important;
+        }
+
+        /* Cell6.6: max 2 tables per row */
+        #cell6_6 .grid-centered>* {
+            flex: 0 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+            min-width: 280px;
         }
 
         #cell6_6 .card.card-inner.single-child {
@@ -3954,11 +3967,14 @@
         function clearPopupHighlights() {
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
+            // Reset highlight cache so next applyPopupHighlights will actually run
+            try { applyPopupHighlights._lastKey = null; } catch (e) { }
             tbl.querySelectorAll('td.popup-number-highlight').forEach(td => td.classList.remove('popup-number-highlight'));
             try {
                 // restore place values if we temporarily replaced them while highlighting
+                // Use light mode to avoid regenerating the entire popup table
                 if (window.__prevPlaceValues && typeof window.setPlaceValues === 'function') {
-                    try { window.setPlaceValues(window.__prevPlaceValues); } catch (e) { }
+                    try { window.__lightPlaceUpdate = true; window.setPlaceValues(window.__prevPlaceValues); } catch (e) { } finally { window.__lightPlaceUpdate = false; }
                     window.__prevPlaceValues = null;
                 }
             } catch (e) { }
@@ -3967,7 +3983,12 @@
         function applyPopupHighlights(nums) {
             const tbl = document.getElementById('numberPickerTable');
             if (!tbl) return;
+            // Cache: skip if same numbers as last time (avoids redundant clear+apply)
+            const _cacheKey = Array.isArray(nums) ? nums.slice().sort((a, b) => a - b).join(',') : '';
+            if (_cacheKey && _cacheKey === applyPopupHighlights._lastKey) return;
             clearPopupHighlights();
+            // Set cache key AFTER clearing (clearPopupHighlights resets it)
+            applyPopupHighlights._lastKey = _cacheKey;
             // Always apply the orange popup highlight for group header numbers
             nums.forEach(n => {
                 try {
@@ -3985,8 +4006,8 @@
                 if (inHover && Array.isArray(nums) && nums.length === 6 && typeof window.getPlaceValues === 'function') {
                     // save previous
                     try { window.__prevPlaceValues = (window.getPlaceValues ? window.getPlaceValues().slice() : null); } catch (e) { window.__prevPlaceValues = null; }
-                    // set new place values (strings)
-                    try { if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n))); } catch (e) { }
+                    // set new place values (strings) — use light mode during hover to avoid full regen
+                    try { window.__lightPlaceUpdate = true; if (typeof window.setPlaceValues === 'function') window.setPlaceValues(nums.map(n => String(n))); } catch (e) { } finally { window.__lightPlaceUpdate = false; }
                 }
             } catch (e) { }
 
@@ -4102,9 +4123,10 @@
                 // If hovering a result row, try to find the header <strong>{...}</strong>
                 // in the same card and use it to compute popup highlights.
                 if (tr && cardEl) {
-                    // Skip popup highlight for Cell5.5 / Cell6.5 rows when both toggles are "normal"
+                    // Skip popup highlight for Cell5.5 / Cell7..11 rows when both toggles are "normal"
+                    // Cell6.5 and Cell6.6 always show orange popup highlights (their <strong> header numbers)
                     try {
-                        if (tr.closest('#cell5_5') || tr.closest('#cell6_5') || tr.closest('#cell6_6') || tr.closest('#cell7') || tr.closest('#cell8') || tr.closest('#cell9') || tr.closest('#cell11')) {
+                        if (tr.closest('#cell5_5') || tr.closest('#cell7') || tr.closest('#cell8') || tr.closest('#cell9') || tr.closest('#cell11')) {
                             const trashMode = (typeof window.getTrashToggleMode === 'function') ? window.getTrashToggleMode() : 'normal';
                             const favMode = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal';
                             if (trashMode === 'normal' && favMode === 'normal') return;
@@ -5047,8 +5069,8 @@
                 // compute numbers that did NOT appear in the filtered set
                 const zeros = items.filter(it => it.c === 0).map(it => it.n).sort((a, b) => a - b);
                 if (zeros.length) {
-                    const zerosHtml = zeros.map(n => `<span class="info-zero-num">${n}</span>`).join(' ');
-                    html += `<div style="margin-top:6px;font-size:12px;font-weight:700;color:var(--muted);">Không có ${zeros.length} số: ${zerosHtml}</div>`;
+                    const zerosText = zeros.join(',');
+                    html += `<div class="info-zeros-line" style="margin-top:6px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;" title="Nhấn đúp để copy" data-zeros="${zerosText}">Không có ${zeros.length} số: ${zerosText}</div>`;
                 }
 
                 html += `<div style="margin-top:8px;color:var(--muted);font-size:11px;">Tổng kỳ: ${filtered.length}</div>`;
@@ -5080,9 +5102,25 @@
                 if (sel) {
                     sel.value = infoSort;
                     sel.onchange = () => {
-                        infoSort = sel.value; infoPopup.innerHTML = buildCountsHtml(); // re-wire recursively
-                        const sel2 = infoPopup.querySelector('#infoSortSel'); if (sel2) sel2.onchange = () => { infoSort = sel2.value; renderInfoPopup(); }
+                        infoSort = sel.value;
+                        renderInfoPopup(); // re-render and re-wire all handlers
                     };
+                }
+                // Wire dblclick-to-copy on zeros line
+                const zerosLine = infoPopup.querySelector('.info-zeros-line');
+                if (zerosLine) {
+                    zerosLine.addEventListener('dblclick', (e) => {
+                        e.preventDefault();
+                        const txt = zerosLine.dataset.zeros || zerosLine.textContent;
+                        try {
+                            navigator.clipboard.writeText(txt).then(() => {
+                                zerosLine.style.outline = '2px solid var(--accent)';
+                                setTimeout(() => { zerosLine.style.outline = ''; }, 600);
+                            });
+                        } catch (err) {
+                            try { window.prompt('Copy:', txt); } catch (e2) { }
+                        }
+                    });
                 }
             }
 
@@ -5529,7 +5567,7 @@
                             const numsHtml = (row.nums || []).map(v => {
                                 const inFav = __cell5_5_favSet.has(Number(v));
                                 const cls = inFav ? 'pill in-fav' : 'pill';
-                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-block;text-align:center;margin-right:4px;font-size:13px;'>${v}</span>`;
+                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;width:22px;min-width:22px;height:20px;padding:0;margin:0 1px;font-family:monospace;font-size:12px;text-align:center;box-sizing:border-box;'>${v}</span>`;
                             }).join("");
                             let t = 0;
                             try {
@@ -5590,7 +5628,7 @@
                             const numsHtml = (row.nums || []).map(v => {
                                 const inFav = __cell5_5_favSet.has(Number(v));
                                 const cls = inFav ? 'pill in-fav' : 'pill';
-                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-block;text-align:center;margin-right:4px;font-size:13px;'>${v}</span>`;
+                                return `<span class='${cls} cell5-pill' style='background:#fffbea;color:#000;font-weight:700;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;width:22px;min-width:22px;height:20px;padding:0;margin:0 1px;font-family:monospace;font-size:12px;text-align:center;box-sizing:border-box;'>${v}</span>`;
                             }).join("");
                             // fallback: try to compute k via global helper if available
                             let tFallback = '';
@@ -6403,6 +6441,10 @@
                     const box = ev.target.closest('.place-box');
                     const inputContainer = ev.target.closest('.drag-input-container');
                     if (!box && !inputContainer) return;
+
+                    // Skip dblclick on arrow buttons (▲/▼) inside input containers —
+                    // these are rapid increment/decrement clicks, not paste intent
+                    if (inputContainer && ev.target.closest('button.arrow-up, button.arrow-down, button')) return;
 
                     let text = null;
                     // Try clipboard API first
@@ -8056,6 +8098,43 @@
                             } else {
                                 // clear the informational field when no inputs provided
                                 try { if (typeof unpairInfo !== 'undefined' && unpairInfo) unpairInfo.textContent = ''; } catch (e) { }
+                                // Reset numtrash back to analVal value when all inputs are empty
+                                try {
+                                    const _analValEl = document.querySelector('#cell6_5_analysis_panel .anal-val');
+                                    if (_analValEl) {
+                                        const av = parseInt((_analValEl.value || '').trim(), 10);
+                                        if (Number.isFinite(av) && av >= 0 && av <= 44 && numTrashInput) {
+                                            numTrashInput.value = String(av);
+                                            numTrashInput.dispatchEvent(new Event('input'));
+                                        }
+                                    }
+                                } catch (e) { }
+                                // Focus the num field from analNum
+                                try {
+                                    const _analNumEl = document.querySelector('#cell6_5_analysis_panel .anal-num');
+                                    if (_analNumEl) {
+                                        const numVal = parseInt((_analNumEl.value || '').trim(), 10);
+                                        if (Number.isFinite(numVal) && numVal >= 1 && numVal <= 45) {
+                                            if (typeof _focusUnpairRow === 'function') _focusUnpairRow(numVal);
+                                        }
+                                    }
+                                } catch (e) { }
+                                // Remove fav candidate that was added by computeAndApplyUnpairBest
+                                try {
+                                    const prevCand = window.__cell6_5_lastCand;
+                                    if (prevCand != null && typeof window.removeFromFav === 'function') {
+                                        window.removeFromFav(Number(prevCand));
+                                    }
+                                    window.__cell6_5_lastCand = null;
+                                } catch (e) { }
+                                // Also remove hover fav candidate
+                                try {
+                                    const hoverCand = window.__cell6_5_hoverFavCand;
+                                    if (hoverCand != null && typeof window.removeFromFav === 'function') {
+                                        window.removeFromFav(Number(hoverCand));
+                                    }
+                                    window.__cell6_5_hoverFavCand = null;
+                                } catch (e) { }
                             }
                         } catch (e) { }
                     } catch (e) { }
@@ -8187,15 +8266,21 @@
             unpairInputs.appendChild(unpairClearBtn);
 
             // dblclick quickpaste for the unpair inputs: read clipboard or prompt and apply
-            // Ignore dblclick that originates from spin buttons (rapid +/- clicks on number inputs)
+            // Ignore dblclick that originates from spin buttons or arrow buttons (rapid +/- clicks)
             unpairInputs.addEventListener('dblclick', async (ev) => {
                 try {
                     const popup = document.getElementById('numberPickerPopup');
                     if (popup && popup.contains(ev.target)) return;
                 } catch (e) { }
-                // If dblclick target is an input[type=number], ignore — user is clicking spin buttons
+                // If dblclick target is an input, button (arrow), or drag-handle — ignore
                 try {
-                    if (ev.target && (ev.target.tagName === 'INPUT' || (ev.target.closest && ev.target.closest('input[type="number"]')))) return;
+                    if (ev.target && (
+                        ev.target.tagName === 'INPUT' ||
+                        ev.target.tagName === 'BUTTON' ||
+                        (ev.target.closest && ev.target.closest('input[type="number"]')) ||
+                        (ev.target.closest && ev.target.closest('button')) ||
+                        (ev.target.closest && ev.target.closest('.drag-handle'))
+                    )) return;
                 } catch (e) { }
                 let text = null;
                 try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (e) { text = null; }
@@ -9313,8 +9398,10 @@
                             analTotal.textContent = '0';
                             analAvg.textContent = '0';
                             analDistSummary.textContent = '0<>0';
-                            analMissing.textContent = '[0]';
-                            analConsider.textContent = '[0]';
+                            analMissing.textContent = '';
+                            analConsider.textContent = '';
+                            try { analMissingWrap.querySelector('b').textContent = 'Missing[0]:'; } catch (e) { }
+                            try { analConsiderWrap.querySelector('b').textContent = 'Consider[0]:'; } catch (e) { }
                             analRank.textContent = '';
                             analTableWrap.innerHTML = '';
                             analPageInfo.textContent = '';
@@ -9388,10 +9475,12 @@
                         numtrashSet.add(x); // exclude x itself
                         const fullSet = new Set(Array.from({ length: 45 }, (_, i) => i + 1));
                         analConsiderNums = Array.from(considerSet).filter(v => v !== x).sort((a, b) => a - b);
-                        analConsider.textContent = '[' + analConsiderNums.length + '] ' + analConsiderNums.join(', ');
+                        analConsider.textContent = analConsiderNums.join(', ');
+                        try { analConsiderWrap.querySelector('b').textContent = 'Consider[' + analConsiderNums.length + ']:'; } catch (e) { }
 
                         analMissingNums = Array.from(fullSet).filter(v => !numtrashSet.has(v) && !considerSet.has(v)).sort((a, b) => a - b);
-                        analMissing.textContent = '[' + analMissingNums.length + '] ' + analMissingNums.join(', ');
+                        analMissing.textContent = analMissingNums.join(', ');
+                        try { analMissingWrap.querySelector('b').textContent = 'Missing[' + analMissingNums.length + ']:'; } catch (e) { }
 
                         // Sort: [] grouping has priority, then recency within each group
                         const sortMode = _sortMode;
@@ -14472,8 +14561,10 @@
 
                 numberPickerTable.innerHTML = html;
                 // If there is an active hover-driven highlight set, reapply after regeneration
+                // Reset cache first — innerHTML destroyed all classes so cache is stale
                 try {
                     if (window.__popupHighlights && Array.isArray(window.__popupHighlights) && window.__popupHighlights.length) {
+                        try { applyPopupHighlights._lastKey = null; } catch (e) { }
                         applyPopupHighlights(window.__popupHighlights);
                     }
                 } catch (e) { /* ignore */ }
@@ -15727,6 +15818,90 @@
                         placeValues[i] = (v === undefined || v === null) ? '' : v;
                     }
                 }
+                // Light mode: only update place box visuals (no table regen / cell6.5 highlights)
+                // Used during hover operations to avoid expensive full-pipeline rebuild
+                if (window.__lightPlaceUpdate) {
+                    try {
+                        const boxes = placesGrid ? placesGrid.querySelectorAll('.place-box') : [];
+                        boxes.forEach((box, i) => {
+                            const val = placeValues[i] || '';
+                            const valEl = box.querySelector('.place-box-value');
+                            if (valEl) valEl.textContent = val || '_';
+                            if (val) box.classList.add('filled'); else box.classList.remove('filled');
+                        });
+                    } catch (e) { }
+                    // Sync selected-number + disabled classes on popup cells (fast class toggle)
+                    try { updateNumberCellHighlights(); } catch (e) { }
+                    try {
+                        if (numberPickerTable) {
+                            const _placed = new Set(placeValues.filter(v => v && String(v).trim() && !isNaN(v)).map(v => String(parseInt(v, 10))));
+                            numberPickerTable.querySelectorAll('td.number-cell.disabled').forEach(td => {
+                                const dn = td.dataset && td.dataset.number;
+                                if (dn && !_placed.has(String(dn))) { td.classList.remove('disabled'); td.draggable = true; }
+                            });
+                            _placed.forEach(v => {
+                                const td = numberPickerTable.querySelector('td[data-number="' + v + '"]');
+                                if (td && !td.classList.contains('disabled')) { td.classList.add('disabled'); td.draggable = false; }
+                            });
+                        }
+                    } catch (e) { }
+                    // Update canvas connection lines
+                    try { drawConnections(); } catch (e) { }
+                    // Update Euclid distance overlays between place boxes
+                    try {
+                        // Remove old overlays
+                        numberPickerPopup.querySelectorAll('.place-distance-overlay').forEach(n => n.remove());
+                        // Compute grid distance (inline version of computeGridDistance)
+                        function _lgd(n1, n2) {
+                            const tbody = numberPickerTable.querySelector('tbody');
+                            const rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                            const c1 = numberPickerTable.querySelector('td[data-number="' + n1 + '"]');
+                            const c2 = numberPickerTable.querySelector('td[data-number="' + n2 + '"]');
+                            if (!c1 || !c2 || !rows.length) return null;
+                            const r1 = rows.indexOf(c1.parentElement), r2 = rows.indexOf(c2.parentElement);
+                            const lr1 = 7 - r1, lr2 = 7 - r2;
+                            const ci1 = Array.from(c1.parentElement.children).indexOf(c1);
+                            const ci2 = Array.from(c2.parentElement.children).indexOf(c2);
+                            return Math.sqrt((ci2 - ci1) ** 2 + (lr2 - lr1) ** 2);
+                        }
+                        if (placesGrid && euclidState && currentMode === 'number') {
+                            const boxes = placesGrid.querySelectorAll('.place-box');
+                            let total = 0;
+                            for (let i = 0; i < boxes.length - 1; i++) {
+                                const a = placeValues[i], b = placeValues[i + 1];
+                                if (a && b && !isNaN(a) && !isNaN(b)) {
+                                    const d = _lgd(parseInt(a, 10), parseInt(b, 10));
+                                    if (d !== null) total += d;
+                                    // Create overlay
+                                    const bA = boxes[i], bB = boxes[i + 1];
+                                    if (bA && bB) {
+                                        const midX = (bA.offsetLeft + bA.offsetWidth / 2 + bB.offsetLeft + bB.offsetWidth / 2) / 2;
+                                        const midY = (bA.offsetTop + bA.offsetHeight / 2 + bB.offsetTop + bB.offsetHeight / 2) / 2;
+                                        const ov = document.createElement('div');
+                                        ov.className = 'place-distance-overlay';
+                                        ov.textContent = d === null ? '' : d.toFixed(2);
+                                        ov.style.left = midX + 'px';
+                                        ov.style.top = midY + 'px';
+                                        placesGrid.appendChild(ov);
+                                    }
+                                }
+                            }
+                            // Update Euclid total
+                            const eTEl = document.getElementById('euclidTotal');
+                            if (eTEl) {
+                                const vEl = document.getElementById('euclidTotalValue');
+                                if (vEl) { vEl.textContent = total.toFixed(2); vEl.style.color = '#38ef7d'; }
+                                else { eTEl.textContent = '\u03A3: ' + total.toFixed(2); }
+                                eTEl.style.opacity = '1';
+                            }
+                        } else {
+                            // Not in number mode or euclid disabled: just clear total opacity
+                            const eTEl = document.getElementById('euclidTotal');
+                            if (eTEl) eTEl.style.opacity = '0.5';
+                        }
+                    } catch (e) { }
+                    return;
+                }
                 generateNumberPickerTable();
                 generatePlaceBoxes();
                 setupNumberCellDragDrop();
@@ -15782,14 +15957,14 @@
             await loadData();
 
             // Build SCORES + COMBO_DATA from loaded rows (computed from data.json)
-            // Load saved score config from localStorage (default: bộ 2-5, all)
+            // Load saved score config from localStorage (default: bộ 2-5, non-empty)
             {
                 let _savedKs = [2, 3, 4, 5];
-                let _savedMode = 'all';
+                let _savedMode = 'non-empty';
                 try {
                     const cfg = JSON.parse(localStorage.getItem('scoreConfig') || 'null');
                     if (cfg && Array.isArray(cfg.ks) && cfg.ks.length > 0) _savedKs = cfg.ks;
-                    if (cfg && (cfg.mode === 'non-empty' || cfg.mode === 'all')) _savedMode = cfg.mode;
+                    if (cfg && cfg.mode === 'non-empty') _savedMode = 'non-empty';
                 } catch (e) { }
                 window.__scoreConfigKs = _savedKs;
                 window.__scoreConfigMode = _savedMode;
@@ -15874,9 +16049,18 @@
             }
             // initial pass
             try { mark(); } catch (e) { }
-            // watch for future additions
+            // watch for future additions — debounced + skip when draft popup is open
             try {
-                const mo = new MutationObserver(mark);
+                let _markInnerTimer = null;
+                const mo = new MutationObserver((mutations) => {
+                    // Skip full scan when draft popup is open to prevent lag
+                    try {
+                        const dp = document.getElementById('draftPopup');
+                        if (dp && dp.style.display !== 'none') return;
+                    } catch (e) { }
+                    if (_markInnerTimer) cancelAnimationFrame(_markInnerTimer);
+                    _markInnerTimer = requestAnimationFrame(() => { _markInnerTimer = null; mark(); });
+                });
                 mo.observe(document.body, { childList: true, subtree: true });
                 // expose for debugging if needed
                 window.__markInnerChildObserver = mo;
@@ -15976,7 +16160,12 @@
                     });
 
                     // mutation observer to handle dynamic content
-                    const mo = new MutationObserver(() => setTimeout(update, 50));
+                    // Debounced to avoid layout thrashing when draft popup manipulates DOM
+                    let _stickyTimer = null;
+                    const mo = new MutationObserver(() => {
+                        if (_stickyTimer) clearTimeout(_stickyTimer);
+                        _stickyTimer = setTimeout(() => { _stickyTimer = null; update(); }, 150);
+                    });
                     mo.observe(sec, { childList: true, subtree: true });
 
                     // initial check
@@ -16121,6 +16310,8 @@
                         try { input.replaceWith(newSpan); } catch (ex) { }
                         initPill(newSpan);
                         editing = null;
+                        // Immediately update draft scores after committing a pill edit
+                        try { if (typeof patchDraftScores === 'function') patchDraftScores(); } catch (e) { }
                     }
 
                     // Store commit on outer scope for reuse
@@ -16149,6 +16340,55 @@
                     }
 
                     input.addEventListener('blur', () => { if (editing && editing.input === input && !navigating) commitEditing(true); });
+                    // Real-time score update while editing a pill
+                    input.addEventListener('input', () => {
+                        try {
+                            const row = editing ? (editing.row || (editing.input && editing.input.closest ? editing.input.closest('tr') : null)) : null;
+                            if (!row) return;
+                            const pills = Array.from(row.querySelectorAll('.pill'));
+                            const editorVal = parseInt(input.value.trim(), 10);
+                            const nums = pills.map(p => {
+                                const t = (p.textContent || '').trim();
+                                return (t === '' || t === '__') ? null : parseInt(t, 10);
+                            });
+                            // Replace the pill being edited with the current editor value
+                            const pillsContainer = row.querySelector('.pills');
+                            if (pillsContainer) {
+                                const children = Array.from(pillsContainer.children).filter(c => c.classList.contains('pill') || c.classList.contains('pill-editor'));
+                                const editIdx = children.indexOf(input);
+                                if (editIdx >= 0 && editIdx < nums.length) {
+                                    nums[editIdx] = (Number.isFinite(editorVal) && editorVal >= 1 && editorVal <= 45) ? editorVal : null;
+                                } else if (editIdx >= 0) {
+                                    nums.push((Number.isFinite(editorVal) && editorVal >= 1 && editorVal <= 45) ? editorVal : null);
+                                }
+                            }
+                            const filled = nums.filter(n => n !== null && Number.isFinite(n));
+                            if (filled.length === 6) {
+                                const key = filled.join(',');
+                                let score = (typeof getScoreForResult === 'function') ? getScoreForResult(key) : null;
+                                if (score === null && typeof window.__scoreInput === 'function') score = window.__scoreInput(filled);
+                                const existing = row.querySelector('.draft-score');
+                                if (score !== null) {
+                                    if (existing) {
+                                        existing.textContent = score.toFixed(2);
+                                        existing.style.background = (typeof getScoreBg === 'function') ? getScoreBg(score) : '#666';
+                                        existing.style.color = (typeof getScoreTextColor === 'function') ? getScoreTextColor(score) : '#fff';
+                                    } else {
+                                        const scoreSpan = document.createElement('span');
+                                        scoreSpan.className = 'draft-score';
+                                        scoreSpan.textContent = score.toFixed(2);
+                                        scoreSpan.style.background = (typeof getScoreBg === 'function') ? getScoreBg(score) : '#666';
+                                        scoreSpan.style.color = (typeof getScoreTextColor === 'function') ? getScoreTextColor(score) : '#fff';
+                                        const recordRow = row.querySelector('.record-row');
+                                        const grabber = row.querySelector('.grabber');
+                                        if (recordRow && grabber) recordRow.insertBefore(scoreSpan, grabber);
+                                    }
+                                } else if (existing) {
+                                    existing.textContent = ''; existing.style.background = 'transparent';
+                                }
+                            }
+                        } catch (e) { }
+                    });
                     input.addEventListener('keydown', (ev) => {
                         if (ev.key === 'Enter') { ev.preventDefault(); commitEditing(true); }
                         else if (ev.key === 'Escape') { commitEditing(false); }
@@ -16174,6 +16414,8 @@
                             }
                             input.value = String(next);
                             input.select();
+                            // Trigger score update for arrow key changes
+                            input.dispatchEvent(new Event('input'));
                         }
                     });
                 }
@@ -16455,7 +16697,11 @@
             setDraggableOnNumbers();
             const table = document.querySelector(numberTableSelector);
             if (table) {
-                const mo = new MutationObserver(() => setDraggableOnNumbers());
+                let _dragTimer = null;
+                const mo = new MutationObserver(() => {
+                    if (_dragTimer) cancelAnimationFrame(_dragTimer);
+                    _dragTimer = requestAnimationFrame(() => { _dragTimer = null; setDraggableOnNumbers(); });
+                });
                 mo.observe(table, { childList: true, subtree: true });
             } else {
                 const mo2 = new MutationObserver(() => {
@@ -16532,8 +16778,17 @@
                 };
                 // try now and also watch for future additions
                 attach();
-                const mo2 = new MutationObserver(() => { try { attach(); } catch (e) { } });
-                mo2.observe(document.body, { childList: true, subtree: true });
+                const mo2 = new MutationObserver(() => {
+                    try {
+                        if (document.getElementById('favPopup')) {
+                            attach();
+                            mo2.disconnect(); // stop watching body once favPopup is found
+                        }
+                    } catch (e) { }
+                });
+                if (!document.getElementById('favPopup')) {
+                    mo2.observe(document.body, { childList: true, subtree: false });
+                }
             } catch (e) { /* ignore */ }
         })();
     </script>
@@ -16553,7 +16808,33 @@
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markAll);
             else markAll();
             // Watch for DOM changes (tables regenerated dynamically)
-            const mo = new MutationObserver(() => { markAll(); });
+            // Heavily debounced + skip when draft popup is open to prevent lag
+            let _markTimer = null;
+            const mo = new MutationObserver((mutations) => {
+                // Skip if draft popup is currently displayed — draft pill edits cause
+                // excessive re-scans of all <td> elements in large output tables.
+                try {
+                    const dp = document.getElementById('draftPopup');
+                    if (dp && dp.style.display !== 'none') {
+                        // Only mark inside draft popup itself
+                        if (_markTimer) cancelAnimationFrame(_markTimer);
+                        _markTimer = requestAnimationFrame(() => {
+                            _markTimer = null;
+                            try {
+                                dp.querySelectorAll('td').forEach(td => {
+                                    try {
+                                        if (td.querySelector && td.querySelector('.pill')) td.classList.add('td-has-pill');
+                                        else td.classList.remove('td-has-pill');
+                                    } catch (e) { }
+                                });
+                            } catch (e) { }
+                        });
+                        return;
+                    }
+                } catch (e) { }
+                if (_markTimer) cancelAnimationFrame(_markTimer);
+                _markTimer = requestAnimationFrame(() => { _markTimer = null; markAll(); });
+            });
             mo.observe(document.body, { childList: true, subtree: true });
         })();
     </script>
@@ -18802,10 +19083,29 @@
                 } catch (e) { }
             }
 
-            // keep handles in sync with popup DOM changes
+            // keep handles in sync with popup DOM changes (debounced to avoid lag)
             try {
-                const moHandles = new MutationObserver(() => { try { ensureRestoreHandles(); } catch (e) { } });
-                if (numberPickerTable) moHandles.observe(numberPickerTable, { childList: true, subtree: true, attributes: true });
+                let _handleTimer = null;
+                const moHandles = new MutationObserver((mutations) => {
+                    // Only react to childList changes or in-trash class being added/removed;
+                    // skip popup-number-highlight-only changes to prevent lag.
+                    let needsRun = false;
+                    for (const m of mutations) {
+                        if (m.type === 'childList') { needsRun = true; break; }
+                        if (m.type === 'attributes' && m.attributeName === 'class') {
+                            // Compare old vs new class to detect in-trash changes
+                            const oldVal = m.oldValue || '';
+                            const newVal = (m.target && m.target.className) || '';
+                            const wasInTrash = oldVal.indexOf('in-trash') !== -1;
+                            const isInTrash = newVal.indexOf('in-trash') !== -1;
+                            if (wasInTrash !== isInTrash) { needsRun = true; break; }
+                        }
+                    }
+                    if (!needsRun) return;
+                    if (_handleTimer) cancelAnimationFrame(_handleTimer);
+                    _handleTimer = requestAnimationFrame(() => { _handleTimer = null; try { ensureRestoreHandles(); } catch (e) { } });
+                });
+                if (numberPickerTable) moHandles.observe(numberPickerTable, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
             } catch (e) { }
 
             // Helper: toggle dragged-out class for all unpair rows matching a stable key
@@ -20287,10 +20587,7 @@
             let _draftHoveredTr = null;
             try {
                 if (draftTableBody) {
-                    let _draftMouseoverTimer = 0;
                     draftTableBody.addEventListener('mouseover', (ev) => {
-                        if (_draftMouseoverTimer) return;
-                        _draftMouseoverTimer = setTimeout(() => { _draftMouseoverTimer = 0; }, 50);
                         try {
                             if (dragState) return; // don't highlight during row drag
                             const tr = ev.target && ev.target.closest ? ev.target.closest('tr') : null;
@@ -20308,35 +20605,25 @@
                             });
                             const validNums = allNums.filter(n => n !== null);
 
-                            // Clear previous highlights first
-                            if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
-
-                            // Apply highlights only for valid numbers
-                            if (validNums.length > 0) {
-                                // Apply orange highlights to popup (bypass the internal clear since we already cleared)
-                                const tbl = document.getElementById('numberPickerTable');
-                                if (tbl) {
-                                    try {
-                                        const inHover = (window.getQuickPlaceMode && window.getQuickPlaceMode() === 'hover');
-                                        if (inHover) {
-                                            validNums.forEach(n => {
-                                                try { const td = tbl.querySelector('td[data-number="' + n + '"]'); if (td) td.classList.add('popup-number-highlight'); } catch (e) { }
-                                            });
-                                        }
-                                    } catch (e) { }
-                                }
-                            }
+                            // Clear old popup highlights, then apply this draft record's numbers on popup
+                            try { if (typeof clearPopupHighlights === 'function') clearPopupHighlights(); } catch (e) { }
+                            try { if (validNums.length && typeof applyPopupHighlights === 'function') applyPopupHighlights(validNums); } catch (e) { }
 
                             // Always sync place boxes: use 6-element array with empty strings for missing
+                            // Use light mode to avoid regenerating the popup table (the root cause of lag)
                             try {
                                 if (typeof window.getPlaceValues === 'function' && typeof window.setPlaceValues === 'function') {
                                     if (!window.__prevPlaceValues) {
                                         window.__prevPlaceValues = window.getPlaceValues().slice();
                                     }
                                     const placeArr = allNums.map(n => n !== null ? String(n) : '');
-                                    window.setPlaceValues(placeArr);
+                                    try { window.__lightPlaceUpdate = true; window.setPlaceValues(placeArr); } catch (e) { } finally { window.__lightPlaceUpdate = false; }
                                 }
                             } catch (e) { }
+
+                            // Apply cell6.5 row highlights based on hovered draft record's numbers
+                            // (light mode skips this, so call explicitly — this is the "orange border" on cell6.5 rows)
+                            try { if (typeof applyCell6_5HighlightSet === 'function') applyCell6_5HighlightSet(validNums); } catch (e) { }
                         } catch (e) { }
                     }, true);
 
@@ -20347,6 +20634,8 @@
                             if (related && draftPopup && draftPopup.contains(related)) return;
                             _draftHoveredTr = null;
                             if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
+                            // Restore cell6.5 row highlights based on trash items (clear hover-applied ones)
+                            try { if (typeof updateCell6_5Highlights === 'function') updateCell6_5Highlights(); } catch (e) { }
                         } catch (e) { }
                     }, true);
                 }
@@ -20922,6 +21211,17 @@
                     comboPct[k] = pctMap;
                 }
 
+                // Precompute frequency maps and totals for leave-one-out percentiles
+                const comboCountFreq = {}; // k -> Map<count, freq>
+                const comboTotalObserved = {}; // k -> number of observed combos
+                for (const k of activeKs) {
+                    const m = comboCounts[k];
+                    const freq = new Map();
+                    for (const cnt of m.values()) freq.set(cnt, (freq.get(cnt) || 0) + 1);
+                    comboCountFreq[k] = freq;
+                    comboTotalObserved[k] = m.size;
+                }
+
                 // 3. Compute S_k per record, build variance lists
                 const skLists = {};
                 for (const k of activeKs) skLists[k] = [];
@@ -20935,7 +21235,32 @@
                         } else {
                             const keys = enumCombos(rec.nums, k);
                             let sum = 0;
-                            for (const key of keys) sum += (comboPct[k][key] || 0);
+                            // For stored SCORES, compute leave-one-out percentile so a record's
+                            // own presence doesn't inflate its score. This matches scoring
+                            // used by draft/scoreInput (which uses COMBO_DATA without the
+                            // current record) and makes scores stable.
+                            const m = comboCounts[k];
+                            const freq = comboCountFreq[k];
+                            const totalObs = comboTotalObserved[k] || 0;
+                            for (const key of keys) {
+                                const orig = m.get(key) || 0;
+                                let pct = 0;
+                                if (orig <= 0) {
+                                    pct = 0;
+                                } else if (orig === 1) {
+                                    // After removing the current record this combo disappears
+                                    const newTotal = Math.max(0, totalObs - 1);
+                                    pct = newTotal > 0 ? 0 : 0;
+                                } else {
+                                    const eff = orig - 1;
+                                    // count how many observed combos have count <= eff
+                                    let base = 0;
+                                    for (const [c, f] of freq.entries()) if (c <= eff) base += f;
+                                    // include this combo moved into eff bucket
+                                    pct = (base + 1) / totalObs;
+                                }
+                                sum += pct;
+                            }
                             sk[k] = keys.length > 0 ? sum / keys.length : 0;
                         }
                         // Variance list: 'all' = always push; 'non-empty' = only if valid
@@ -21151,9 +21476,9 @@
             margin: 0 !important;
         }
 
-        /* Cell5.5: smaller number pills */
-        #cell5_5 td.td-has-pill .pill,
-        #cell5_5 td.td-has-pill .cell5-pill {
+        /* Cell5.5: smaller number pills — override to fit score column */
+        #cell5_5 td .pill,
+        #cell5_5 td .cell5-pill {
             width: 18px !important;
             min-width: 18px !important;
             height: 17px !important;
@@ -21163,7 +21488,7 @@
             border-radius: 3px !important;
         }
 
-        #cell5_5 td.td-has-pill {
+        #cell5_5 td:nth-child(2) {
             padding: 1px 1px !important;
         }
 
@@ -21398,10 +21723,9 @@
                         // Mode dropdown: non-empty / all
                         const modeSel = document.createElement('select');
                         modeSel.style.cssText = 'font-size:10px;padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);height:22px;';
-                        modeSel.title = 'Variance mode: non-empty (chỉ record có dữ liệu) / all (tất cả record)'
+                        modeSel.title = 'Variance mode: non-empty (chỉ record có dữ liệu)'
                         const optNE = document.createElement('option'); optNE.value = 'non-empty'; optNE.textContent = 'non-empty'; modeSel.appendChild(optNE);
-                        const optAll = document.createElement('option'); optAll.value = 'all'; optAll.textContent = 'all'; modeSel.appendChild(optAll);
-                        modeSel.value = window.__scoreConfigMode || 'all';
+                        modeSel.value = 'non-empty';
 
                         // Auto-apply on mode change
                         modeSel.addEventListener('change', () => { applyBtn.click(); });
