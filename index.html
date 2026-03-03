@@ -16749,6 +16749,34 @@
                                 }
                             }
 
+                            // Same-row swap: check if resulting record would duplicate another draft row
+                            if (!blocked && rowA === rowB) {
+                                try {
+                                    const allRows = Array.from(draft.querySelectorAll('#draftTable tbody tr:not(.draft-add-row-tr)'));
+                                    // Compute what this row's pill sequence would be AFTER the swap
+                                    const pillsInRow = Array.from(rowA.querySelectorAll('span.pill'));
+                                    const wouldBeSeq = pillsInRow.map(p => {
+                                        if (p === dragSrc) return pillText(b);   // source receives target's value
+                                        if (p === target) return pillText(a);    // target receives source's value
+                                        return (p.textContent || '').trim();
+                                    }).join(',');
+                                    for (const otherRow of allRows) {
+                                        if (otherRow === rowA) continue;
+                                        const otherSeq = Array.from(otherRow.querySelectorAll('span.pill')).map(p => (p.textContent || '').trim()).join(',');
+                                        if (otherSeq === wouldBeSeq) {
+                                            blocked = true;
+                                            // Flash red on both swapped pills and the conflicting row's pills
+                                            flashRed(dragSrc); flashRed(target);
+                                            otherRow.querySelectorAll('span.pill').forEach(p => flashRed(p));
+                                            // Revert source back to its original value
+                                            dragSrc.textContent = a;
+                                            updatePillClass(dragSrc);
+                                            break;
+                                        }
+                                    }
+                                } catch (e) { }
+                            }
+
                             if (!blocked) {
                                 // Swap: source gets target's value, target gets source's original
                                 dragSrc.textContent = pillText(b);
@@ -20130,23 +20158,41 @@
                     const nums = (typeof parseSixNumbersFromString === 'function') ? parseSixNumbersFromString(result) : null;
                     if (!nums) return;
 
-                    // Parse rule column: extract candidate (cand) and bracket value [n]
-                    // Rule format in HTML: <span bg=yellow>cand</span>>{...}<span bg=red>[n]</span>
+                    // Parse rule from ALL columns in the row (scan each td for pattern like "17>{...}[25]")
                     let _ruleCand = null, _ruleBracket = null;
                     try {
                         const tds = tr.querySelectorAll('td');
-                        // rule column is typically 4th (index 3) in: date, KQ, label, rule, score
-                        const ruleTd = tds[3] || null;
-                        if (ruleTd) {
-                            const ruleText = ruleTd.textContent || '';
-                            // Extract candidate: number before '>'
-                            const candMatch = ruleText.match(/^(\d+)>/);
-                            if (candMatch) _ruleCand = parseInt(candMatch[1], 10);
-                            // Extract bracket value: number inside [...]
+                        // Scan every td for a rule pattern: number>....[number]
+                        for (let _ti = 0; _ti < tds.length; _ti++) {
+                            const ruleText = (tds[_ti].textContent || '').trim();
+                            const candMatch = ruleText.match(/(\d+)\s*>\s*\{/);
                             const bracketMatch = ruleText.match(/\[(\d+)\]/);
-                            if (bracketMatch) _ruleBracket = parseInt(bracketMatch[1], 10);
+                            if (candMatch && bracketMatch) {
+                                _ruleCand = parseInt(candMatch[1], 10);
+                                _ruleBracket = parseInt(bracketMatch[1], 10);
+                                break; // found the rule column
+                            }
+                        }
+                        // Fallback: looser match if strict pattern didn't find both
+                        if (_ruleCand == null || _ruleBracket == null) {
+                            for (let _ti = 0; _ti < tds.length; _ti++) {
+                                const ruleText = (tds[_ti].textContent || '').trim();
+                                if (_ruleCand == null) {
+                                    const cm = ruleText.match(/(\d+)\s*>/);
+                                    if (cm) _ruleCand = parseInt(cm[1], 10);
+                                }
+                                if (_ruleBracket == null) {
+                                    const bm = ruleText.match(/\[(\d+)\]/);
+                                    if (bm) _ruleBracket = parseInt(bm[1], 10);
+                                }
+                                if (_ruleCand != null && _ruleBracket != null) break;
+                            }
                         }
                     } catch (e) { }
+
+                    // Store rule data globally so it survives async re-renders
+                    window.__shiftClickRule = (_ruleCand != null || _ruleBracket != null)
+                        ? { cand: _ruleCand, bracket: _ruleBracket, ts: Date.now() } : null;
 
                     // Navigate to cell6_5 (click nav button if present)
                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]') || document.querySelector('#cell6_5_nav_btn');
@@ -20192,31 +20238,54 @@
                             try { if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights(); } catch (e) { }
                             try { if (typeof updateLabelCellStyles === 'function') updateLabelCellStyles(); } catch (e) { }
 
-                            // Auto-fill analysis panel fields from rule: anal-num = candidate, anal-op = '=', anal-val = bracket value
+                            // Auto-fill analysis panel fields from rule (poll until panel exists & stable)
                             if (_ruleCand != null || _ruleBracket != null) {
-                                try {
+                                let _pollCount = 0;
+                                const _maxPolls = 60; // 60 × 100ms = 6s max wait
+                                const _pollFill = function () {
+                                    // Check global rule data is still from our click (not stale)
+                                    const rd = window.__shiftClickRule;
+                                    if (!rd || (Date.now() - rd.ts) > 10000) return;
                                     const _ap = document.querySelector('#cell6_5_analysis_panel');
-                                    if (_ap) {
+                                    // Panel must exist AND be attached to the DOM (has parentNode inside #cell6_5)
+                                    if (!_ap || !_ap.parentNode || !_ap.closest('#cell6_5')) {
+                                        if (++_pollCount < _maxPolls) { setTimeout(_pollFill, 100); }
+                                        return;
+                                    }
+                                    try {
                                         const _aN = _ap.querySelector('.anal-num');
                                         const _aO = _ap.querySelector('.anal-op');
                                         const _aV = _ap.querySelector('.anal-val');
-                                        // 1) Set candidate → dispatch input (resets op & val internally, runs analysis)
-                                        if (_aN && _ruleCand != null) {
-                                            _aN.value = String(_ruleCand);
+                                        if (!_aN) { if (++_pollCount < _maxPolls) { setTimeout(_pollFill, 100); } return; }
+                                        // 1) Set candidate → dispatch input (this resets op to '>=' and val to '0' internally)
+                                        if (rd.cand != null) {
+                                            _aN.value = String(rd.cand);
                                             _aN.dispatchEvent(new Event('input'));
                                         }
-                                        // 2) After a tick, set operator and bracket value
-                                        setTimeout(() => {
+                                        // 2) Use a multi-step approach to set op and val AFTER the internal reset settles
+                                        const _setOpVal = function (attempt) {
+                                            if (attempt > 5) return;
                                             try {
-                                                if (_aO) { _aO.value = '='; _aO.dispatchEvent(new Event('change')); }
-                                                if (_aV && _ruleBracket != null) {
-                                                    _aV.value = String(_ruleBracket);
-                                                    _aV.dispatchEvent(new Event('input'));
+                                                const _ap2 = document.querySelector('#cell6_5_analysis_panel');
+                                                if (!_ap2 || !_ap2.closest('#cell6_5')) {
+                                                    // Panel was removed during re-render; retry
+                                                    setTimeout(function () { _setOpVal(attempt + 1); }, 250);
+                                                    return;
+                                                }
+                                                const _aO2 = _ap2.querySelector('.anal-op');
+                                                const _aV2 = _ap2.querySelector('.anal-val');
+                                                if (_aO2) { _aO2.value = '='; _aO2.dispatchEvent(new Event('change')); }
+                                                if (_aV2 && rd.bracket != null) {
+                                                    _aV2.value = String(rd.bracket);
+                                                    _aV2.dispatchEvent(new Event('input'));
                                                 }
                                             } catch (e) { }
-                                        }, 150);
-                                    }
-                                } catch (e) { }
+                                        };
+                                        setTimeout(function () { _setOpVal(0); }, 250);
+                                    } catch (e) { }
+                                };
+                                // Start polling immediately (the 500ms outer delay already passed)
+                                _pollFill();
                             }
                         }, 500);
                     }, 200);
