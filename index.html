@@ -1646,6 +1646,17 @@
             contain: content;
         }
 
+        /* Disable lazy rendering for inner cards inside active cells so
+           single-table width is correct immediately (fixes 30s delay) */
+        #cell5_5 .grid-centered>.card,
+        #cell6_5 .grid-centered>.card,
+        #cell6_6 .grid-centered>.card,
+        #cell9 .grid-centered>.card,
+        #cell11 .grid-centered>.card {
+            content-visibility: visible !important;
+            contain: none !important;
+        }
+
         /* Marker for cards nested inside "card-inner" wrappers.
            JS will add the class 'card-inner-child' to any .card inside .card.card-inner.
            Use this selector to style inner cards separately. */
@@ -1757,6 +1768,12 @@
             min-width: 280px;
         }
 
+        /* Single table in Cell6.5: full width */
+        #cell6_5 .grid-centered>*:only-child {
+            flex: 1 1 auto !important;
+            max-width: none !important;
+        }
+
         #cell6_5 .card.card-inner.single-child {
             justify-content: flex-start !important;
         }
@@ -1819,6 +1836,52 @@
             width: 100% !important;
         }
 
+        /* Same behavior for Cell9: don't center its grid/cards when only one child/table */
+        #cell9 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+            width: 100%;
+        }
+
+        /* Cell9: max 2 tables per row */
+        #cell9 .grid-centered>* {
+            flex: 1 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+            min-width: 280px;
+        }
+
+        /* Single table in Cell9: max half width */
+        #cell9 .grid-centered>*:only-child {
+            flex: 0 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+        }
+
+        #cell9 .card.card-inner.single-child {
+            justify-content: flex-start !important;
+        }
+
+        #cell9 .card.card-inner.single-child .card-inner-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+            flex: 0 1 auto !important;
+        }
+
+        #cell9 .card.card-inner.single-child .card-inner-child table {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            display: table !important;
+        }
+
+        /* Clear any :only-child centering inside cell9 */
+        #cell9 .card.card-inner>.card-inner-child:only-child {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
         /* Cell11 table: center KQ column, full width */
         #cell11 table td:nth-child(2) {
             text-align: center !important;
@@ -1835,13 +1898,20 @@
         #cell11 .grid-centered {
             justify-content: flex-start !important;
             align-items: flex-start !important;
+            width: 100%;
         }
 
-        /* Each table in Cell11 takes exactly half the row width */
+        /* Cell11: max 2 tables per row (matching Cell6.5 layout) */
         #cell11 .grid-centered>* {
-            flex: 0 0 calc(50% - 5px) !important;
-            max-width: calc(50% - 5px) !important;
-            min-width: 0 !important;
+            flex: 1 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+            min-width: 280px;
+        }
+
+        /* Single table in Cell11: max half width */
+        #cell11 .grid-centered>*:only-child {
+            flex: 0 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
         }
 
         #cell11 .card.card-inner.single-child {
@@ -4064,6 +4134,20 @@
             };
         };
 
+        // Scroll helper: after rendering, restore scroll if user was scrolled past 200px,
+        // otherwise scroll to 240 to show controls (first render / cold start).
+        // Usage: const _savedY = window.scrollY; ... render ... __scrollAfterRender(_savedY);
+        function __scrollAfterRender(savedY) {
+            requestAnimationFrame(() => {
+                if (savedY > 200) {
+                    window.scrollTo(0, savedY);
+                } else {
+                    try { window.scrollTo({ top: 240, behavior: 'auto' }); }
+                    catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (er) { } }
+                }
+            });
+        }
+
         // Throttle helper for smoother updates
         const createThrottle = (fn, delay = 100) => {
             let lastCall = 0;
@@ -4457,6 +4541,7 @@
             // (removed debug placeholder)
 
             function draw() {
+                const _savedY = window.scrollY;
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                 const counts = Array.from({ length: 46 }, () => Array(6).fill(0));
                 let total = 0;
@@ -4585,8 +4670,7 @@
                         });
                     } catch (err) { }
                 })();
-                // ensure viewport shows controls + results consistently
-                setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
+                __scrollAfterRender(_savedY);
             }
             topSel.onchange = sortSel.onchange = decimalSel.onchange = draw;
             draw();
@@ -5262,6 +5346,7 @@
             });
 
             function draw() {
+                const _savedY = window.scrollY;
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                 populateYears();
                 // Build data with parsedDate (if available) and display date
@@ -5793,14 +5878,7 @@
                 };
                 createChunk();
 
-                // after structure is ready, scroll viewport to 240px so controls sit under header
-                // Use a small timeout + rAF to wait for layout/paint to settle (match Cell6.5 behavior)
-                setTimeout(() => {
-                    requestAnimationFrame(() => {
-                        try { window.scrollTo({ top: 240, behavior: 'auto' }); }
-                        catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (er) { } }
-                    });
-                }, 160);
+                __scrollAfterRender(_savedY);
             }
 
             sortSel.onchange = yearSel.onchange = monthSel.onchange = trashSel.onchange = draw;
@@ -5909,6 +5987,7 @@
             let cacheKey = null;
 
             function group() {
+                const _savedY = window.scrollY;
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
                 // Tạo key để kiểm tra cache
@@ -6038,12 +6117,12 @@
                     groupCache = groups;
                     cacheKey = newCacheKey;
                     renderGroups(groups);
-                    // Ensure controls sit under header after render by scrolling
-                    try { setTimeout(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }, 160); } catch (e) { }
+                    __scrollAfterRender(_savedY);
                 }
             }
 
             function renderGroups(groups) {
+                const _savedY = window.scrollY;
                 // Apply sorting based on sortSel value
                 if (sortSel.value === 'count_desc') groups.sort((a, b) => {
                     const d = b.rows.length - a.rows.length;
@@ -6367,9 +6446,7 @@
                     if (created < groups.length) requestAnimationFrame(createChunk);
                 };
                 createChunk();
-                // After rendering group cards, ensure page scrolls to 240px
-                // Use a small delay to allow layout to settle before scrolling
-                try { setTimeout(() => { window.scrollTo({ top: 240, behavior: 'smooth' }); }, 50); } catch (e) { try { setTimeout(() => { window.scrollTo(0, 240); }, 50); } catch (er) { /* ignore */ } }
+                __scrollAfterRender(_savedY);
             }
 
             // Dùng debounce để tránh tính toán quá tần suất
@@ -6781,6 +6858,7 @@
             const wrap = document.createElement('div'); wrap.className = 'card card-inner'; body.appendChild(wrap);
 
             function draw() {
+                const _savedY = window.scrollY;
                 if (!rows || !rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                 const vals = inputs.map(i => { const v = String(i.value ?? '').trim(); return v === '' ? NaN : parseInt(v, 10); });
                 if (vals.some(v => !Number.isFinite(v))) { wrap.innerHTML = "<div class='muted'>Vui lòng nhập đủ 6 số hợp lệ</div>"; return; }
@@ -7321,13 +7399,7 @@
 
                 if (arrGroups.length === 1) wrap.classList.add('single-child');
 
-                // After chunked creation completes, scroll viewport to keep controls visible
-                setTimeout(() => {
-                    requestAnimationFrame(() => {
-                        try { window.scrollTo({ top: 240, behavior: 'auto' }); }
-                        catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } }
-                    });
-                }, 160);
+                __scrollAfterRender(_savedY);
             }
 
             // wire events: input changes trigger redraw
@@ -10661,6 +10733,7 @@
             }
 
             function renderGroupTable(arr) {
+                const _savedY = window.scrollY;
                 // Header + empty grid container so the browser can paint quickly
                 // Use baselineArrAll (unfiltered) for totals/rank while grid shows filtered arr
                 const baselineTotal = (typeof baselineArrAll !== 'undefined' && baselineArrAll && Array.isArray(baselineArrAll)) ? baselineArrAll.length : arr.length;
@@ -11304,18 +11377,7 @@
                 };
                 createChunk();
 
-                // After chunked creation completes, scroll viewport to 240px so
-                // the `.controls` area and new results are visible. Use a small
-                // timeout + rAF to wait for layout/paint to settle.
-                setTimeout(() => {
-                    requestAnimationFrame(() => {
-                        try {
-                            window.scrollTo({ top: 240, behavior: 'auto' });
-                        } catch (e) {
-                            try { document.scrollingElement.scrollTop = 240; } catch (err) { }
-                        }
-                    });
-                }, 160);
+                __scrollAfterRender(_savedY);
 
             }
 
@@ -11700,6 +11762,7 @@
             try { wrapInputs.appendChild(recencySel); } catch (e) { }
 
             function run() {
+                const _savedY = window.scrollY;
                 const pattern = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : "_"; }).join("");
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
                 if (pattern.length !== 6) { wrap.innerHTML = "<div class='error'>Cần 6 ký tự</div>"; return; }
@@ -11841,8 +11904,7 @@
                     } catch (err) { /* ignore */ }
                 })();
 
-                // scroll to 240px so the controls sit under header consistently
-                setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
+                __scrollAfterRender(_savedY);
             }
             inputs.forEach((inp, idx) => {
                 inp.oninput = run;
@@ -12288,16 +12350,22 @@
                         container.style.opacity = "0.4";
                         container.style.cursor = "grabbing";
                         e.dataTransfer.effectAllowed = "copyMove";
-                        e.dataTransfer.setData("text/plain", inputs[idx].value);
+                        // Store display value (single or first of multi) for external drops
+                        const set = cell9MultiValues[idx];
+                        const val = set && set.size > 0 ? String([...set][0]) : inputs[idx].value;
+                        e.dataTransfer.setData("text/plain", val);
                     });
 
                     container.addEventListener("dragend", (e) => {
                         container.style.opacity = "";
                         container.style.cursor = "grab";
-                        // If drop didn't happen (dragged outside), delete the value
-                        if (!dropHandled && draggedIndex === idx && inputs[idx].value) {
+                        // If drop didn't happen (dragged outside), delete the value AND multi-set
+                        if (!dropHandled && draggedIndex === idx && (inputs[idx].value || cell9MultiValues[idx].size > 0)) {
+                            cell9MultiValues[idx].clear();
                             inputs[idx].value = "";
+                            inputs[idx].placeholder = "";
                             inputs[idx].dispatchEvent(new Event("input"));
+                            c9UpdateMvBadge(idx);
                             if (run) run();
                         }
                         draggedIndex = null;
@@ -12398,11 +12466,21 @@
                             container.style.transform = "";
                             return;
                         }
-                        // Otherwise swap
+                        // Otherwise swap (including multi-value Sets)
                         else if (draggedIndex !== null && draggedIndex !== idx) {
+                            // Swap multi-value sets
+                            const tempSet = cell9MultiValues[idx];
+                            cell9MultiValues[idx] = cell9MultiValues[draggedIndex];
+                            cell9MultiValues[draggedIndex] = tempSet;
+                            // Swap input values
                             const tempValue = inputs[idx].value;
                             inputs[idx].value = inputs[draggedIndex].value;
                             inputs[draggedIndex].value = tempValue;
+                            // Sync from multi sets
+                            c9SyncInputFromMulti(idx);
+                            c9SyncInputFromMulti(draggedIndex);
+                            c9UpdateMvBadge(idx);
+                            c9UpdateMvBadge(draggedIndex);
 
                             inputs[idx].dispatchEvent(new Event("input"));
                             inputs[draggedIndex].dispatchEvent(new Event("input"));
@@ -12444,7 +12522,12 @@
             controls.appendChild(hint);
             try { controls.appendChild(recencySel); } catch (e) { }
 
+            // Persistent auto-sync state for missing → trash
+            let _c9MissingAutoSync = false;
+            let _c9PrevMissing = [];
+
             function run() {
+                const _c9PrevScroll = window.scrollY;
                 const mode = cell9ModeState;
 
                 // Build pairCounts & computeRule for rule column (same as Cell6.5)
@@ -12527,7 +12610,28 @@
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
                     const sArr = [...combinedSet].sort((a, b) => a - b);
                     const sStr = '{' + sArr.join(',') + '}';
-                    let html = `<div class='muted'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div><div class='grid-centered'>`;
+                    // Compute missing[]: numbers from 1-45 not appearing in any output record
+                    const _outputNums9 = new Set();
+                    records.forEach(r => r.nums.forEach(n => _outputNums9.add(n)));
+                    const _allNums9 = Array.from({ length: 45 }, (_, i) => i + 1);
+                    const _missing9 = _allNums9.filter(n => !_outputNums9.has(n));
+
+                    // Auto-sync missing → trash when enabled
+                    if (_c9MissingAutoSync && _missing9.length) {
+                        try {
+                            const toRemove = _c9PrevMissing.filter(n => !_missing9.includes(n));
+                            const toAdd = _missing9.filter(n => !_c9PrevMissing.includes(n));
+                            if (toRemove.length) document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: toRemove } }));
+                            if (toAdd.length) document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: toAdd } }));
+                            _c9PrevMissing = _missing9.slice();
+                        } catch (e) { }
+                    }
+
+                    const _syncIndicator9 = _c9MissingAutoSync ? ' ✦sync' : '';
+                    const _missingHtml9 = _missing9.length
+                        ? `<div class='muted cell9-missing-line' style='flex-basis:100%;cursor:pointer;user-select:none;margin-top:2px;font-size:12px;${_c9MissingAutoSync ? 'text-decoration:line-through;opacity:0.5;' : ''}' title='Dblclick để toggle đồng bộ liên tục vào trash'>missing[${_missing9.length}]${_syncIndicator9}: ${_missing9.join(', ')}</div>`
+                        : '';
+                    let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div>${_missingHtml9}<div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
@@ -12542,6 +12646,34 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
+                    // Attach dblclick on missing[] line to toggle continuous sync to trash
+                    try {
+                        const missingLine = wrap.querySelector('.cell9-missing-line');
+                        if (missingLine && _missing9.length) {
+                            missingLine.addEventListener('dblclick', (e) => {
+                                e.preventDefault();
+                                _c9MissingAutoSync = !_c9MissingAutoSync;
+                                if (_c9MissingAutoSync) {
+                                    // Turn ON: add all current missing to trash
+                                    document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: _missing9.slice() } }));
+                                    _c9PrevMissing = _missing9.slice();
+                                    missingLine.style.textDecoration = 'line-through';
+                                    missingLine.style.opacity = '0.5';
+                                    missingLine.textContent = missingLine.textContent.replace(/ ✦sync/, '');
+                                    missingLine.textContent = missingLine.textContent.replace(/^(missing\[\d+\])/, '$1 ✦sync');
+                                } else {
+                                    // Turn OFF: remove synced missing from trash
+                                    if (_c9PrevMissing.length) {
+                                        document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: _c9PrevMissing.slice() } }));
+                                    }
+                                    _c9PrevMissing = [];
+                                    missingLine.style.textDecoration = 'none';
+                                    missingLine.style.opacity = '1';
+                                    missingLine.textContent = missingLine.textContent.replace(/ ✦sync/, '');
+                                }
+                            });
+                        }
+                    } catch (e) { }
                     // Reapply persisted Ctrl-selected highlight (persist across renders) for cell9
                     try {
                         const persisted = (function () { try { return localStorage.getItem('cell9_ctrl_selected'); } catch (e) { return null; } })();
@@ -12637,8 +12769,8 @@
                             });
                         } catch (err) { }
                     })();
-                    // ensure viewport shows controls + results consistently
-                    setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
+                    // Restore scroll position to prevent jank
+                    setTimeout(() => window.scrollTo(0, _c9PrevScroll), 0);
                 } else {
                     const labels = inputs.map(i => { const v = i.value.trim(); return v ? v[0] : null; }).filter(v => v !== null);
                     if (!labels.length) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 ký tự...</div>"; return; }
@@ -12673,7 +12805,7 @@
                     if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
                     let display = records.slice();
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
-                    let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
+                    let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
@@ -12720,8 +12852,8 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
-                    // ensure viewport shows controls + results consistently
-                    setTimeout(() => { requestAnimationFrame(() => { try { window.scrollTo({ top: 240, behavior: 'auto' }); } catch (e) { try { document.scrollingElement.scrollTop = 240; } catch (err) { } } }); }, 160);
+                    // Restore scroll position to prevent jank
+                    setTimeout(() => window.scrollTo(0, _c9PrevScroll), 0);
                 }
             }
 
@@ -13142,7 +13274,21 @@
                     return;
                 }
                 const pattern = Array(6).fill("_"); pattern[order - 1] = (cell10ModeState === "number") ? value : `C${value}`;
-                let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>`;
+                // Compute missing[]: the input number(s) not in the latest draw
+                const _latestNums10 = rows.length ? new Set(rows[rows.length - 1].nums) : new Set();
+                let _missing10 = [];
+                if (cell10ModeState === "number") {
+                    if (!_latestNums10.has(value)) _missing10 = [value];
+                } else {
+                    // Column mode: collect all numbers belonging to that column
+                    const _colNums = [];
+                    for (let n = 1; n <= 45; n++) if (getCol(n) === value) _colNums.push(n);
+                    _missing10 = _colNums.filter(n => !_latestNums10.has(n));
+                }
+                const _missingHtml10 = _missing10.length
+                    ? `<div class='muted cell10-missing-line' style='cursor:pointer;user-select:none;margin-top:2px;font-size:12px;' title='Dblclick để toggle đưa vào trash'>missing[${_missing10.length}]: ${_missing10.join(', ')}</div>`
+                    : '';
+                let html = `<div class='muted'>${hit}/${total} kỳ (${(hit / total * 100).toFixed(2)}%) · Pattern: ${pattern.join(',')}</div>${_missingHtml10}`;
 
                 // Show numbers at selected position for column mode
                 if (cell10ModeState === "column" && selectedPosNumbers.length > 0) {
@@ -13183,6 +13329,34 @@
                 if (positionsBefore.length) html += `<h4>Vị trí trước</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsBefore.map(renderPosTable) : positionsBefore.map(renderPosTableColumn)).join('')}</div>`;
                 if (positionsAfter.length) html += `<h4>Vị trí sau</h4><div class='grid-centered'>${(cell10ModeState === "number" ? positionsAfter.map(renderPosTable) : positionsAfter.map(renderPosTableColumn)).join('')}</div>`;
                 wrap.innerHTML = html;
+                // Attach dblclick on missing[] line to toggle those numbers in/out of trash
+                try {
+                    const missingLine10 = wrap.querySelector('.cell10-missing-line');
+                    if (missingLine10 && _missing10.length) {
+                        missingLine10.addEventListener('dblclick', (e) => {
+                            e.preventDefault();
+                            const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            const allInTrash = _missing10.every(n => trashed.includes(n));
+                            if (allInTrash) {
+                                document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: _missing10.slice() } }));
+                                missingLine10.style.textDecoration = 'none';
+                                missingLine10.style.opacity = '1';
+                            } else {
+                                document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: _missing10.slice() } }));
+                                missingLine10.style.textDecoration = 'line-through';
+                                missingLine10.style.opacity = '0.5';
+                            }
+                        });
+                        // Initial visual state
+                        try {
+                            const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            if (_missing10.every(n => trashed.includes(n))) {
+                                missingLine10.style.textDecoration = 'line-through';
+                                missingLine10.style.opacity = '0.5';
+                            }
+                        } catch (e) { }
+                    }
+                } catch (e) { }
                 // restore scroll for same-input edits (prevent jump-to-top)
                 if (changeIdx !== undefined && changeIdx !== null && window._cell10LastIndex === changeIdx) {
                     // small timeout to let layout settle
@@ -13608,49 +13782,7 @@
                         }
                     });
 
-                    // Double-click to paste clipboard (6 numbers)
-                    container.addEventListener('dblclick', async (e) => {
-                        e.stopPropagation();
-                        let text = null;
-                        try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (err) { text = null; }
-                        if (!text || String(text).trim() === '') {
-                            try { const res = window.prompt('Paste 6 numbers (comma or space separated), e.g. 29,3,35,24,18,30', ''); if (res && String(res).trim() !== '') text = res.trim(); } catch (ex) { text = null; }
-                        }
-                        if (!text) return;
-                        // Label mode: accept a raw 6-digit string like "152345" → 1,5,2,3,4,5
-                        if (cell11Mode === 'label') {
-                            const raw = text.trim();
-                            if (/^\d{6}$/.test(raw)) {
-                                const digits = raw.split('').map(d => parseInt(d, 10));
-                                if (digits.every(d => d >= 1 && d <= 6)) {
-                                    for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(digits[ii]); inputs[ii].dispatchEvent(new Event('input')); }
-                                    try { container.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (ex) { }
-                                    if (run) run();
-                                    return;
-                                }
-                            }
-                        }
-                        const parts = text.split(/[^0-9]+/).map(p => p.trim()).filter(Boolean);
-                        if (parts.length !== 6) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
-                        const parsed = parts.map(p => parseInt(p, 10));
-                        if (parsed.some(n => !Number.isFinite(n) || n < 1)) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
-                        if (cell11Mode === 'pattern') {
-                            // Pattern mode: 6 distinct numbers 1-45
-                            if (parsed.some(n => n > 45) || new Set(parsed).size !== 6) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
-                            for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(parsed[ii]); inputs[ii].dispatchEvent(new Event('input')); }
-                        } else {
-                            // Label mode: if all values ≤6, accept directly; otherwise convert via getCol
-                            const allLabel = parsed.every(n => n >= 1 && n <= 6);
-                            if (allLabel) {
-                                for (let ii = 0; ii < 6; ii++) { inputs[ii].value = String(parsed[ii]); inputs[ii].dispatchEvent(new Event('input')); }
-                            } else {
-                                if (parsed.some(n => n > 45)) { try { container.animate([{ boxShadow: '0 0 0 6px rgba(255,0,0,0.18)' }, { boxShadow: '0 0 0 0 rgba(255,0,0,0)' }], { duration: 420 }); } catch (ex) { } return; }
-                                for (let ii = 0; ii < 6; ii++) { const col = getCol(parsed[ii]); inputs[ii].value = col ? String(col) : ''; inputs[ii].dispatchEvent(new Event('input')); }
-                            }
-                        }
-                        try { container.animate([{ transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 }); } catch (ex) { }
-                        if (run) run();
-                    });
+                    // (dblclick paste clipboard removed — dblclick now only opens mvDropdown)
 
                     return container;
                 });
@@ -13938,7 +14070,12 @@
                 return source;
             }
 
+            // Persistent auto-sync state for missing → trash
+            let _c11MissingAutoSync = false;
+            let _c11PrevMissing = [];
+
             function run(changeIdx) {
+                const _savedY = window.scrollY;
                 // Build pairCounts & computeRule for rule column (same as Cell6.5)
                 const __c11_pairCounts = new Map();
                 try {
@@ -14023,7 +14160,28 @@
                     }).join(',');
                     let display = results.slice();
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
-                    let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div><div class='grid-centered'>`;
+                    // Compute missing[]: numbers from 1-45 not appearing in any output record
+                    const _outputNums11 = new Set();
+                    results.forEach(r => r.nums.forEach(n => _outputNums11.add(n)));
+                    const _allNums11 = Array.from({ length: 45 }, (_, i) => i + 1);
+                    const _missing11 = _allNums11.filter(n => !_outputNums11.has(n));
+
+                    // Auto-sync missing → trash when enabled
+                    if (_c11MissingAutoSync && _missing11.length) {
+                        try {
+                            const toRemove = _c11PrevMissing.filter(n => !_missing11.includes(n));
+                            const toAdd = _missing11.filter(n => !_c11PrevMissing.includes(n));
+                            if (toRemove.length) document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: toRemove } }));
+                            if (toAdd.length) document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: toAdd } }));
+                            _c11PrevMissing = _missing11.slice();
+                        } catch (e) { }
+                    }
+
+                    const _syncIndicator11 = _c11MissingAutoSync ? ' ✦sync' : '';
+                    const _missingHtml11 = _missing11.length
+                        ? `<div class='muted cell11-missing-line' style='flex-basis:100%;cursor:pointer;user-select:none;margin-top:2px;font-size:12px;${_c11MissingAutoSync ? 'text-decoration:line-through;opacity:0.5;' : ''}' title='Dblclick để toggle đồng bộ liên tục vào trash'>missing[${_missing11.length}]${_syncIndicator11}: ${_missing11.join(', ')}</div>`
+                        : '';
+                    let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div>${_missingHtml11}<div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
@@ -14039,6 +14197,34 @@
                     }
                     html += "</div>";
                     wrap.innerHTML = html;
+                    // Attach dblclick on missing[] line to toggle continuous sync to trash
+                    try {
+                        const missingLine11 = wrap.querySelector('.cell11-missing-line');
+                        if (missingLine11 && _missing11.length) {
+                            missingLine11.addEventListener('dblclick', (e) => {
+                                e.preventDefault();
+                                _c11MissingAutoSync = !_c11MissingAutoSync;
+                                if (_c11MissingAutoSync) {
+                                    // Turn ON: add all current missing to trash
+                                    document.dispatchEvent(new CustomEvent('moveMultipleToTrash', { detail: { nums: _missing11.slice() } }));
+                                    _c11PrevMissing = _missing11.slice();
+                                    missingLine11.style.textDecoration = 'line-through';
+                                    missingLine11.style.opacity = '0.5';
+                                    missingLine11.textContent = missingLine11.textContent.replace(/ ✦sync/, '');
+                                    missingLine11.textContent = missingLine11.textContent.replace(/^(missing\[\d+\])/, '$1 ✦sync');
+                                } else {
+                                    // Turn OFF: remove synced missing from trash
+                                    if (_c11PrevMissing.length) {
+                                        document.dispatchEvent(new CustomEvent('restoreMultipleFromTrash', { detail: { nums: _c11PrevMissing.slice() } }));
+                                    }
+                                    _c11PrevMissing = [];
+                                    missingLine11.style.textDecoration = 'none';
+                                    missingLine11.style.opacity = '1';
+                                    missingLine11.textContent = missingLine11.textContent.replace(/ ✦sync/, '');
+                                }
+                            });
+                        }
+                    } catch (e) { }
                 } else {
                     // === LABEL MODE: strict positional match ===
                     // Each input corresponds to a position in the 6-char label.
@@ -14086,6 +14272,7 @@
                     html += "</div>";
                     wrap.innerHTML = html;
                 }
+                __scrollAfterRender(_savedY);
             }
 
             // Mode toggle
@@ -19943,6 +20130,24 @@
                     const nums = (typeof parseSixNumbersFromString === 'function') ? parseSixNumbersFromString(result) : null;
                     if (!nums) return;
 
+                    // Parse rule column: extract candidate (cand) and bracket value [n]
+                    // Rule format in HTML: <span bg=yellow>cand</span>>{...}<span bg=red>[n]</span>
+                    let _ruleCand = null, _ruleBracket = null;
+                    try {
+                        const tds = tr.querySelectorAll('td');
+                        // rule column is typically 4th (index 3) in: date, KQ, label, rule, score
+                        const ruleTd = tds[3] || null;
+                        if (ruleTd) {
+                            const ruleText = ruleTd.textContent || '';
+                            // Extract candidate: number before '>'
+                            const candMatch = ruleText.match(/^(\d+)>/);
+                            if (candMatch) _ruleCand = parseInt(candMatch[1], 10);
+                            // Extract bracket value: number inside [...]
+                            const bracketMatch = ruleText.match(/\[(\d+)\]/);
+                            if (bracketMatch) _ruleBracket = parseInt(bracketMatch[1], 10);
+                        }
+                    } catch (e) { }
+
                     // Navigate to cell6_5 (click nav button if present)
                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]') || document.querySelector('#cell6_5_nav_btn');
                     if (navBtn) navBtn.click();
@@ -19986,6 +20191,33 @@
                             // Refresh visual highlights: num cell and label styles
                             try { if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights(); } catch (e) { }
                             try { if (typeof updateLabelCellStyles === 'function') updateLabelCellStyles(); } catch (e) { }
+
+                            // Auto-fill analysis panel fields from rule: anal-num = candidate, anal-op = '=', anal-val = bracket value
+                            if (_ruleCand != null || _ruleBracket != null) {
+                                try {
+                                    const _ap = document.querySelector('#cell6_5_analysis_panel');
+                                    if (_ap) {
+                                        const _aN = _ap.querySelector('.anal-num');
+                                        const _aO = _ap.querySelector('.anal-op');
+                                        const _aV = _ap.querySelector('.anal-val');
+                                        // 1) Set candidate → dispatch input (resets op & val internally, runs analysis)
+                                        if (_aN && _ruleCand != null) {
+                                            _aN.value = String(_ruleCand);
+                                            _aN.dispatchEvent(new Event('input'));
+                                        }
+                                        // 2) After a tick, set operator and bracket value
+                                        setTimeout(() => {
+                                            try {
+                                                if (_aO) { _aO.value = '='; _aO.dispatchEvent(new Event('change')); }
+                                                if (_aV && _ruleBracket != null) {
+                                                    _aV.value = String(_ruleBracket);
+                                                    _aV.dispatchEvent(new Event('input'));
+                                                }
+                                            } catch (e) { }
+                                        }, 150);
+                                    }
+                                } catch (e) { }
+                            }
                         }, 500);
                     }, 200);
 
@@ -20582,20 +20814,34 @@
                 updateScrollClass();
             }
 
-            // ── Hover: highlight numbers in popup (skip during row drag) ──
-            // Track currently hovered draft row to avoid redundant updates
-            let _draftHoveredTr = null;
+            // ── Hover: highlight numbers in popup ──
+            // Removed _draftHoveredTr same-DOM-reference skip to prevent stale highlights
+            // after re-renders or when returning from cell table hover.
+            let _draftHoveredKey = ''; // data-based dedup: pill text of last hovered row
             try {
                 if (draftTableBody) {
+                    // When mouse enters draftPopup from outside, force-clear any
+                    // cell-table highlights so draft hover can immediately take over.
+                    draftPopup.addEventListener('mouseenter', () => {
+                        try {
+                            _draftHoveredKey = '';
+                            try { applyPopupHighlights._lastKey = null; } catch (e) { }
+                            // Clear stale cell-table highlight source
+                            try { window.__popupHighlights = null; window.__popupHighlightSource = null; } catch (e) { }
+                        } catch (e) { }
+                    }, true);
+
                     draftTableBody.addEventListener('mouseover', (ev) => {
                         try {
                             if (dragState) return; // don't highlight during row drag
                             const tr = ev.target && ev.target.closest ? ev.target.closest('tr') : null;
                             if (!tr || tr.classList.contains('draft-add-row-tr')) return;
-                            if (tr === _draftHoveredTr) return; // same row, skip
-                            _draftHoveredTr = tr;
+                            // Data-based dedup: skip only if pill text is identical
                             const pillEls = Array.from(tr.querySelectorAll('.pill'));
                             if (!pillEls.length) return;
+                            const key = pillEls.map(sp => (sp.textContent || '').trim()).join(',');
+                            if (key === _draftHoveredKey) return;
+                            _draftHoveredKey = key;
                             // Build full 6-element array: valid numbers or empty string for each position
                             const allNums = pillEls.map(sp => {
                                 const t = (sp.textContent || '').trim();
@@ -20632,7 +20878,7 @@
                             if (dragState) return;
                             const related = ev.relatedTarget;
                             if (related && draftPopup && draftPopup.contains(related)) return;
-                            _draftHoveredTr = null;
+                            _draftHoveredKey = '';
                             if (typeof clearPopupHighlights === 'function') clearPopupHighlights();
                             // Restore cell6.5 row highlights based on trash items (clear hover-applied ones)
                             try { if (typeof updateCell6_5Highlights === 'function') updateCell6_5Highlights(); } catch (e) { }
@@ -20749,7 +20995,8 @@
                     if (!ev.target || !ev.target.closest || !ev.target.closest('#draftPopup')) return;
                     // Skip if double-click is on a draft record row (handled separately for copy)
                     if (ev.target.closest('#draftTable tr:not(.draft-add-row-tr)')) return;
-                    if (!isPickerVisible()) return;
+                    // Allow paste: either picker is visible, or dblclick is on the draft header area
+                    if (!isPickerVisible() && !ev.target.closest('.draft-header')) return;
                     const text = await (navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : Promise.resolve(''));
                     const recs = parseClipboardText(text);
                     if (recs.length) {
@@ -20855,6 +21102,91 @@
             }
 
             // NO click-outside-close: draft only closes via 'a' key or when picker hides
+
+            // ── Ctrl+click / Shift+click on draft record rows ──
+            // Only applies to rows with exactly 6 valid (non-empty) pills
+            if (draftTableBody) {
+                draftTableBody.addEventListener('click', (ev) => {
+                    if (!ev.ctrlKey && !ev.shiftKey) return;
+                    const tr = ev.target && ev.target.closest ? ev.target.closest('tr:not(.draft-add-row-tr)') : null;
+                    if (!tr) return;
+                    const pills = Array.from(tr.querySelectorAll('.pill'));
+                    if (pills.length !== 6) return;
+                    const nums = pills.map(sp => {
+                        const t = (sp.textContent || '').trim();
+                        if (t === '' || t === '__') return null;
+                        const n = parseInt(t, 10);
+                        return (Number.isFinite(n) && n >= 1 && n <= 45) ? n : null;
+                    });
+                    // Must have exactly 6 valid numbers
+                    if (nums.some(v => v === null)) return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+
+                    if (ev.ctrlKey) {
+                        // ── Ctrl+click: send to Cell6.6 ──
+                        try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                        const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                        if (navBtn) {
+                            setTimeout(() => {
+                                try { navBtn.click(); } catch (e) { }
+                                setTimeout(() => {
+                                    try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { }
+                                }, 220);
+                            }, 200);
+                        } else {
+                            setTimeout(() => {
+                                try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { }
+                            }, 260);
+                        }
+                        // Flash row to indicate action
+                        tr.classList.add('draft-row-copied');
+                        setTimeout(() => tr.classList.remove('draft-row-copied'), 600);
+                    } else if (ev.shiftKey) {
+                        // ── Shift+click: send to Cell6.5 unpair mode ──
+                        const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]') || document.querySelector('#cell6_5_nav_btn');
+                        if (navBtn) navBtn.click();
+
+                        setTimeout(() => {
+                            // Switch to unpair mode
+                            const modeSelect = document.querySelector('#cell6_5 .controls .mode-selector select')
+                                || document.querySelector('#cell6_5 select')
+                                || document.querySelector('#modeSelectorContainer select');
+                            if (modeSelect) {
+                                try { modeSelect.value = 'unpair'; } catch (e) { }
+                                modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            // Fill the six unpair inputs
+                            for (let i = 0; i < 6; i++) {
+                                const input = document.getElementById(`cell6_5_unpair_input_${i + 1}`) || document.querySelector(`#cell6_5 input[name=unpair_${i}]`);
+                                if (input) {
+                                    input.value = nums[i] ?? '';
+                                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                                }
+                            }
+                            // Also update place boxes if helper exists
+                            if (typeof window.setPlaceValues === 'function') {
+                                try { window.setPlaceValues(nums); } catch (e) { }
+                            }
+                            // After group() rerenders, compute best rule
+                            setTimeout(() => {
+                                try { window.__hoverActive = false; window.__hoverPrevTrash = null; } catch (e) { }
+                                try { if (typeof clearPopupHighlights === 'function') clearPopupHighlights(); } catch (e) { }
+                                try {
+                                    if (typeof window.computeAndApplyUnpairBest === 'function') {
+                                        window.computeAndApplyUnpairBest(nums);
+                                    }
+                                } catch (e) { }
+                                try { if (typeof updateNumberCellHighlights === 'function') updateNumberCellHighlights(); } catch (e) { }
+                                try { if (typeof updateLabelCellStyles === 'function') updateLabelCellStyles(); } catch (e) { }
+                            }, 500);
+                        }, 200);
+                        // Flash row
+                        tr.classList.add('draft-row-copied');
+                        setTimeout(() => tr.classList.remove('draft-row-copied'), 600);
+                    }
+                }, true);
+            }
         })();
     </script>
 
@@ -21790,6 +22122,9 @@
                                 try { if (typeof patchDraftScores === 'function') patchDraftScores(); } catch (e) { }
                                 // Update unpair score display
                                 try { if (typeof updateUnpairScore === 'function') updateUnpairScore(); } catch (e) { }
+                                try { if (typeof window.updateUnpairScore === 'function') window.updateUnpairScore(); } catch (e) { }
+                                // Dispatch event so other listeners can react to score config changes
+                                try { document.dispatchEvent(new CustomEvent('scoreConfigApplied')); } catch (e) { }
                                 // Flash apply button as confirmation
                                 applyBtn.style.background = '#2e7d32';
                                 setTimeout(() => { applyBtn.style.background = 'var(--accent)'; }, 600);
@@ -21995,7 +22330,16 @@
                     if (filled.length !== 6) { scoreEl.textContent = ''; scoreEl.style.background = 'transparent'; return; }
                     // Sort for consistent key lookup
                     filled.sort((a, b) => a - b);
-                    let score = (typeof window.__scoreInput === 'function') ? window.__scoreInput(filled) : null;
+                    // Try precomputed SCORES first (matches record table scoring), then fall back to scoreInput
+                    let score = null;
+                    try {
+                        if (typeof window.__getScoreForResult === 'function') {
+                            score = window.__getScoreForResult(filled.join(','));
+                        }
+                    } catch (e) { }
+                    if (score === null && typeof window.__scoreInput === 'function') {
+                        score = window.__scoreInput(filled);
+                    }
                     if (score === null) {
                         scoreEl.textContent = 'N/A';
                         scoreEl.style.background = '#555';
@@ -22007,12 +22351,20 @@
                     }
                 } catch (e) { console.warn('updateUnpairScore error:', e); }
             }
+            // Expose globally so other script blocks (e.g., score config Apply) can call it
+            window.updateUnpairScore = updateUnpairScore;
             // DOCUMENT-level event delegation: works even when cell6.5 is lazily rendered
             document.addEventListener('input', (ev) => {
                 if (ev.target && ev.target.id && ev.target.id.startsWith('cell6_5_unpair_input_')) {
                     setTimeout(updateUnpairScore, 50);
                 }
             }, true);
+            // Listen for score config rebuild → refresh unpair score display
+            document.addEventListener('scoreConfigApplied', () => { setTimeout(updateUnpairScore, 100); });
+            // Also refresh when switching to cell6_5 section
+            document.addEventListener('sectionchange', (ev) => {
+                if (ev.detail && ev.detail.id === 'cell6_5') setTimeout(updateUnpairScore, 200);
+            });
 
             // ══════════ CELL5.5 INFO POPUP: FIX FORMAT ══════════
             // Remove the old full-sequence .info-sequence-str and replace with
