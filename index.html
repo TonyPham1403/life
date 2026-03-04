@@ -2043,15 +2043,19 @@
             outline-offset: -2px;
         }
 
-        /* Persistent highlight when a record is Ctrl+clicked in Cell5.5 */
-        tr.ctrl-selected {
+        /* Persistent highlight when a record is Ctrl+clicked / Shift+clicked / Alt+clicked */
+        tr.ctrl-selected,
+        tr.shift-selected,
+        tr.alt-selected {
             outline: 3px solid #FFD500;
             /* yellow */
             outline-offset: -3px;
         }
 
         /* Fallback highlight using inset box-shadow on cells so clipping doesn't hide the outline */
-        tr.ctrl-selected td {
+        tr.ctrl-selected td,
+        tr.shift-selected td,
+        tr.alt-selected td {
             box-shadow: inset 0 0 0 3px #FFD500;
             background-clip: padding-box;
         }
@@ -2177,6 +2181,7 @@
         #cell5_5 .controls,
         #cell6_5 .controls,
         #cell6_6 .controls,
+        #cell6_7 .controls,
         #cell7 .controls,
         #cell8 .controls,
         #cell9 .controls,
@@ -2201,6 +2206,7 @@
         #cell5_5,
         #cell6_5,
         #cell6_6,
+        #cell6_7,
         #cell7,
         #cell8,
         #cell9,
@@ -3258,6 +3264,128 @@
             box-shadow: 0 2px 6px rgba(46, 125, 50, 0.18);
         }
     </style>
+    <!-- Cell6.7 sort column highlight -->
+    <style>
+        #cell67_pairTable th.c67-sort-th {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #cell67_pairTable th.c67-sort-th:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        #cell67_pairTable th.c67-sort-active {
+            background: var(--accent) !important;
+            color: #fff !important;
+        }
+
+        /* Direction arrow indicator on active sort header */
+        #cell67_pairTable th.c67-sort-active::after {
+            content: ' \25BC';
+            /* ▼ descending */
+            font-size: 0.7em;
+        }
+
+        #cell67_pairTable th.c67-sort-active.c67-sort-asc::after {
+            content: ' \25B2';
+            /* ▲ ascending */
+        }
+
+        #cell67_pairTable td.c67-sort-active-col {
+            background: #414143 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="light"] #cell67_pairTable td.c67-sort-active-col {
+            background: #e0e0e0 !important;
+            color: #000 !important;
+        }
+    </style>
+    <!-- Cell6.7 Dò cặp grid CSS -->
+    <style>
+        .cell67-grid {
+            background: var(--card);
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        .cell67-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 44px;
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: 700;
+            border-radius: 5px;
+            cursor: pointer;
+            user-select: none;
+            background: #fffbea;
+            color: #000;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .cell67-num:hover {
+            filter: brightness(0.92);
+        }
+
+        .cell67-num.cell67-selected {
+            background: #2e7d32;
+            color: #fff;
+            border-color: #2e7d32;
+        }
+
+        .cell67-num.cell67-missing {
+            background: #d32f2f;
+            color: transparent;
+            border-color: #d32f2f;
+            cursor: not-allowed;
+        }
+
+        .cell67-num.cell67-disabled {
+            background: #9e9e9e;
+            color: #fff;
+            border-color: #9e9e9e;
+            cursor: not-allowed;
+        }
+
+        [data-theme="dark"] .cell67-num {
+            background: rgba(255, 251, 234, 0.12);
+            color: var(--text);
+            border-color: rgba(128, 128, 128, 0.3);
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-selected {
+            background: #2e7d32;
+            color: #fff;
+            border-color: #2e7d32;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-missing {
+            background: #d32f2f;
+            color: transparent;
+            border-color: #d32f2f;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-disabled {
+            background: #616161;
+            color: #fff;
+            border-color: #616161;
+        }
+
+        /* Cell6.7 tables */
+        #cell6_7 table {
+            width: 100%;
+        }
+
+        #cell6_7 .card {
+            padding: 6px;
+        }
+    </style>
     <!-- Cell11 multi-value picker dropdown CSS -->
     <style>
         .cell11-mv-dropdown {
@@ -3692,6 +3820,13 @@
         box-shadow: inset 0 0 0 2px #38ef7d;
         transition: box-shadow 0.15s ease;
     }
+
+    /* Yellow border on ctrl/shift/alt-clicked draft rows */
+    #draftPopup tr.ctrl-selected td,
+    #draftPopup tr.shift-selected td,
+    #draftPopup tr.alt-selected td {
+        box-shadow: inset 0 0 0 2px #ffd600;
+    }
 </style>
 
 <body>
@@ -3812,6 +3947,29 @@
                 try { el.focus(); } catch (e2) { /* ignore */ }
             }
         }
+
+        // ── Unified yellow-border persistence (ctrl/alt/shift-selected) ──
+        // Stores ONE global selection {r: result, t: 'ctrl'|'alt'|'shift'}
+        (function () {
+            const K = '__border_selected';
+            window.__saveBorderSel = function (result, type) {
+                try { localStorage.setItem(K, JSON.stringify({ r: result, t: type })); } catch (e) { }
+            };
+            window.__restoreBorderSel = function (container) {
+                try {
+                    const raw = localStorage.getItem(K);
+                    if (!raw) return;
+                    const d = JSON.parse(raw);
+                    if (!d || !d.r || !d.t) return;
+                    const sel = 'tr[data-result="' + d.r.replace(/"/g, '\\"') + '"]';
+                    const m = container.querySelector(sel);
+                    if (m) m.classList.add(d.t + '-selected');
+                } catch (e) { }
+            };
+            window.__clearBorderSel = function () {
+                try { document.querySelectorAll('tr.ctrl-selected,tr.shift-selected,tr.alt-selected').forEach(r => { r.classList.remove('ctrl-selected', 'shift-selected', 'alt-selected'); }); } catch (e) { }
+            };
+        })();
         // ===== Web Worker Setup =====
         // Tạo web worker inline để xử lý tính toán nặng
         const workerCode = `
@@ -4243,6 +4401,7 @@
             { id: "cell5_5", label: "Cell5.5 · Lịch sử" },
             { id: "cell6_5", label: "Cell6.5 · Truy x" },
             { id: "cell6_6", label: "Cell6.6 · Mổ pattern" },
+            { id: "cell6_7", label: "Cell6.7 · Dò cặp" },
             { id: "cell7", label: "Cell7 · Nhóm label" },
             { id: "cell8", label: "Cell8 · Tìm label" },
             { id: "cell9", label: "Cell9 · Tổ hợp tùy chọn" },
@@ -4276,18 +4435,16 @@
                 const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-result]') : null;
                 if (!tr) return;
 
-                // Ctrl+click: navigate to Cell6.6 and apply numbers there (existing behavior)
+                // Ctrl+click: navigate to Cell6.6 and apply numbers there (works from any cell)
                 if (ev && ev.ctrlKey) {
-                    const section = tr.closest('section');
-                    if (!section || section.id !== 'cell11') return;
                     ev.preventDefault();
                     const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
                     if (!result) return;
                     const nums = parseSixNumbersFromString(result);
                     if (!nums) return;
-                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                    window.__clearBorderSel();
                     tr.classList.add('ctrl-selected');
-                    try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                    window.__saveBorderSel(result, 'ctrl');
                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                     if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
@@ -4295,16 +4452,45 @@
                     return;
                 }
 
+                // Alt+click: navigate to Cell6.7 and auto-pick numbers on Table T
+                if (ev && ev.altKey) {
+                    ev.preventDefault();
+                    const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
+                    if (!result) return;
+                    const nums = parseSixNumbersFromString(result);
+                    if (!nums) return;
+                    // Extract date from first td
+                    const _dateTd = tr.querySelector('td:first-child');
+                    const _dateStr = _dateTd ? _dateTd.textContent.trim() : '';
+                    window.__clearBorderSel();
+                    tr.classList.add('alt-selected');
+                    window.__saveBorderSel(result, 'alt');
+                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_7'); } catch (e) { }
+                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_7"]');
+                    const applyToCell67 = () => {
+                        try { if (typeof window.__cell67_pickNumbers === 'function') window.__cell67_pickNumbers(nums, _dateStr); } catch (e) { }
+                    };
+                    if (navBtn) {
+                        setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(applyToCell67, 220); }, 200);
+                    } else {
+                        setTimeout(applyToCell67, 260);
+                    }
+                    return;
+                }
+
                 // Shift+click: navigate to Cell6.5, switch to 'unpair' mode and paste numbers into unpair inputs
                 if (ev && ev.shiftKey) {
+                    // Skip if click originated from Cell6.7 pair table (handled by its own shift-click handler)
+                    if (tr.closest('#cell67_pairTable')) return;
                     ev.preventDefault();
                     const result = tr.dataset && tr.dataset.result ? tr.dataset.result : null;
                     if (!result) return;
                     const nums = parseSixNumbersFromString(result);
                     if (!nums) return;
 
-                    try { document.querySelectorAll('tr.shift-selected').forEach(r => r.classList.remove('shift-selected')); } catch (e) { }
+                    window.__clearBorderSel();
                     tr.classList.add('shift-selected');
+                    window.__saveBorderSel(result, 'shift');
 
                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_5'); } catch (e) { }
                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]');
@@ -4576,17 +4762,8 @@
                 });
                 html += "</tbody></table></div>";
                 wrap.innerHTML = html;
-                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell11
-                try {
-                    const persisted = (function () { try { return localStorage.getItem('cell11_ctrl_selected'); } catch (e) { return null; } })();
-                    if (persisted) {
-                        const _tbody_reapply = wrap.querySelector('tbody');
-                        if (_tbody_reapply) {
-                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                            if (m) m.classList.add('ctrl-selected');
-                        }
-                    }
-                } catch (e) { /* ignore reapply errors */ }
+                // Reapply persisted border highlight (persist across renders) for cell11
+                try { window.__restoreBorderSel(wrap); } catch (e) { }
 
                 // Attach delegated hover + Ctrl+click handlers on wrap so all generated inner cards/tables receive behavior
                 (function attachRowHoverAndCtrlClick_cell11_delegated() {
@@ -4612,9 +4789,9 @@
                                 if (!result) return;
                                 const nums = parseSixNumbersFromString(result);
                                 if (!nums) return;
-                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                window.__clearBorderSel();
                                 tr.classList.add('ctrl-selected');
-                                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                                window.__saveBorderSel(result, 'ctrl');
                                 try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                 const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                                 if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
@@ -4623,17 +4800,8 @@
                         });
                     } catch (err) { }
                 })();
-                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell11
-                try {
-                    const persisted = (function () { try { return localStorage.getItem('cell11_ctrl_selected'); } catch (e) { return null; } })();
-                    if (persisted) {
-                        const _tbody_reapply = wrap.querySelector('tbody');
-                        if (_tbody_reapply) {
-                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                            if (m) m.classList.add('ctrl-selected');
-                        }
-                    }
-                } catch (e) { /* ignore reapply errors */ }
+                // Reapply persisted border highlight (persist across renders) for cell11
+                try { window.__restoreBorderSel(wrap); } catch (e) { }
 
                 // Attach Ctrl+click handler for cell11 (use delegation on wrap so all inner cards/tables are covered)
                 (function attachRowHoverAndCtrlClick_cell11() {
@@ -4659,9 +4827,9 @@
                                 if (!result) return;
                                 const nums = parseSixNumbersFromString(result);
                                 if (!nums) return;
-                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                window.__clearBorderSel();
                                 tr.classList.add('ctrl-selected');
-                                try { localStorage.setItem('cell11_ctrl_selected', result); } catch (e) { }
+                                window.__saveBorderSel(result, 'ctrl');
                                 try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                 const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                                 if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
@@ -5746,17 +5914,8 @@
                         htmlCache.set(idx, inner);
                     }
                     body.innerHTML = inner;
-                    // Reapply persisted Ctrl-selected highlight (persist across renders)
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell5_5_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = body.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders)
+                    try { window.__restoreBorderSel(body); } catch (e) { }
                     // Cell5.5: attach Ctrl+click handler to tbody so Ctrl+click marks row + applies to Cell6.6
                     (function attachRowHoverAndCtrlClick() {
                         try {
@@ -5780,13 +5939,11 @@
                                     const nums = parseSixNumbersFromString(result);
                                     if (!nums) return;
 
-                                    // clear any previous ctrl-selected rows globally and mark this one
-                                    try {
-                                        document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected'));
-                                    } catch (e) { }
+                                    // clear any previous selected rows globally and mark this one
+                                    window.__clearBorderSel();
                                     tr.classList.add('ctrl-selected');
                                     // persist selection so it survives remounts/navigation
-                                    try { localStorage.setItem('cell5_5_ctrl_selected', result); } catch (e) { }
+                                    window.__saveBorderSel(result, 'ctrl');
 
                                     // Ensure target section is rendered then navigate to it after a short delay
                                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
@@ -6228,7 +6385,7 @@
                                 return `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${found.cand}</span>>{${remaining.join(',')}}<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 2px;border-radius:4px">[${found.n}]</span>`;
                             } catch (e) { return ''; }
                         };
-                        inner += "<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                        inner += "<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                         slice.forEach(r => {
                             const label = labelOf(r.nums);
                             let labelHtml = "";
@@ -6249,10 +6406,11 @@
                             const nums = r.nums.map(v => `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const ruleHtml = (Array.isArray(r.nums) && r.nums.length === 6) ? __c66_computeRule(r.nums) : '';
                             const _scoreHtml = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
+                            const _kHtml7 = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                            inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml7}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
                         });
                         inner += "</tbody></table>";
-                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (g.rows.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='6' class='muted'>... ${g.rows.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
                             `<input type='number' class='page-input' min='1' max='${totalPages}' value='${page + 1}' style='width:64px;text-align:center'/>` +
@@ -6263,17 +6421,8 @@
                     }
                     body.style.minHeight = "";
                     body.innerHTML = inner;
-                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell7
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell7_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = body.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders) for cell7
+                    try { window.__restoreBorderSel(body); } catch (e) { }
 
                     // attach hover + Ctrl+click handler to tbody so Ctrl+click will mark + apply to Cell6.6
                     (function attachRowHoverAndCtrlClick() {
@@ -6313,9 +6462,9 @@
                                     const nums = parseSixNumbersFromString(result);
                                     if (!nums) return;
 
-                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    window.__clearBorderSel();
                                     tr.classList.add('ctrl-selected');
-                                    try { localStorage.setItem('cell7_ctrl_selected', result); } catch (e) { }
+                                    window.__saveBorderSel(result, 'ctrl');
 
                                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
@@ -7118,9 +7267,9 @@
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
 
-                        inner += `<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>`;
+                        inner += `<table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>`;
                         if (slice.length === 0) {
-                            inner += `<tr><td colspan='5' class='muted'>Không có kết quả</td></tr>`;
+                            inner += `<tr><td colspan='6' class='muted'>Không có kết quả</td></tr>`;
                         } else {
                             // Build pairCounts & computeRule for rule column (same as Cell5.5 / Cell6.5)
                             const __c66b_pairCounts = new Map();
@@ -7241,10 +7390,11 @@
                                 } catch (err) { }
 
                                 const _scoreHtml = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
+                                const _kHtml66 = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml66}</td><td style='text-align:center'>${_scoreHtml}</td></tr>`;
                             });
                         }
-                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (list.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='6' class='muted'>... ${list.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
@@ -7257,17 +7407,8 @@
 
                     body.style.minHeight = '';
                     body.innerHTML = inner;
-                    // Reapply persisted Ctrl-selected highlight (persist across renders)
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = body.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders)
+                    try { window.__restoreBorderSel(body); } catch (e) { }
 
                     (function attachRowHoverToPopup() {
                         try {
@@ -7421,6 +7562,535 @@
                 }
             } catch (e) { /* ignore */ }
         }
+        // Cell6.7: Dò cặp — pick numbers one-by-one and analyse pairs + missing
+        function renderCell6_7() {
+            const body = sectionShell("cell6_7", "Cell6.7 · Dò cặp", "Chọn số từ bảng 45 số để phân tích cặp và missing.");
+            const controls = document.createElement("div"); controls.className = "controls";
+            // Controls placeholder — empty for now
+            body.parentElement.querySelector('h2').after(controls);
+
+            // ── State ──
+            const selectedSet = new Set(); // numbers user has picked (ordered via array)
+            const selectedOrder = [];       // insertion order
+            let pairSortCol = 'pair'; // active sort column: 'pair'|'rankinpair'|'rank1'|'rank2'|'missing'
+            let pairSortAsc = false; // false = descending (default first click), true = ascending (toggle)
+
+            // ── Build pairCounts once (same as Cell6.5 / Cell9) ──
+            const pairCounts67 = new Map();
+            rows.forEach(r => {
+                const ns = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                for (let i = 0; i < ns.length; i++)
+                    for (let j = i + 1; j < ns.length; j++) {
+                        const key = `${ns[i]}-${ns[j]}`;
+                        pairCounts67.set(key, (pairCounts67.get(key) || 0) + 1);
+                    }
+            });
+
+            // ── Precompute pair rankings for rankinpair / rank1 / rank2 columns ──
+            const allPairsSorted67 = [...pairCounts67.entries()]
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+            const pairRankMap67 = new Map();
+            allPairsSorted67.forEach(([key, count], idx) => { pairRankMap67.set(key, idx + 1); });
+            // per-number partner ranking: partnerRankMap67["x-y"] = rank of y among 44 partners of x (desc by count)
+            const partnerRankMap67 = new Map();
+            for (let x = 1; x <= 45; x++) {
+                const partners = [];
+                for (let y = 1; y <= 45; y++) {
+                    if (y === x) continue;
+                    const a = Math.min(x, y), b = Math.max(x, y);
+                    partners.push({ y, c: pairCounts67.get(`${a}-${b}`) || 0 });
+                }
+                partners.sort((A, B) => (B.c - A.c) || (A.y - B.y));
+                partners.forEach((p, idx) => { partnerRankMap67.set(`${x}-${p.y}`, idx + 1); });
+            }
+
+            // ── Compute dontmatch for a single number x: sorted ascending by pair count ──
+            function getDontmatch(x) {
+                const others = [];
+                for (let y = 1; y <= 45; y++) {
+                    if (y === x) continue;
+                    const a = Math.min(x, y), b = Math.max(x, y);
+                    others.push({ y, c: pairCounts67.get(`${a}-${b}`) || 0 });
+                }
+                others.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                return others.map(o => o.y);
+            }
+
+            // ── Missing for a pair (a,b): filter rows to those containing both a AND b,
+            //    then missing = 1..45 minus all nums appearing in those rows ──
+            function getMissingForPair(a, b) {
+                const matched = rows.filter(r => {
+                    const s = new Set(r.nums);
+                    return s.has(a) && s.has(b);
+                });
+                const appeared = new Set();
+                matched.forEach(r => r.nums.forEach(n => appeared.add(n)));
+                const all45 = Array.from({ length: 45 }, (_, i) => i + 1);
+                return all45.filter(n => !appeared.has(n));
+            }
+
+            // ── Compute rule for a 6-number array (same logic as Cell6.5 unpair / Cell9) ──
+            function computeRule67(sixNums) {
+                if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
+                const userNums = sixNums.map(Number).filter(Number.isFinite);
+                if (userNums.length !== 6) return '';
+                let found = null;
+                for (let n = 44; n >= 1; n--) {
+                    for (const cand of userNums) {
+                        const oth = [];
+                        for (let y = 1; y <= 45; y++) {
+                            if (y === cand) continue;
+                            const a = Math.min(cand, y), b = Math.max(cand, y);
+                            oth.push({ y, c: pairCounts67.get(`${a}-${b}`) || 0 });
+                        }
+                        oth.sort((A, B) => (A.c - B.c) || (A.y - B.y));
+                        const pick = oth.slice(0, n).map(o => o.y);
+                        const otherFive = userNums.filter(x => x !== cand);
+                        if (!pick.some(v => otherFive.includes(v))) { found = { n, cand }; break; }
+                    }
+                    if (found) break;
+                }
+                if (!found) return '';
+                const remaining = userNums.filter(x => x !== found.cand).sort((a, b) => a - b);
+                return `<span style="background:#FFD600;color:#000;font-weight:700;padding:1px 3px;border-radius:4px;display:inline-block;min-width:20px;text-align:center">${found.cand}</span>>{${remaining.join(',')}}<span style="background:#FF1744;color:#fff;font-weight:700;padding:1px 2px;border-radius:4px">[${found.n}]</span>`;
+            }
+
+            // ── Layout: left (table T) + right (top table + bottom table) ──
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;';
+
+            // ═══ LEFT: Table T (45 numbers) ═══
+            const leftPanel = document.createElement('div');
+            leftPanel.style.cssText = 'flex:0 0 auto;';
+            const gridT = document.createElement('div');
+            gridT.className = 'cell67-grid';
+            gridT.id = 'cell67_gridT';
+            gridT.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:8px;';
+            const colGroups67 = [
+                [1, 2, 3, 4, 5, 6, 7, 8],
+                [9, 10, 11, 12, 13, 14, 15, 16],
+                [17, 18, 19, 20, 21, 22, 23, 24],
+                [25, 26, 27, 28, 29, 30, 31],
+                [32, 33, 34, 35, 36, 37, 38],
+                [39, 40, 41, 42, 43, 44, 45]
+            ];
+            const cellMap67 = {}; // num -> DOM element
+            const maxRows67 = 8;
+            for (let row = maxRows67 - 1; row >= 0; row--) {
+                for (let col = 0; col < 6; col++) {
+                    const num = colGroups67[col][row];
+                    if (num === undefined) {
+                        const empty = document.createElement('div');
+                        empty.style.cssText = 'width:52px;height:44px;';
+                        gridT.appendChild(empty);
+                        continue;
+                    }
+                    const cell = document.createElement('div');
+                    cell.className = 'cell67-num';
+                    cell.textContent = String(num);
+                    cell.dataset.num = num;
+                    cell.addEventListener('click', () => onClickNumber(num));
+                    gridT.appendChild(cell);
+                    cellMap67[num] = cell;
+                }
+            }
+            leftPanel.appendChild(gridT);
+            // ── Clear button below Table T ──
+            const clearBtnWrap = document.createElement('div');
+            clearBtnWrap.style.cssText = 'display:flex;justify-content:flex-end;margin-top:6px;';
+            const clearBtn67 = document.createElement('button');
+            clearBtn67.textContent = 'Xoá';
+            clearBtn67.className = 'clear-btn';
+            clearBtn67.style.cssText = 'font-size:13px;padding:4px 14px;cursor:pointer;';
+            clearBtn67.addEventListener('click', () => {
+                selectedSet.clear();
+                selectedOrder.length = 0;
+                // Preserve alt-click data — only clear Table T selection
+                // Alt-click label stays visible so user can toggle it back on
+                if (altClickApply && altClickNums) {
+                    altClickApply = false;
+                    updateAltClickLabel();
+                }
+                rebuildAll();
+            });
+            clearBtnWrap.appendChild(clearBtn67);
+            leftPanel.appendChild(clearBtnWrap);
+            wrapper.appendChild(leftPanel);
+
+            // ═══ RIGHT panel ═══
+            const rightPanel = document.createElement('div');
+            rightPanel.style.cssText = 'flex:1 1 300px;display:flex;flex-direction:column;gap:12px;min-width:260px;';
+
+            // ── Alt-click source row display (standalone div above top table) ──
+            let altClickNums = null; // array of nums from alt-click source
+            let altClickApply = true; // toggle: apply to Table T or not
+            let altClickDate = '';    // date string from alt-click source
+            const altClickDiv = document.createElement('div');
+            altClickDiv.style.cssText = 'display:none;padding:6px 10px;font-size:13px;cursor:pointer;border:1px dashed var(--accent);border-radius:6px;text-align:center;user-select:none;';
+            altClickDiv.addEventListener('click', () => {
+                altClickApply = !altClickApply;
+                updateAltClickLabel();
+                if (altClickApply && altClickNums) {
+                    pickNumbers(altClickNums);
+                } else if (!altClickApply) {
+                    // Clear Table T when toggling off
+                    selectedSet.clear();
+                    selectedOrder.length = 0;
+                    rebuildAll();
+                }
+            });
+
+            // ── Alt-click label div (above top table) ──
+            rightPanel.appendChild(altClickDiv);
+
+            // ── Right Top: result table (ngày | kết quả | rule | score) ──
+            const topCard = document.createElement('div');
+            topCard.className = 'card';
+            topCard.id = 'cell67_topCard';
+            topCard.innerHTML = `<table id="cell67_topTable" style="width:100%">
+                <thead><tr><th>Ngày</th><th>Kết quả</th><th>Rule</th><th>k</th><th>Score</th></tr></thead>
+                <tbody><tr><td>?</td><td></td><td></td><td></td><td></td></tr></tbody>
+            </table>`;
+            rightPanel.appendChild(topCard);
+
+            // ── Right Bottom: pair/missing table (15 rows) ──
+            const bottomCard = document.createElement('div');
+            bottomCard.className = 'card';
+            bottomCard.id = 'cell67_bottomCard';
+            let pairTableHtml = `<table id="cell67_pairTable" style="width:100%">
+                <thead><tr><th data-sort="pair" class="c67-sort-th c67-sort-active" style="cursor:pointer">Cặp</th><th data-sort="rankinpair" class="c67-sort-th" style="cursor:pointer">rankinpair</th><th data-sort="rank1" class="c67-sort-th" style="cursor:pointer">rank1</th><th data-sort="rank2" class="c67-sort-th" style="cursor:pointer">rank2</th><th data-sort="missing" class="c67-sort-th" style="cursor:pointer">Missing</th></tr></thead><tbody>`;
+            for (let i = 0; i < 15; i++) {
+                pairTableHtml += `<tr><td></td><td></td><td></td><td></td><td></td></tr>`;
+            }
+            pairTableHtml += '</tbody></table>';
+            bottomCard.innerHTML = pairTableHtml;
+            rightPanel.appendChild(bottomCard);
+
+            // ═══ Click sort on bottom pair table headers ═══
+            (function () {
+                const pairTbl = bottomCard.querySelector('#cell67_pairTable');
+                if (!pairTbl) return;
+                const ths = pairTbl.querySelectorAll('thead th.c67-sort-th');
+                ths.forEach(th => {
+                    th.addEventListener('click', function (ev) {
+                        if (ev.shiftKey || ev.ctrlKey || ev.altKey) return; // don't interfere with modifier clicks
+                        const col = th.dataset.sort;
+                        if (!col) return;
+                        if (pairSortCol === col) {
+                            pairSortAsc = !pairSortAsc; // toggle direction on re-click
+                        } else {
+                            pairSortCol = col;
+                            pairSortAsc = false; // default descending for new column
+                        }
+                        // Update active header style + direction indicator
+                        ths.forEach(h => {
+                            const isActive = h.dataset.sort === pairSortCol;
+                            h.classList.toggle('c67-sort-active', isActive);
+                            h.classList.toggle('c67-sort-asc', isActive && pairSortAsc);
+                        });
+                        rebuildAll();
+                    });
+                });
+            })();
+
+            wrapper.appendChild(rightPanel);
+            body.appendChild(wrapper);
+
+            // ═══ Shift-click on bottom pair table → navigate to Cell6.5 truy x bộ 2 ═══
+            (function () {
+                const pairTbl = document.querySelector('#cell67_pairTable tbody');
+                if (!pairTbl) return;
+                pairTbl.addEventListener('click', function (ev) {
+                    if (!ev.shiftKey) return;
+                    const tr = ev.target.closest('tr');
+                    if (!tr) return;
+                    const pairText = (tr.children[0] && tr.children[0].textContent || '').trim();
+                    if (!pairText) return;
+                    const parts = pairText.split(',').map(s => parseInt(s.trim(), 10));
+                    if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return;
+                    const numA = parts[0], numB = parts[1];
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
+
+                    try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_5'); } catch (e) { }
+                    const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]');
+                    const applyToCell65 = () => {
+                        try {
+                            const sec = document.getElementById('cell6_5');
+                            if (!sec) return;
+                            // Set mode to 'truy'
+                            const modeSel = sec.__modeSel || (sec.querySelector('h2 select'));
+                            if (modeSel) {
+                                modeSel.value = 'truy';
+                                modeSel.dispatchEvent(new Event('change'));
+                            }
+                            // Set bộ to 2
+                            if (sec.__xSel) {
+                                sec.__xSel.value = '2';
+                                // update custom button text
+                                const xSelBtn = document.getElementById('cell6_5_xSelBtn');
+                                if (xSelBtn) xSelBtn.textContent = 'Bộ 2';
+                                // rebuild combo extras for bộ 2 → 1 dynamic input prefilled with numB
+                                if (typeof sec.__rebuildComboExtras === 'function') {
+                                    sec.__rebuildComboExtras([String(numB)]);
+                                }
+                                sec.__xSel.dispatchEvent(new Event('change'));
+                            }
+                            // Set số x to numA
+                            if (sec.__xFilter) {
+                                sec.__xFilter.value = String(numA);
+                                sec.__xFilter.dispatchEvent(new Event('input'));
+                                sec.__xFilter.dispatchEvent(new Event('change'));
+                            }
+                            // Ensure combo-extra input has numB after rebuild
+                            setTimeout(() => {
+                                try {
+                                    if (sec.__comboExtras) {
+                                        const inp = sec.__comboExtras.querySelector('input[type="number"].combo-extra');
+                                        if (inp && (!inp.value || inp.value !== String(numB))) {
+                                            inp.value = String(numB);
+                                            inp.dispatchEvent(new Event('input'));
+                                        }
+                                    }
+                                    // Trigger group
+                                    if (typeof sec.__group === 'function') sec.__group();
+                                } catch (e) { }
+                            }, 120);
+                        } catch (e) { /* ignore */ }
+                    };
+
+                    if (navBtn) {
+                        setTimeout(() => {
+                            try { navBtn.click(); } catch (e) { }
+                            setTimeout(() => { try { applyToCell65(); } catch (e) { } }, 250);
+                        }, 200);
+                    } else {
+                        setTimeout(() => { try { applyToCell65(); } catch (e) { } }, 300);
+                    }
+                }, true);
+            })();
+
+            // ═══ Core click handler ═══
+            function onClickNumber(num) {
+                const cell = cellMap67[num];
+                if (!cell) return;
+                // Can't click disabled (grey/red) cells
+                if (cell.classList.contains('cell67-disabled') || cell.classList.contains('cell67-missing')) return;
+                if (selectedSet.has(num)) {
+                    // Deselect: remove from set and order, full rebuild
+                    selectedSet.delete(num);
+                    const idx = selectedOrder.indexOf(num);
+                    if (idx !== -1) selectedOrder.splice(idx, 1);
+                } else {
+                    if (selectedOrder.length >= 6) return; // max 6 numbers
+                    selectedSet.add(num);
+                    selectedOrder.push(num);
+                }
+                rebuildAll();
+            }
+
+            // ═══ Full rebuild after selection change ═══
+            function rebuildAll() {
+                const S = [...selectedOrder];
+
+                // ── 1. Compute all pairs from S and their missing ──
+                const pairData = [];
+                for (let i = 0; i < S.length; i++) {
+                    for (let j = i + 1; j < S.length; j++) {
+                        const a = Math.min(S[i], S[j]), b = Math.max(S[i], S[j]);
+                        const miss = getMissingForPair(a, b);
+                        pairData.push({ a, b, missing: miss });
+                    }
+                }
+
+                // ── 2. Union of all missing numbers ──
+                const unionMissing = new Set();
+                pairData.forEach(p => p.missing.forEach(n => unionMissing.add(n)));
+
+                // ── 3. Update table T styling ──
+                for (let n = 1; n <= 45; n++) {
+                    const c = cellMap67[n];
+                    if (!c) continue;
+                    c.classList.remove('cell67-selected', 'cell67-missing', 'cell67-disabled');
+                    c.style.pointerEvents = '';
+                    if (selectedSet.has(n)) {
+                        c.classList.add('cell67-selected');
+                    } else if (unionMissing.has(n)) {
+                        c.classList.add('cell67-missing');
+                        c.style.pointerEvents = 'none';
+                    }
+                }
+
+                // ── 4. Sort + Update pair/missing table (bottom right) ──
+                // Sort pairData based on active sort column + direction
+                if (pairSortCol !== 'pair') {
+                    pairData.forEach(p => {
+                        const pairKey = `${p.a}-${p.b}`;
+                        p._rip = pairRankMap67.get(pairKey) || 9999;
+                        p._r1 = partnerRankMap67.get(`${p.a}-${p.b}`) || 9999;
+                        p._r2 = partnerRankMap67.get(`${p.b}-${p.a}`) || 9999;
+                        p._mlen = p.missing.length;
+                    });
+                    const dir = pairSortAsc ? 1 : -1; // 1=ascending, -1=descending
+                    if (pairSortCol === 'rankinpair') pairData.sort((x, y) => dir * (x._rip - y._rip));
+                    else if (pairSortCol === 'rank1') pairData.sort((x, y) => dir * (x._r1 - y._r1));
+                    else if (pairSortCol === 'rank2') pairData.sort((x, y) => dir * (x._r2 - y._r2));
+                    else if (pairSortCol === 'missing') pairData.sort((x, y) => dir * (x._mlen - y._mlen));
+                }
+                const pairTbody = document.querySelector('#cell67_pairTable tbody');
+                if (pairTbody) {
+                    const rowEls = pairTbody.querySelectorAll('tr');
+                    const totalPairs = allPairsSorted67.length; // 990
+                    // Determine active column index for highlight
+                    const sortColIdx = pairSortCol === 'pair' ? 0 : pairSortCol === 'rankinpair' ? 1 : pairSortCol === 'rank1' ? 2 : pairSortCol === 'rank2' ? 3 : 4;
+                    for (let i = 0; i < 15; i++) {
+                        const tr = rowEls[i];
+                        if (!tr) continue;
+                        if (i < pairData.length) {
+                            const p = pairData[i];
+                            const pairKey = `${p.a}-${p.b}`;
+                            tr.children[0].textContent = `${p.a},${p.b}`;
+                            // rankinpair
+                            const rip = pairRankMap67.get(pairKey);
+                            tr.children[1].textContent = rip != null ? `${rip}/${totalPairs}` : '';
+                            // rank1: x=a, dynamic=b
+                            const r1 = partnerRankMap67.get(`${p.a}-${p.b}`);
+                            tr.children[2].textContent = r1 != null ? `${r1}/44` : '';
+                            // rank2: x=b, dynamic=a
+                            const r2 = partnerRankMap67.get(`${p.b}-${p.a}`);
+                            tr.children[3].textContent = r2 != null ? `${r2}/44` : '';
+                            tr.children[4].textContent = p.missing.join(',');
+                        } else {
+                            for (let c = 0; c < 5; c++) tr.children[c].textContent = '';
+                        }
+                        // Apply sort-active-col class to the sorted column cells (all 5 columns)
+                        for (let c = 0; c < 5; c++) {
+                            tr.children[c].classList.toggle('c67-sort-active-col', c === sortColIdx);
+                        }
+                    }
+                }
+
+                // ── 5. Dynamic Missing[x] header ──
+                const missingTh = document.querySelector('#cell67_pairTable thead th:last-child');
+                if (missingTh) {
+                    if (unionMissing.size > 0) {
+                        const sortedMissing = [...unionMissing].sort((a, b) => a - b);
+                        missingTh.innerHTML = `Missing<span style="background:#c62828;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700">[${unionMissing.size}]</span>: ${sortedMissing.join(',')}`;
+                    } else {
+                        missingTh.textContent = 'Missing';
+                    }
+                }
+
+                // ── 6. Update top table ──
+                const topTbody = document.querySelector('#cell67_topTable tbody');
+                if (topTbody) {
+                    const currentNums = S.slice().sort((a, b) => a - b);
+                    const numsHtml = currentNums.map(n =>
+                        `<span class="pill" style="background:#2e7d32;color:#fff;">${n}</span>`
+                    ).join(' ');
+                    const ruleHtml = (S.length === 6) ? computeRule67(S) : '';
+                    // Score: same formula as Cell6.5 unpair — __getScoreForResult → __scoreInput
+                    let scoreStr = '';
+                    if (S.length === 6) {
+                        const key = currentNums.join(',');
+                        let score = null;
+                        try {
+                            if (typeof window.__getScoreForResult === 'function') {
+                                score = window.__getScoreForResult(key);
+                            }
+                        } catch (e) { }
+                        if (score === null && typeof window.__scoreInput === 'function') {
+                            score = window.__scoreInput(currentNums);
+                        }
+                        if (score !== null && score !== undefined) {
+                            const bg = typeof window.__getScoreBg === 'function' ? window.__getScoreBg(score) : '#666';
+                            const fg = typeof window.__getScoreTextColor === 'function' ? window.__getScoreTextColor(score) : '#fff';
+                            scoreStr = `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;background:${bg};color:${fg}" title="Score: ${score.toFixed(2)}">${score.toFixed(2)}</span>`;
+                        }
+                    }
+                    const dateDisplay = (altClickApply && altClickDate) ? altClickDate : '?';
+                    // Compute k for the current selection
+                    let kHtml67 = '';
+                    if (S.length === 6 && typeof window.__kHtml === 'function') {
+                        kHtml67 = window.__kHtml(currentNums.join(','));
+                    }
+                    const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
+                    topTbody.innerHTML = `<tr${resultAttr}><td>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
+                }
+            }
+
+            // ═══ Programmatic pick: clear and select given numbers on Table T ═══
+            function pickNumbers(nums) {
+                if (!Array.isArray(nums)) return;
+                // Clear current selection
+                selectedSet.clear();
+                selectedOrder.length = 0;
+                const valid = nums.map(Number).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                valid.slice(0, 6).forEach(n => { selectedSet.add(n); selectedOrder.push(n); });
+                rebuildAll();
+            }
+
+            // ═══ Update alt-click label div ═══
+            function updateAltClickLabel() {
+                if (!altClickNums) {
+                    altClickDiv.style.display = 'none';
+                    return;
+                }
+                const prefix = altClickApply ? '✔' : '✖';
+                const dateInfo = altClickDate ? ` (${altClickDate})` : '';
+                altClickDiv.textContent = prefix + ' alt click' + dateInfo + ': ' + altClickNums.join(',');
+                altClickDiv.style.display = '';
+                altClickDiv.style.opacity = altClickApply ? '1' : '0.45';
+            }
+
+            // ═══ Expose global API for alt-click and tooltip ═══
+            window.__cell67_pickNumbers = function (nums, dateStr) {
+                altClickDate = dateStr || '';
+                altClickNums = Array.isArray(nums) ? nums.slice() : null;
+                altClickApply = true;
+                updateAltClickLabel();
+                if (altClickApply) {
+                    pickNumbers(nums);
+                }
+            };
+
+            // ═══ Sequential pick for partial records (draft alt-click) ═══
+            // Simulates clicking numbers one by one; stops at first number blocked by missing set
+            window.__cell67_pickNumbersSeq = function (nums, dateStr) {
+                altClickDate = dateStr || '';
+                const rawNums = Array.isArray(nums) ? nums.filter(n => n !== null && n !== undefined) : [];
+                altClickNums = rawNums.length > 0 ? rawNums.slice() : null;
+                altClickApply = true;
+                // Clear current selection
+                selectedSet.clear();
+                selectedOrder.length = 0;
+                // Try adding numbers one by one
+                for (const rawN of rawNums) {
+                    const n = Number(rawN);
+                    if (!Number.isFinite(n) || n < 1 || n > 45) continue;
+                    if (selectedSet.has(n)) continue;
+                    if (selectedOrder.length >= 6) break;
+                    // Compute current unionMissing (before adding n)
+                    const curS = [...selectedOrder];
+                    const curUnion = new Set();
+                    for (let i = 0; i < curS.length; i++) {
+                        for (let j = i + 1; j < curS.length; j++) {
+                            const a = Math.min(curS[i], curS[j]), b = Math.max(curS[i], curS[j]);
+                            getMissingForPair(a, b).forEach(m => curUnion.add(m));
+                        }
+                    }
+                    // If n is in the missing set, it's blocked → stop
+                    if (curUnion.has(n)) break;
+                    selectedSet.add(n);
+                    selectedOrder.push(n);
+                }
+                updateAltClickLabel();
+                rebuildAll();
+            };
+
+        }
+
         // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
         function renderCell6_5() {
             const body = sectionShell("cell6_5", "Cell6.5 · Truy x", "Chọn số x (1-45) và kích thước bộ để liệt kê chỉ những bộ liên quan tới x.");
@@ -8817,7 +9487,7 @@
                     // --- PHẦN THAY ĐỔI ĐỂ TẠO FILE XLSX CHUẨN ---
 
                     // 4. Chuẩn bị mảng dữ liệu (AOA - Array of Arrays)
-                    const excelData = [['date', 'result', 'rule']]; // Header dòng 1
+                    const excelData = [['date', 'result', 'rule', 'k']]; // Header dòng 1
 
                     for (let i = 0; i < (Array.isArray(data) ? data.length : 0); i++) {
                         try {
@@ -8826,9 +9496,17 @@
                             const resultVal = obj.Result || obj.result || '';
                             const nums = (resultVal || '').split(/\s*,\s*/).map(s => parseInt(s, 10)).filter(Number.isFinite);
                             const rule = (nums.length === 6) ? computeRule(nums) : '';
+                            // Compute k value (union missing count)
+                            let kVal = '';
+                            try {
+                                if (nums.length === 6 && typeof window.__kForResult === 'function') {
+                                    const kResult = window.__kForResult(nums.join(','));
+                                    if (kResult !== null && kResult !== undefined) kVal = kResult;
+                                }
+                            } catch (e) { }
 
                             // Thêm dòng dữ liệu vào mảng thay vì cộng chuỗi XML
-                            excelData.push([dateVal, resultVal, rule]);
+                            excelData.push([dateVal, resultVal, rule, kVal]);
                         } catch (e) { }
                     }
 
@@ -9599,7 +10277,7 @@
 
                         const avgBracket = parseFloat(analAvg.textContent) || 0;
 
-                        let tbl = `<table class="no-sticky" style="width:100%"><thead><tr><th>Ng\u00E0y</th><th>K\u1EBFt qu\u1EA3</th><th>dist</th><th>rule</th><th>score</th></tr></thead><tbody>`;
+                        let tbl = `<table class="no-sticky" style="width:100%"><thead><tr><th>Ng\u00E0y</th><th>K\u1EBFt qu\u1EA3</th><th>dist</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>`;
                         const analX = parseInt((analNum.value || '').trim(), 10);
                         pageItems.forEach(item => {
                             const numsHtml = item.nums.map(v => {
@@ -9614,7 +10292,8 @@
                             const distArrJson = item.distArr ? encodeURIComponent(JSON.stringify(item.distArr)) : '';
 
                             const _scoreHtml7 = window.__scoreHtml ? window.__scoreHtml(item.result) : '';
-                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" data-dist-arr="${distArrJson}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${_scoreHtml7}</td></tr>`;
+                            const _kHtml7anal = window.__kHtml ? window.__kHtml(item.result) : '';
+                            tbl += `<tr data-result="${item.result}" data-nums="${item.result}" data-dist-arr="${distArrJson}" style="cursor:pointer"><td style="white-space:nowrap">${item.date}</td><td class="td-has-pill" style="white-space:nowrap">${numsHtml}</td><td style="font-family:monospace">${item.dist}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${_kHtml7anal}</td><td style="text-align:center">${_scoreHtml7}</td></tr>`;
                         });
                         tbl += '</tbody></table>';
                         analTableWrap.innerHTML = tbl;
@@ -9655,9 +10334,9 @@
                                         const nums = typeof parseSixNumbersFromString === 'function' ? parseSixNumbersFromString(res) : null;
                                         if (!nums) return;
                                         ev.preventDefault();
-                                        try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                        window.__clearBorderSel();
                                         tr.classList.add('ctrl-selected');
-                                        try { localStorage.setItem('cell5_5_ctrl_selected', res); } catch (e) { }
+                                        window.__saveBorderSel(res, 'ctrl');
                                         try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                         const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                                         if (navBtn) {
@@ -10978,11 +11657,11 @@
                             `<button class='nav-btn next'>▶</button>` +
                             `</div>`;
                         inner = headerHtml + navHtml;
-                        inner += `<table style="width:100%"><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>`;
+                        inner += `<table style="width:100%"><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>`;
                         // If there are rows to render, compute per-row `k` using the same
                         // greedy trash-popup semantics so we can annotate each <tr>
                         if (slice.length === 0) {
-                            inner += `<tr><td colspan='5' class='muted'>Không có kết quả</td></tr>`;
+                            inner += `<tr><td colspan='6' class='muted'>Không có kết quả</td></tr>`;
                         } else {
                             // Build mapping from stable row key -> global indices
                             const rowKeyToIndices = new Map();
@@ -11102,10 +11781,11 @@
                                 } catch (err) { }
 
                                 const _scoreHtml65 = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml65}</td></tr>`;
+                                const _kHtml65 = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                                inner += `<tr data-result="${r.nums.join(',')}" title="k=x=${t}" data-k="${t}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml65}</td><td style='text-align:center'>${_scoreHtml65}</td></tr>`;
                             });
                         }
-                        if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='5' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
+                        if (displayList.length > (page + 1) * pageSizeRows) inner += `<tr><td colspan='6' class='muted'>... ${displayList.length - (page + 1) * pageSizeRows} dòng nữa</td></tr>`;
                         inner += `</tbody></table>`;
                         inner += `<div class='flex' style='justify-content:flex-end;gap:8px;margin-top:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
@@ -11117,17 +11797,8 @@
                     }
                     body.style.minHeight = '';
                     body.innerHTML = inner;
-                    // Reapply persisted Ctrl-selected highlight (persist across renders)
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell6_5_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = body.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders)
+                    try { window.__restoreBorderSel(body); } catch (e) { }
 
                     // attach hover handler to tbody so hovering a row will
                     // read the card header <strong> (e.g. {18,29}) and
@@ -11181,11 +11852,11 @@
                                     const nums = parseSixNumbersFromString(result);
                                     if (!nums) return;
 
-                                    // clear any previous ctrl-selected rows globally and mark this one
-                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    // clear any previous selected rows globally and mark this one
+                                    window.__clearBorderSel();
                                     tr.classList.add('ctrl-selected');
                                     // persist selection so it survives remounts/navigation
-                                    try { localStorage.setItem('cell6_5_ctrl_selected', result); } catch (e) { }
+                                    window.__saveBorderSel(result, 'ctrl');
 
                                     // Ensure target section is rendered then navigate to it after a short delay
                                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
@@ -11388,6 +12059,11 @@
                 const sec = document.getElementById('cell6_5');
                 if (sec) {
                     sec.__group = debouncedGroup;
+                    sec.__xFilter = xFilter;
+                    sec.__xSel = xSel;
+                    sec.__rebuildComboExtras = rebuildComboExtras;
+                    sec.__comboExtras = comboExtras;
+                    sec.__modeSel = body.__modeSel || null;
                     // provide an invalidate helper so external listeners can clear
                     // internal caches and force a fresh compute/render
                     sec.__invalidate = function () {
@@ -11835,7 +12511,7 @@
                 let html = `<div class='muted'>${records.length} kỳ</div><div class='grid-centered'>`;
                 const chunk = 15;
                 for (let i = 0; i < display.length; i += chunk) {
-                    html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                    html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>Kết quả</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                     display.slice(i, i + chunk).forEach(r => {
                         const nums = r.nums.map((v, idx) => pattern[idx] !== "_"
                             ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>`
@@ -11844,23 +12520,15 @@
                         const labelHtml = r.label.split("").map((ch, idx) => pattern[idx] === "_" ? `<span>${ch}</span>` : `<span style='background:var(--highlight-bg);color:var(--highlight-text);padding:2px 6px;border-radius:4px;font-weight:700;'>${ch}</span>`).join(" ");
                         const ruleHtml = (Array.isArray(r.nums) && r.nums.length === 6) ? __c8_computeRule(r.nums) : '';
                         const _scoreHtml8 = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml8}</td></tr>`;
+                        const _kHtml8 = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                        html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td style='white-space:nowrap;'>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml8}</td><td style='text-align:center'>${_scoreHtml8}</td></tr>`;
                     });
                     html += "</tbody></table></div>";
                 }
                 html += "</div>";
                 wrap.innerHTML = html;
-                // Reapply persisted Ctrl-selected highlight (persist across renders) for cell8
-                try {
-                    const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
-                    if (persisted) {
-                        const _tbody_reapply = wrap.querySelector('tbody');
-                        if (_tbody_reapply) {
-                            const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                            if (m) m.classList.add('ctrl-selected');
-                        }
-                    }
-                } catch (e) { /* ignore reapply errors */ }
+                // Reapply persisted border highlight (persist across renders) for cell8
+                try { window.__restoreBorderSel(wrap); } catch (e) { }
 
                 // Attach delegated hover + Ctrl+click handlers so rows can be highlighted and Ctrl-clicked
                 (function attachRowHoverAndCtrlClick_cell8_labelMode() {
@@ -11885,9 +12553,9 @@
                                 const nums = parseSixNumbersFromString(result);
                                 if (!nums) return;
 
-                                try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                window.__clearBorderSel();
                                 tr.classList.add('ctrl-selected');
-                                try { localStorage.setItem('cell8_ctrl_selected', result); } catch (e) { }
+                                window.__saveBorderSel(result, 'ctrl');
 
                                 try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                 const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
@@ -12634,13 +13302,14 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div>${_missingHtml9}<div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const { html: numsHtml, positions } = renderHighlightedNums(r.nums, setVals, requiredCount, consec.checked);
                             const labelHtml = renderHighlightedLabel(r.label, positions);
                             const ruleHtml = __c9_computeRule(r.nums);
                             const _scoreHtml9a = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml9a}</td></tr>`;
+                            const _kHtml9a = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml9a}</td><td style='text-align:center'>${_scoreHtml9a}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -12674,17 +13343,8 @@
                             });
                         }
                     } catch (e) { }
-                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell9
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell9_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = wrap.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders) for cell9
+                    try { window.__restoreBorderSel(wrap); } catch (e) { }
 
                     // Attach Ctrl+click handler for cell9 (use delegation on wrap so all inner cards/tables are covered)
                     (function attachRowHoverAndCtrlClick_cell9() {
@@ -12710,9 +13370,9 @@
                                     if (!result) return;
                                     const nums = parseSixNumbersFromString(result);
                                     if (!nums) return;
-                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    window.__clearBorderSel();
                                     tr.classList.add('ctrl-selected');
-                                    try { localStorage.setItem('cell9_ctrl_selected', result); } catch (e) { }
+                                    window.__saveBorderSel(result, 'ctrl');
                                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                                     if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
@@ -12721,17 +13381,8 @@
                             });
                         } catch (err) { }
                     })();
-                    // Reapply persisted Ctrl-selected highlight (persist across renders) for cell8
-                    try {
-                        const persisted = (function () { try { return localStorage.getItem('cell8_ctrl_selected'); } catch (e) { return null; } })();
-                        if (persisted) {
-                            const _tbody_reapply = wrap.querySelector('tbody');
-                            if (_tbody_reapply) {
-                                const m = _tbody_reapply.querySelector(`tr[data-result="${persisted}"]`);
-                                if (m) m.classList.add('ctrl-selected');
-                            }
-                        }
-                    } catch (e) { /* ignore reapply errors */ }
+                    // Reapply persisted border highlight (persist across renders) for cell8
+                    try { window.__restoreBorderSel(wrap); } catch (e) { }
 
                     // Attach Ctrl+click handler for cell8
                     (function attachRowHoverAndCtrlClick_cell8() {
@@ -12758,9 +13409,9 @@
                                     if (!result) return;
                                     const nums = parseSixNumbersFromString(result);
                                     if (!nums) return;
-                                    try { document.querySelectorAll('tr.ctrl-selected').forEach(r => r.classList.remove('ctrl-selected')); } catch (e) { }
+                                    window.__clearBorderSel();
                                     tr.classList.add('ctrl-selected');
-                                    try { localStorage.setItem('cell8_ctrl_selected', result); } catch (e) { }
+                                    window.__saveBorderSel(result, 'ctrl');
                                     try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
                                     const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
                                     if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(nums); } catch (e) { } }, 220); }, 200); }
@@ -12808,7 +13459,7 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const labelStr = r.label;
                             let highlightPos = [];
@@ -12846,7 +13497,8 @@
                             const labelHtml = renderHighlightedLabel(labelStr, highlightPos);
                             const ruleHtml = __c9_computeRule(r.nums);
                             const _scoreHtml9b = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml9b}</td></tr>`;
+                            const _kHtml9b = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${numsHtml}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml9b}</td><td style='text-align:center'>${_scoreHtml9b}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -14184,14 +14836,15 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · pattern ${patternStr}</div>${_missingHtml11}<div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const nums = r.nums.map((v, idx) => pattern[idx] !== "_" ? `<span class='pill' style='${MATCH_STYLE}width:28px;display:inline-block;text-align:center;'>${v}</span>` : `<span class='pill' style='background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;'>${v}</span>`).join(" ");
                             const highlightPositions = pattern.map((p, i) => p === "_" ? -1 : i).filter(i => i >= 0);
                             const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
                             const ruleHtml = __c11_computeRule(r.nums);
                             const _scoreHtml11a = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml11a}</td></tr>`;
+                            const _kHtml11a = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml11a}</td><td style='text-align:center'>${_scoreHtml11a}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -14255,7 +14908,7 @@
                     let html = `<div class='muted' style='flex-basis:100%'>${results.length} kỳ · label ${patternStr}</div><div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
-                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>score</th></tr></thead><tbody>";
+                        html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
                         display.slice(i, i + chunk).forEach(r => {
                             const highlightPositions = labelPattern.map((p, i) => p !== null ? i : -1).filter(i => i >= 0);
                             const nums = r.nums.map((v, idx) => {
@@ -14265,7 +14918,8 @@
                             const labelHtml = renderHighlightedLabel(r.label, highlightPositions);
                             const ruleHtml = __c11_computeRule(r.nums);
                             const _scoreHtml11b = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_scoreHtml11b}</td></tr>`;
+                            const _kHtml11b = window.__kHtml ? window.__kHtml(r.nums.join(',')) : '';
+                            html += `<tr data-result="${r.nums.join(',')}" title="k=x=${getRowTrashK(r)}" data-k="${getRowTrashK(r)}"><td>${r.date}</td><td>${nums}</td><td style='white-space:nowrap;'>${labelHtml}</td><td style='white-space:nowrap;'>${ruleHtml}</td><td style='text-align:center'>${_kHtml11b}</td><td style='text-align:center'>${_scoreHtml11b}</td></tr>`;
                         });
                         html += "</tbody></table></div>";
                     }
@@ -16190,6 +16844,7 @@
                 cell5_5: renderCell5_5,
                 cell6_5: renderCell6_5, // Truy x (lọc theo số x)
                 cell6_6: renderCell6_6, // Mổ pattern (6 số cố định)
+                cell6_7: renderCell6_7, // Dò cặp
                 cell7: renderCell7, // Nhóm theo label
                 cell8: renderCell8, // Tìm kiếm theo Label
                 cell9: renderCell9,
@@ -20004,6 +20659,111 @@
             }, true);
         })();
     </script>
+    <!-- Precompute pairAppeared cache + __computeUnionMissingCount globally (for tooltip k without visiting Cell6.7) -->
+    <script>
+        (function () {
+            if (typeof window.__computeUnionMissingCount === 'function') return; // already defined
+            let pairAppeared = null; // lazy-built cache
+            function ensureCache() {
+                if (pairAppeared) return;
+                pairAppeared = new Map();
+                (window.rows || []).forEach(r => {
+                    const ns = Array.isArray(r.nums) ? r.nums : [];
+                    const sorted = ns.slice().sort((a, b) => a - b);
+                    for (let i = 0; i < sorted.length; i++) {
+                        for (let j = i + 1; j < sorted.length; j++) {
+                            const key = sorted[i] + '-' + sorted[j];
+                            if (!pairAppeared.has(key)) pairAppeared.set(key, new Set());
+                            const s = pairAppeared.get(key);
+                            ns.forEach(n => s.add(n));
+                        }
+                    }
+                });
+                // If rows was empty (data not loaded yet), reset so we retry next call
+                if (pairAppeared.size === 0 && window.rows && window.rows.length > 0) {
+                    pairAppeared = null;
+                }
+                if (pairAppeared && pairAppeared.size === 0) {
+                    pairAppeared = null; // force rebuild on next call when data is ready
+                }
+            }
+            window.__computeUnionMissingCount = function (sixNums) {
+                ensureCache();
+                if (!pairAppeared) return 0;
+                if (!Array.isArray(sixNums) || sixNums.length !== 6) return 0;
+                const nums = sixNums.map(Number).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                if (nums.length !== 6) return 0;
+                const union = new Set();
+                for (let i = 0; i < nums.length; i++) {
+                    for (let j = i + 1; j < nums.length; j++) {
+                        const a = Math.min(nums[i], nums[j]), b = Math.max(nums[i], nums[j]);
+                        const appeared = pairAppeared.get(a + '-' + b);
+                        if (appeared) {
+                            for (let n = 1; n <= 45; n++) { if (!appeared.has(n)) union.add(n); }
+                        } else {
+                            for (let n = 1; n <= 45; n++) union.add(n);
+                        }
+                    }
+                }
+                return union.size;
+            };
+        })();
+    </script>
+    <!-- Global k helpers: __kHtml (column HTML), __computeKRange (min/max across all rows) -->
+    <script>
+        (function () {
+            const _kCache = new Map();
+            window.__kForResult = function (resultStr) {
+                try {
+                    if (typeof window.__computeUnionMissingCount !== 'function') return null;
+                    const key = String(resultStr).trim();
+                    if (_kCache.has(key)) return _kCache.get(key);
+                    const parts = key.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                    if (parts.length !== 6) return null;
+                    const k = window.__computeUnionMissingCount(parts);
+                    _kCache.set(key, k);
+                    return k;
+                } catch (e) { return null; }
+            };
+            window.__kHtml = function (resultStr) {
+                const k = window.__kForResult(resultStr);
+                if (k === null || k === undefined) return '';
+                return '<span class="k-value ' + (typeof window.__lastAvgK === 'number' && k >= window.__lastAvgK ? 'k-cyan' : 'k-yellow') + '">' + k + '</span>';
+            };
+            window.__computeKRange = function () {
+                try {
+                    if (!window.rows || !window.rows.length) return { min: null, max: null, avg: null, below: 0, atOrAbove: 0 };
+                    if (typeof window.__computeUnionMissingCount !== 'function') return { min: null, max: null, avg: null, below: 0, atOrAbove: 0 };
+                    let minK = Infinity, maxK = -Infinity, sumK = 0, countK = 0;
+                    const allK = [];
+                    for (const r of window.rows) {
+                        if (!r.nums || !Array.isArray(r.nums) || r.nums.length !== 6) continue;
+                        const key = r.nums.join(',');
+                        const k = window.__kForResult(key);
+                        if (k === null) continue;
+                        if (k < minK) minK = k;
+                        if (k > maxK) maxK = k;
+                        sumK += k;
+                        countK++;
+                        allK.push(k);
+                    }
+                    if (minK === Infinity) return { min: null, max: null, avg: null, below: 0, atOrAbove: 0 };
+                    const avg = countK > 0 ? (sumK / countK) : null;
+                    let below = 0, atOrAbove = 0;
+                    if (avg !== null) {
+                        for (const k of allK) {
+                            if (k < avg) below++;
+                            else atOrAbove++;
+                        }
+                    }
+                    window.__K_MIN = minK;
+                    window.__K_MAX = maxK;
+                    window.__K_AVG = avg;
+                    return { min: minK, max: maxK, avg: avg, below: below, atOrAbove: atOrAbove };
+                } catch (e) { return { min: null, max: null, avg: null, below: 0, atOrAbove: 0 }; }
+            };
+        })();
+    </script>
     <!-- Instant floating tooltip for Cell5.5 / Cell6.5 / Cell6.6 rows: appears immediately and follows the cursor -->
     <script>
         (function () {
@@ -20032,13 +20792,25 @@
             function showTooltipFor(e, tr) {
                 if (!tr) return;
                 activeTr = tr;
-                // strip native title to avoid browser delay
                 if (tr.getAttribute('title')) {
                     tr.dataset._origTitle = tr.getAttribute('title');
                     tr.removeAttribute('title');
                 }
-                const k = tr.getAttribute('data-k') || tr.dataset.k;
-                tooltip.textContent = k ? `k=${k}` : (tr.dataset._origTitle || '');
+                // Compute k from unionMissing count via cell6.7 logic
+                let kText = '';
+                const result = tr.getAttribute('data-result') || tr.dataset.result;
+                if (result && typeof window.__computeUnionMissingCount === 'function') {
+                    const parts = result.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
+                    if (parts.length === 6) {
+                        const cnt = window.__computeUnionMissingCount(parts);
+                        kText = `k=${cnt}`;
+                    }
+                }
+                if (!kText) {
+                    const k = tr.getAttribute('data-k') || tr.dataset.k;
+                    kText = k ? `k=${k}` : (tr.dataset._origTitle || '');
+                }
+                tooltip.textContent = kText;
                 tooltip.style.display = 'block';
                 positionClient(e);
                 if (!moveHandler) {
@@ -20053,10 +20825,10 @@
                 if (moveHandler) { document.removeEventListener('mousemove', moveHandler); moveHandler = null; }
             }
 
-            // Delegated mouseover / mouseout to detect rows with data-k in the three cells
+            // Delegated mouseover / mouseout to detect rows with data-result in the cells
             document.addEventListener('mouseover', function (ev) {
                 try {
-                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result][data-k]');
+                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result]');
                     if (!tr) return;
                     const container = tr.closest && tr.closest('#cell5_5, #cell6_5, #cell6_6, #cell7, #cell8, #cell9, #cell11');
                     if (container) showTooltipFor(ev, tr);
@@ -20065,7 +20837,7 @@
 
             document.addEventListener('mouseout', function (ev) {
                 try {
-                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result][data-k]');
+                    const tr = ev.target && ev.target.closest && ev.target.closest('tr[data-result]');
                     if (!tr) return;
                     const related = ev.relatedTarget;
                     if (related && tr.contains && tr.contains(related)) return;
@@ -20147,6 +20919,12 @@
                     if (!ev.shiftKey) return; // only on Shift+click
                     const tr = ev.target.closest('tr');
                     if (!tr) return;
+                    // Skip if click originated from Cell6.7 pair table (handled by its own shift-click handler)
+                    if (tr.closest('#cell67_pairTable')) return;
+
+                    // Add yellow border for shift-selected
+                    window.__clearBorderSel();
+                    tr.classList.add('shift-selected');
 
                     // Try to obtain a 6-number string from common locations
                     let result = tr.getAttribute('data-result') || tr.dataset.result || '';
@@ -20157,6 +20935,7 @@
                     if (!result) return;
                     const nums = (typeof parseSixNumbersFromString === 'function') ? parseSixNumbersFromString(result) : null;
                     if (!nums) return;
+                    window.__saveBorderSel(result, 'shift');
 
                     // Parse rule from ALL columns in the row (scan each td for pattern like "17>{...}[25]")
                     let _ruleCand = null, _ruleBracket = null;
@@ -21082,6 +21861,81 @@
                         updateScrollClass();
                         try { if (typeof window.__scanDraftPills === 'function') window.__scanDraftPills(); } catch (e) { }
                         if (draftPopup.style.display !== 'block') showDraft();
+                    }
+                } catch (e) { }
+            }, true);
+
+            // Ctrl/Shift/Alt click on draft rows → yellow border + navigate
+            document.addEventListener('click', function (ev) {
+                try {
+                    if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey) return;
+                    const tr = ev.target.closest ? ev.target.closest('#draftTable tr:not(.draft-add-row-tr)') : null;
+                    if (!tr) return;
+                    // Extract nums from pills
+                    const pills = Array.from(tr.querySelectorAll('.pill'));
+                    const allNums = pills.map(sp => {
+                        const t = (sp.textContent || '').trim();
+                        if (t === '' || t === '__') return null;
+                        const n = parseInt(t, 10);
+                        return (Number.isFinite(n) && n >= 1 && n <= 45) ? n : null;
+                    });
+                    const filled = allNums.filter(n => n !== null);
+                    if (filled.length === 0) return;
+
+                    if (ev.ctrlKey) {
+                        window.__clearBorderSel();
+                        tr.classList.add('ctrl-selected');
+                        window.__saveBorderSel(filled.join(','), 'ctrl');
+                        if (filled.length === 6) {
+                            try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_6'); } catch (e) { }
+                            const navBtn = document.querySelector('.nav-btn[data-target="cell6_6"]');
+                            if (navBtn) { setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(filled); } catch (e) { } }, 220); }, 200); }
+                            else { setTimeout(() => { try { if (typeof applySixToCell6_6 === 'function') applySixToCell6_6(filled); } catch (e) { } }, 260); }
+                        }
+                        ev.preventDefault();
+                        return;
+                    }
+
+                    if (ev.altKey) {
+                        window.__clearBorderSel();
+                        tr.classList.add('alt-selected');
+                        window.__saveBorderSel(filled.join(','), 'alt');
+                        try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_7'); } catch (e) { }
+                        const navBtn = document.querySelector('.nav-btn[data-target="cell6_7"]');
+                        const applyDraft = () => {
+                            // Use sequential pick for partial records
+                            try {
+                                if (typeof window.__cell67_pickNumbersSeq === 'function') window.__cell67_pickNumbersSeq(allNums);
+                                else if (typeof window.__cell67_pickNumbers === 'function') window.__cell67_pickNumbers(filled);
+                            } catch (e) { }
+                        };
+                        if (navBtn) {
+                            setTimeout(() => { try { navBtn.click(); } catch (e) { } setTimeout(applyDraft, 220); }, 200);
+                        } else { setTimeout(applyDraft, 260); }
+                        ev.preventDefault();
+                        return;
+                    }
+
+                    if (ev.shiftKey) {
+                        window.__clearBorderSel();
+                        tr.classList.add('shift-selected');
+                        window.__saveBorderSel(filled.join(','), 'shift');
+                        if (filled.length === 6) {
+                            try { if (typeof window.ensureRendered === 'function') window.ensureRendered('cell6_5'); } catch (e) { }
+                            const navBtn = document.querySelector('.nav-btn[data-target="cell6_5"]');
+                            if (navBtn) navBtn.click();
+                            setTimeout(() => {
+                                const modeSelect = document.querySelector('#cell6_5 .controls .mode-selector select') || document.querySelector('#cell6_5 select');
+                                if (modeSelect) { try { modeSelect.value = 'unpair'; } catch (e) { } modeSelect.dispatchEvent(new Event('change', { bubbles: true })); }
+                                for (let i = 0; i < 6; i++) {
+                                    const input = document.getElementById('cell6_5_unpair_input_' + (i + 1));
+                                    if (input) { input.value = filled[i] ?? ''; input.dispatchEvent(new Event('input', { bubbles: true })); }
+                                }
+                                if (typeof window.setPlaceValues === 'function') { try { window.setPlaceValues(filled); } catch (e) { } }
+                            }, 200);
+                        }
+                        ev.preventDefault();
+                        return;
                     }
                 } catch (e) { }
             }, true);
@@ -22055,12 +22909,29 @@
                     const maxS = typeof window.__SCORE_MAX === 'number' ? window.__SCORE_MAX : 10.0;
                     const threshDiv = document.createElement('span');
                     threshDiv.className = 'score-thresholds';
+                    // Compute k range
+                    let kRangeHtml = '';
+                    try {
+                        if (typeof window.__computeKRange === 'function') {
+                            const kr = window.__computeKRange();
+                            if (kr.min !== null && kr.max !== null) {
+                                const avgStr = (kr.avg !== null && kr.avg !== undefined) ? kr.avg.toFixed(2) : '?';
+                                const belowStr = (kr.below !== undefined) ? kr.below : '?';
+                                const aboveStr = (kr.atOrAbove !== undefined) ? kr.atOrAbove : '?';
+                                kRangeHtml = '<span class="score-label" style="margin-left:6px">k ' + belowStr + '&lt;&gt;' + aboveStr + ':</span>' +
+                                    '<span class="score-chip" style="background:#0277bd" title="min k">' + kr.min + '</span>' +
+                                    '<span class="score-chip" style="background:#01579b;color:#ffeb3b" title="avg k">' + avgStr + '</span>' +
+                                    '<span class="score-chip" style="background:#01579b" title="max k">' + kr.max + '</span>';
+                            }
+                        }
+                    } catch (e) { }
                     threshDiv.innerHTML =
                         '<span class="score-chip" style="background:#c62828" title="MIN (percentile 0)">0: ' + minS.toFixed(2) + '</span>' +
                         '<span class="score-chip" style="background:#e65100" title="Q25 (percentile 25)">25: ' + q25.toFixed(2) + '</span>' +
                         '<span class="score-chip" style="background:#ffd600;color:#000" title="Q50 (percentile 50)">50: ' + q50.toFixed(2) + '</span>' +
                         '<span class="score-chip" style="background:#2e7d32" title="Q75 (percentile 75)">75: ' + q75.toFixed(2) + '</span>' +
-                        '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>';
+                        '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>' +
+                        kRangeHtml;
                     // Insert thresholds before config wrap if it exists, to keep layout order
                     const existingCfg = status.querySelector('.score-config-wrap');
                     if (existingCfg) status.insertBefore(threshDiv, existingCfg);
@@ -22158,12 +23029,28 @@
                                 const maxS = typeof window.__SCORE_MAX === 'number' ? window.__SCORE_MAX : 10.0;
                                 const threshDiv = document.createElement('span');
                                 threshDiv.className = 'score-thresholds';
+                                let kRangeHtml2 = '';
+                                try {
+                                    if (typeof window.__computeKRange === 'function') {
+                                        const kr2 = window.__computeKRange();
+                                        if (kr2.min !== null && kr2.max !== null) {
+                                            const avgStr2 = (kr2.avg !== null && kr2.avg !== undefined) ? kr2.avg.toFixed(2) : '?';
+                                            const belowStr2 = (kr2.below !== undefined) ? kr2.below : '?';
+                                            const aboveStr2 = (kr2.atOrAbove !== undefined) ? kr2.atOrAbove : '?';
+                                            kRangeHtml2 = '<span class="score-label" style="margin-left:6px">k ' + belowStr2 + '&lt;&gt;' + aboveStr2 + ':</span>' +
+                                                '<span class="score-chip" style="background:#0277bd" title="min k">' + kr2.min + '</span>' +
+                                                '<span class="score-chip" style="background:#01579b;color:#ffeb3b" title="avg k">' + avgStr2 + '</span>' +
+                                                '<span class="score-chip" style="background:#01579b" title="max k">' + kr2.max + '</span>';
+                                        }
+                                    }
+                                } catch (e) { }
                                 threshDiv.innerHTML =
                                     '<span class="score-chip" style="background:#c62828" title="MIN (percentile 0)">0: ' + minS.toFixed(2) + '</span>' +
                                     '<span class="score-chip" style="background:#e65100" title="Q25 (percentile 25)">25: ' + q25.toFixed(2) + '</span>' +
                                     '<span class="score-chip" style="background:#ffd600;color:#000" title="Q50 (percentile 50)">50: ' + q50.toFixed(2) + '</span>' +
                                     '<span class="score-chip" style="background:#2e7d32" title="Q75 (percentile 75)">75: ' + q75.toFixed(2) + '</span>' +
-                                    '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>';
+                                    '<span class="score-chip" style="background:#1b5e20" title="MAX (percentile 100)">100: ' + maxS.toFixed(2) + '</span>' +
+                                    kRangeHtml2;
                                 if (cfgWrap) status.insertBefore(threshDiv, cfgWrap);
                                 else status.appendChild(threshDiv);
                                 // Update all existing .score-cell elements in the DOM
