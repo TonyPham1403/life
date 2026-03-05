@@ -1824,6 +1824,25 @@
             width: 100% !important;
         }
 
+        /* Same behavior for Cell8: don't center its grid/cards when only one child/table */
+        #cell8 .grid-centered {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+            width: 100%;
+        }
+
+        /* Cell8: max 2 tables per row (matching Cell7 layout) */
+        #cell8 .grid-centered>* {
+            flex: 1 1 calc(50% - 10px) !important;
+            max-width: calc(50% - 10px) !important;
+            min-width: 280px;
+        }
+
+        /* Single table in Cell8: max half width */
+        #cell8 .grid-centered>*:only-child {
+            max-width: 50% !important;
+        }
+
         /* Cell9 table: center KQ column, full width */
         #cell9 table td:nth-child(2) {
             text-align: center !important;
@@ -4420,7 +4439,9 @@
                     // Skip popup highlight for Cell5.5 / Cell7..11 rows when both toggles are "normal"
                     // Cell6.5 and Cell6.6 always show orange popup highlights (their <strong> header numbers)
                     try {
-                        if (tr.closest('#cell5_5') || tr.closest('#cell7') || tr.closest('#cell8') || tr.closest('#cell9') || tr.closest('#cell11')) {
+                        // Cell8: never show orange popup highlights
+                        if (tr.closest('#cell8')) return;
+                        if (tr.closest('#cell5_5') || tr.closest('#cell7') || tr.closest('#cell9') || tr.closest('#cell11')) {
                             const trashMode = (typeof window.getTrashToggleMode === 'function') ? window.getTrashToggleMode() : 'normal';
                             const favMode = (typeof window.getFavToggleMode === 'function') ? window.getFavToggleMode() : 'normal';
                             if (trashMode === 'normal' && favMode === 'normal') return;
@@ -6187,10 +6208,75 @@
             const sortSel = document.createElement("select");
             [["count_desc", "Giảm dần (số kỳ)"], ["count_asc", "Tăng dần (số kỳ)"], ["value_asc", "Tăng dần (giá trị)"], ["value_desc", "Giảm dần (giá trị)"]].forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; sortSel.appendChild(o); });
             const recencySel = document.createElement('select');[["desc", "Mới → Cũ"], ["asc", "Cũ → Mới"]].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; recencySel.appendChild(o); }); recencySel.value = 'desc';
-            controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel, recencySel);
+
+            // Trash filter toggle
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell7_trashSel'; trashSel.className = 'trash-mode trash-toggle'; } catch (e) { }
+            trashSel.type = 'button'; trashSel.value = 'include'; trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.style.padding = '6px 10px';
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    cacheKey = null; groupCache = null;
+                    try { group(); } catch (e) { }
+                } catch (e) { }
+            });
+
+            // Fav filter toggle
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell7_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button'; favSel.value = 'exclude'; favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px'; favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    cacheKey = null; groupCache = null;
+                    try { group(); } catch (e) { }
+                } catch (e) { }
+            });
+
+            controls.append("Sai khác tối đa:", diffSel, consecLabel, "Sắp xếp:", sortSel, recencySel, "Trash:", trashSel, "Fav:", favSel);
             body.appendChild(controls);
             const wrap = document.createElement("div"); wrap.className = "card card-inner"; body.appendChild(wrap);
             wrap.addEventListener('dblclick', handleRowCopyDblClick);
+
+            // Sync trash/fav from other cells & redraw
+            try {
+                if (!window.__cell7_trash_listener_added) {
+                    document.addEventListener('trashchange', function () {
+                        try {
+                            const other = document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel');
+                            const cur = document.getElementById('cell7_trashSel');
+                            if (other && cur && cur.value !== other.value) { cur.value = other.value; cur.textContent = other.value; }
+                            cacheKey = null; groupCache = null;
+                            try { group(); } catch (e) { }
+                        } catch (e) { }
+                    });
+                    window.__cell7_trash_listener_added = true;
+                }
+            } catch (e) { }
+            try {
+                if (!window.__cell7_fav_listener_added) {
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell7_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                cacheKey = null; groupCache = null;
+                                try { group(); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell7_fav_listener_added = true;
+                }
+            } catch (e) { }
 
             let groupCache = null;
             let cacheKey = null;
@@ -6200,7 +6286,7 @@
                 if (!rows.length) { wrap.innerHTML = "<div class='loader'>Chưa có dữ liệu</div>"; return; }
 
                 // Tạo key để kiểm tra cache
-                const newCacheKey = `${diffSel.value}|${consec.checked}|${recencySel ? recencySel.value : ''}`;
+                const newCacheKey = `${diffSel.value}|${consec.checked}|${recencySel ? recencySel.value : ''}|${trashSel.value}|${favSel.value}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroups(groupCache);
                     return;
@@ -6216,8 +6302,30 @@
                 }
 
                 function computeAndRender() {
+                    // Apply trash/fav filtering
+                    let filteredRows = rows.slice();
+                    try {
+                        if (trashSel.value === 'exclude') {
+                            const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                            if (trashedSet.size) filteredRows = filteredRows.filter(r => { for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false; return true; });
+                        }
+                    } catch (e) { }
+                    try {
+                        if (favSel.value === 'include') {
+                            let favs = [];
+                            try { if (typeof window.getFavItems === 'function') favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n)); else if (Array.isArray(window.__favItems)) favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n)); } catch (e) { }
+                            if (favs.length) {
+                                const favSet = new Set(favs);
+                                let op = '>=', req = 1;
+                                try { const fpop = document.getElementById('favPopup'); if (fpop) { const opEl = fpop.querySelector('#favFilterOp'); const cntEl = fpop.querySelector('#favFilterCount'); if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value; if (cntEl) { const v = Number(cntEl.value); if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v))); } } } catch (e) { }
+                                filteredRows = filteredRows.filter(r => { let mc = 0; for (const nn of r.nums) if (favSet.has(Number(nn))) mc++; if (op === '>=') return mc >= req; if (op === '=') return mc === req; if (op === '<=') return mc <= req; return mc >= req; });
+                            }
+                        }
+                    } catch (e) { }
+
                     const labelRows = {};
-                    rows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
+                    filteredRows.forEach(r => { const label = labelOf(r.nums); (labelRows[label] ||= []).push(r); });
                     const labels = Object.keys(labelRows).sort();
                     let groups = [];
                     const canonicalLabel = (lbl) => (lbl || '').split('').sort().join('');
@@ -6999,9 +7107,7 @@
                     trashSel.textContent = trashSel.value;
                     // sync other selector if present
                     try { const other = document.getElementById('cell6_5_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
-                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
                     try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
-                    try { draw(); } catch (e) { }
                 } catch (e) { }
             });
 
@@ -7029,9 +7135,7 @@
                 try {
                     favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
                     favSel.textContent = favSel.value;
-                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
                     try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
-                    try { draw(); } catch (e) { }
                 } catch (e) { }
             });
 
@@ -7042,12 +7146,7 @@
                     secEl.__favListenerAdded = true;
                     document.addEventListener('favchange', function () {
                         try {
-                            const cur = document.getElementById('cell6_6_favSel');
-                            const other = document.getElementById('cell6_5_favSel');
-                            const isInclude = (cur && String(cur.value) === 'include') || (other && String(other.value) === 'include');
-                            if (isInclude) {
-                                try { draw(); } catch (err) { /* ignore */ }
-                            }
+                            try { draw(); } catch (err) { /* ignore */ }
                         } catch (e) { }
                     });
                 }
@@ -8172,14 +8271,89 @@
                             scoreStr = `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;background:${bg};color:${fg}" title="Score: ${score.toFixed(2)}">${score.toFixed(2)}</span>`;
                         }
                     }
-                    const dateDisplay = (altClickApply && altClickDate) ? altClickDate : '?';
+
+                    // ── 6b. Find matching historical records for top table ──
+                    const currentNumsSet = new Set(currentNums);
+                    const matchingRecords = S.length > 0 ? rows.filter(r => {
+                        const rSet = new Set(r.nums);
+                        for (const n of currentNums) if (!rSet.has(n)) return false;
+                        return true;
+                    }) : rows.slice();
+                    // Sort matching records by date: newest first (latest-oldest)
+                    const parseDateForSort67 = (s) => {
+                        if (!s || typeof s !== 'string') return 0;
+                        const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                        if (!m) return 0;
+                        return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])).getTime();
+                    };
+                    matchingRecords.sort((a, b) => (parseDateForSort67(b.date) || 0) - (parseDateForSort67(a.date) || 0));
+
+                    // Determine date display: show actual date(s) for 6-number exact matches
+                    let dateDisplay = '?';
+                    if (S.length === 6) {
+                        const exactMatches = matchingRecords.filter(r => {
+                            if (r.nums.length !== 6) return false;
+                            const rSorted = r.nums.slice().sort((a, b) => a - b);
+                            return rSorted.every((n, i) => n === currentNums[i]);
+                        });
+                        if (exactMatches.length > 0) {
+                            dateDisplay = exactMatches.map(r => r.date).join(', ');
+                        } else if (altClickApply && altClickDate) {
+                            dateDisplay = altClickDate;
+                        }
+                    } else if (altClickApply && altClickDate) {
+                        dateDisplay = altClickDate;
+                    }
+
                     // Compute k for the current selection
                     let kHtml67 = '';
                     if (S.length === 6 && typeof window.__kHtml === 'function') {
                         kHtml67 = window.__kHtml(currentNums.join(','));
                     }
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
-                    topTbody.innerHTML = `<tr${resultAttr}><td>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
+
+                    // Build top table rows
+                    let topRows = `<tr${resultAttr}><td>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
+
+                    // When 6 numbers picked and there are exact matches, show all matching result rows
+                    if (S.length === 6) {
+                        const exactMatches = matchingRecords.filter(r => {
+                            if (r.nums.length !== 6) return false;
+                            const rSorted = r.nums.slice().sort((a, b) => a - b);
+                            return rSorted.every((n, i) => n === currentNums[i]);
+                        });
+                        if (exactMatches.length > 0) {
+                            topRows = '';
+                            exactMatches.forEach(r => {
+                                const rNums = r.nums.slice().sort((a, b) => a - b);
+                                const rNumsHtml = rNums.map(n => `<span class="pill" style="background:#2e7d32;color:#fff;">${n}</span>`).join(' ');
+                                const rRule = computeRule67(r.nums);
+                                const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
+                                const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                                topRows += `<tr data-result="${rNums.join(',')}"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
+                            });
+                        }
+                    }
+
+                    topTbody.innerHTML = topRows;
+
+                    // ── 7. Append "... x dòng nữa" as a row inside topTable ──
+                    if (S.length < 6) {
+                        const matchCount = S.length > 0 ? matchingRecords.length : rows.length;
+                        if (matchCount <= 5 && matchCount > 0) {
+                            // Append faded rows directly into topTable tbody
+                            matchingRecords.forEach(r => {
+                                const rNums = r.nums.slice().sort((a, b) => a - b);
+                                const rNumsHtml = rNums.map(n => `<span class="pill" style="background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;">${n}</span>`).join(' ');
+                                const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
+                                const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
+                                const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                                topTbody.insertAdjacentHTML('beforeend', `<tr data-result="${rNums.join(',')}" style="opacity:0.45"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`);
+                            });
+                        } else if (matchCount > 5) {
+                            topTbody.insertAdjacentHTML('beforeend', `<tr style="opacity:0.5"><td colspan="5" style="text-align:center;font-size:12px;color:var(--muted)">... ${matchCount} dòng nữa</td></tr>`);
+                        }
+                    }
                 }
 
             }
@@ -8776,7 +8950,6 @@
                     trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
                     trashSel.textContent = trashSel.value;
                     try { const other = document.getElementById('cell6_6_trashSel'); if (other) { other.value = trashSel.value; if (other.textContent !== undefined) other.textContent = trashSel.value; } } catch (e) { }
-                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
                     try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
                 } catch (e) { }
             });
@@ -9522,7 +9695,6 @@
                         const other = document.getElementById('cell6_6_trashSel');
                         if (other && trashSel && trashSel.value !== other.value) trashSel.value = other.value;
                     } catch (e) { }
-                    try { if (typeof debouncedGroup === 'function') debouncedGroup(); else group(); } catch (e) { }
                 });
             } catch (e) { }
 
@@ -9539,9 +9711,7 @@
                 try {
                     favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
                     favSel.textContent = favSel.value;
-                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
                     try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
-                    try { if (typeof group === 'function') group(); } catch (e) { }
                 } catch (e) { }
             });
 
@@ -9550,15 +9720,11 @@
                 if (!window.__cell6_5_fav_listener_added) {
                     document.addEventListener('favchange', function () {
                         try {
-                            const cur = document.getElementById('cell6_5_favSel');
-                            const other = document.getElementById('cell6_6_favSel');
-                            const isInclude = (cur && String(cur.value) === 'include') || (other && String(other.value) === 'include');
-                            if (isInclude) {
-                                try { groupCache = null; } catch (e) { }
-                                try { cacheKey = null; } catch (e) { }
-                                try { baselineArrAll = null; baselineArrGlobal = null; baselineCountsMap = null; baselineAllKeys = null; baselineGlobalKeys = null; } catch (e) { }
-                                try { if (typeof draw === 'function') draw(); else if (typeof group === 'function') group(); } catch (err) { /* ignore */ }
-                            }
+                            const sec = document.getElementById('cell6_5');
+                            if (sec && typeof sec.__invalidate === 'function') { try { sec.__invalidate(); } catch (e) { } }
+                            try { cacheKey = null; groupCache = null; isComputing = false; } catch (e) { }
+                            const fn = sec && sec.__group ? sec.__group : null;
+                            if (typeof fn === 'function') fn();
                         } catch (e) { }
                     });
                     window.__cell6_5_fav_listener_added = true;
@@ -10850,7 +11016,8 @@
                 let externalTrashEl = null;
                 try { externalTrashEl = document.getElementById('cell6_6_trashSel'); } catch (e) { externalTrashEl = null; }
                 const trashValue = (externalTrashEl && externalTrashEl.value) ? externalTrashEl.value : (trashSel && trashSel.value ? String(trashSel.value) : 'include');
-                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${recencySel ? recencySel.value : ''}|${numTrashInput ? numTrashInput.value : ''}`;
+                const favValue = (() => { try { const el = document.getElementById('cell6_5_favSel'); return (el && el.value) ? el.value : 'exclude'; } catch (e) { return 'exclude'; } })();
+                const newCacheKey = `${xSel.value}|${consec.checked}|${order.checked}|${sortSel.value}|${xFilter.value}|${extraValsKey}|${trashValue}|${favValue}|${recencySel ? recencySel.value : ''}|${numTrashInput ? numTrashInput.value : ''}`;
                 if (cacheKey === newCacheKey && groupCache) {
                     renderGroupTable(groupCache);
                     return;
@@ -12243,10 +12410,8 @@
                 if (body && !body.__trash_listener_added) {
                     body.addEventListener('trashchange', () => {
                         try {
-                            try { console.log('cell6_5: section-local trashchange received'); } catch (e) { }
-                            // Invalidate renderer state then trigger recompute like other inputs
+                            // Invalidate renderer state; global listener handles recompute
                             try { const sec = document.getElementById('cell6_5'); if (sec && typeof sec.__invalidate === 'function') sec.__invalidate(); } catch (e) { }
-                            if (typeof debouncedGroup === 'function') debouncedGroup(); else group();
                         } catch (err) { /* ignore */ }
                     });
                     body.__trash_listener_added = true;
@@ -12263,59 +12428,12 @@
                 if (!window.__cell6_5_trash_watch) {
                     document.addEventListener('trashchange', () => {
                         try {
-                            try { console.log('cell6_5: global trashchange received'); } catch (e) { }
                             const sec = document.getElementById('cell6_5');
                             if (sec && typeof sec.__invalidate === 'function') {
                                 try { sec.__invalidate(); } catch (e) { }
                             }
-                            // Recompute visible rows per group based on current trash mode
-                            try {
-                                // determine effective trash mode (prefer cell6_6 selector)
-                                let trashModeEl = null;
-                                try { trashModeEl = document.getElementById('cell6_6_trashSel'); } catch (e) { trashModeEl = null; }
-                                if (!trashModeEl) {
-                                    try { trashModeEl = document.getElementById('cell6_5_trashSel'); } catch (e) { trashModeEl = null; }
-                                }
-                                const trashValue = (trashModeEl && trashModeEl.value) ? trashModeEl.value : 'include';
-
-                                if (groupCache && Array.isArray(groupCache)) {
-                                    if (String(trashValue) === 'exclude') {
-                                        const trashed = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems ? window.__trashItems.slice() : []);
-                                        const trashedSet = new Set((trashed || []).map(n => Number(n)));
-                                        if (trashedSet.size) {
-                                            groupCache = groupCache.map(([key, list]) => {
-                                                const filtered = (list || []).filter(r => {
-                                                    try {
-                                                        if (!r || !r.nums || !Array.isArray(r.nums)) return false;
-                                                        for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false;
-                                                        return true;
-                                                    } catch (err) { return true; }
-                                                });
-                                                return [key, filtered];
-                                            });
-                                        }
-                                    } else {
-                                        // include mode: restore visible lists from baseline (if available)
-                                        if (baselineArrAll && Array.isArray(baselineArrAll)) {
-                                            try { groupCache = baselineArrAll.map(([k, l]) => [k, (l && l.slice) ? l.slice() : []]); } catch (e) { /* ignore */ }
-                                        }
-                                    }
-                                }
-                                // Ensure groups are re-ordered according to current sort selection
-                                try {
-                                    const currentSort = (typeof sortSel !== 'undefined' && sortSel && sortSel.value) ? sortSel.value : 'count_desc';
-                                    if (groupCache && Array.isArray(groupCache)) {
-                                        if (currentSort === 'value_asc') groupCache.sort((a, b) => compareKey(a[0], b[0]));
-                                        else if (currentSort === 'value_desc') groupCache.sort((a, b) => compareKey(b[0], a[0]));
-                                        else if (currentSort === 'count_asc') groupCache.sort((a, b) => (a[1] ? a[1].length : 0) - (b[1] ? b[1].length : 0));
-                                        else groupCache.sort((a, b) => (b[1] ? b[1].length : 0) - (a[1] ? a[1].length : 0));
-                                    }
-                                } catch (e) { /* ignore sort errors */ }
-                            } catch (e) { /* ignore recompute errors */ }
-
-                            // Force a fresh render by clearing cacheKey so group() will
-                            // re-evaluate sorting and pagination using current controls.
-                            try { cacheKey = null; isComputing = false; } catch (e) { }
+                            // Just invalidate cache and let group() recompute cleanly
+                            try { cacheKey = null; groupCache = null; isComputing = false; } catch (e) { }
                             const fn = sec && sec.__group ? sec.__group : null;
                             if (typeof fn === 'function') fn();
                         } catch (e) { /* ignore */ }
@@ -12599,7 +12717,68 @@
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
             wrapInputs.appendChild(hint);
+
+            // Trash filter toggle
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell8_trashSel'; trashSel.className = 'trash-mode trash-toggle'; } catch (e) { }
+            trashSel.type = 'button'; trashSel.value = 'include'; trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.style.padding = '6px 10px';
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            // Fav filter toggle
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell8_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button'; favSel.value = 'exclude'; favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px'; favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            wrapInputs.append("Trash:", trashSel, "Fav:", favSel);
+
             try { wrapInputs.appendChild(recencySel); } catch (e) { }
+
+            // Sync trash/fav from other cells & redraw
+            try {
+                if (!window.__cell8_trash_listener_added) {
+                    document.addEventListener('trashchange', function () {
+                        try {
+                            const other = document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel');
+                            const cur = document.getElementById('cell8_trashSel');
+                            if (other && cur && cur.value !== other.value) { cur.value = other.value; cur.textContent = other.value; }
+                            try { run(); } catch (e) { }
+                        } catch (e) { }
+                    });
+                    window.__cell8_trash_listener_added = true;
+                }
+            } catch (e) { }
+            try {
+                if (!window.__cell8_fav_listener_added) {
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell8_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                try { run(); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell8_fav_listener_added = true;
+                }
+            } catch (e) { }
 
             function run() {
                 const _savedY = window.scrollY;
@@ -12664,11 +12843,31 @@
                     } catch (e) { return ''; }
                 };
 
-                const records = rows.filter(r => {
+                let records = rows.filter(r => {
                     const label = r.label;
                     for (let i = 0; i < 6; i++) if (pattern[i] !== "_" && pattern[i] !== label[i]) return false;
                     return true;
                 });
+                // Apply trash/fav filtering
+                try {
+                    if (trashSel.value === 'exclude') {
+                        const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                        const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                        if (trashedSet.size) records = records.filter(r => { for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false; return true; });
+                    }
+                } catch (e) { }
+                try {
+                    if (favSel.value === 'include') {
+                        let favs = [];
+                        try { if (typeof window.getFavItems === 'function') favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n)); else if (Array.isArray(window.__favItems)) favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n)); } catch (e) { }
+                        if (favs.length) {
+                            const favSet = new Set(favs);
+                            let op = '>=', req = 1;
+                            try { const fpop = document.getElementById('favPopup'); if (fpop) { const opEl = fpop.querySelector('#favFilterOp'); const cntEl = fpop.querySelector('#favFilterCount'); if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value; if (cntEl) { const v = Number(cntEl.value); if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v))); } } } catch (e) { }
+                            records = records.filter(r => { let mc = 0; for (const nn of r.nums) if (favSet.has(Number(nn))) mc++; if (op === '>=') return mc >= req; if (op === '=') return mc === req; if (op === '<=') return mc <= req; return mc >= req; });
+                        }
+                    }
+                } catch (e) { }
                 if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào khớp pattern</div>"; return; }
                 let display = records.slice();
                 if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
@@ -13352,7 +13551,68 @@
             hint.className = "muted";
             hint.style.cssText = "margin-top:8px;font-size:12px;";
             controls.appendChild(hint);
+
+            // Trash filter toggle
+            const trashSel = document.createElement('button');
+            try { trashSel.id = 'cell9_trashSel'; trashSel.className = 'trash-mode trash-toggle'; } catch (e) { }
+            trashSel.type = 'button'; trashSel.value = 'include'; trashSel.textContent = 'include';
+            trashSel.title = 'Click to toggle trash mode (include/exclude)';
+            trashSel.style.padding = '6px 10px';
+            trashSel.addEventListener('click', () => {
+                try {
+                    trashSel.value = (trashSel.value === 'include') ? 'exclude' : 'include';
+                    trashSel.textContent = trashSel.value;
+                    try { trashSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('trashchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            // Fav filter toggle
+            const favSel = document.createElement('button');
+            try { favSel.id = 'cell9_favSel'; favSel.className = 'fav-mode fav-toggle'; } catch (e) { }
+            favSel.type = 'button'; favSel.value = 'exclude'; favSel.textContent = 'exclude';
+            favSel.title = 'Click to toggle fav mode (include/exclude)';
+            favSel.style.padding = '6px 10px'; favSel.style.marginLeft = '6px';
+            favSel.addEventListener('click', () => {
+                try {
+                    favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
+                    favSel.textContent = favSel.value;
+                    try { favSel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { }
+                    try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { run(); } catch (e) { }
+                } catch (e) { }
+            });
+            controls.append("Trash:", trashSel, "Fav:", favSel);
+
             try { controls.appendChild(recencySel); } catch (e) { }
+
+            // Sync trash/fav from other cells & redraw
+            try {
+                if (!window.__cell9_trash_listener_added) {
+                    document.addEventListener('trashchange', function () {
+                        try {
+                            const other = document.getElementById('cell6_6_trashSel') || document.getElementById('cell6_5_trashSel');
+                            const cur = document.getElementById('cell9_trashSel');
+                            if (other && cur && cur.value !== other.value) { cur.value = other.value; cur.textContent = other.value; }
+                            try { run(); } catch (e) { }
+                        } catch (e) { }
+                    });
+                    window.__cell9_trash_listener_added = true;
+                }
+            } catch (e) { }
+            try {
+                if (!window.__cell9_fav_listener_added) {
+                    document.addEventListener('favchange', function () {
+                        try {
+                            const cur = document.getElementById('cell9_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                try { run(); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    });
+                    window.__cell9_fav_listener_added = true;
+                }
+            } catch (e) { }
 
             // Persistent auto-sync state for missing → trash
             let _c9MissingAutoSync = false;
@@ -13427,7 +13687,7 @@
                     if (!combinedSet.size) { wrap.innerHTML = "<div class='loader'>Điền ít nhất 1 số...</div>"; return; }
                     const requiredCount = Math.min(6, combinedSet.size);
                     const setVals = combinedSet;
-                    const records = rows.filter(r => {
+                    const records_raw = rows.filter(r => {
                         const rowSet = new Set(r.nums);
                         let matchCount = 0;
                         for (const n of combinedSet) {
@@ -13437,6 +13697,27 @@
                         if (consec.checked) return hasConsecutiveBlock(r.nums, setVals);
                         return true;
                     });
+                    // Apply trash/fav filtering
+                    let records = records_raw.slice();
+                    try {
+                        if (trashSel.value === 'exclude') {
+                            const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                            if (trashedSet.size) records = records.filter(r => { for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false; return true; });
+                        }
+                    } catch (e) { }
+                    try {
+                        if (favSel.value === 'include') {
+                            let favs = [];
+                            try { if (typeof window.getFavItems === 'function') favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n)); else if (Array.isArray(window.__favItems)) favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n)); } catch (e) { }
+                            if (favs.length) {
+                                const favSet = new Set(favs);
+                                let op = '>=', req = 1;
+                                try { const fpop = document.getElementById('favPopup'); if (fpop) { const opEl = fpop.querySelector('#favFilterOp'); const cntEl = fpop.querySelector('#favFilterCount'); if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value; if (cntEl) { const v = Number(cntEl.value); if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v))); } } } catch (e) { }
+                                records = records.filter(r => { let mc = 0; for (const nn of r.nums) if (favSet.has(Number(nn))) mc++; if (op === '>=') return mc >= req; if (op === '=') return mc === req; if (op === '<=') return mc <= req; return mc >= req; });
+                            }
+                        }
+                    } catch (e) { }
                     if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
                     let display = records.slice();
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
@@ -13621,7 +13902,7 @@
                     const inputKeys = Object.keys(inputFreq);
                     const keySet = new Set(inputKeys);
 
-                    const records = rows.filter(r => {
+                    const records_raw_label = rows.filter(r => {
                         const labelStr = r.label;
                         const rowFreq = {};
                         for (const ch of labelStr) rowFreq[ch] = (rowFreq[ch] || 0) + 1;
@@ -13643,6 +13924,27 @@
                         }
                         return true;
                     });
+                    // Apply trash/fav filtering (label mode)
+                    let records = records_raw_label.slice();
+                    try {
+                        if (trashSel.value === 'exclude') {
+                            const trashedArr = (typeof window.getTrashItems === 'function') ? window.getTrashItems() : (window.__trashItems || []);
+                            const trashedSet = new Set((trashedArr || []).map(n => Number(n)));
+                            if (trashedSet.size) records = records.filter(r => { for (const nn of r.nums) if (trashedSet.has(Number(nn))) return false; return true; });
+                        }
+                    } catch (e) { }
+                    try {
+                        if (favSel.value === 'include') {
+                            let favs = [];
+                            try { if (typeof window.getFavItems === 'function') favs = (window.getFavItems() || []).map(n => Number(n)).filter(n => Number.isFinite(n)); else if (Array.isArray(window.__favItems)) favs = (window.__favItems || []).map(n => Number(n)).filter(n => Number.isFinite(n)); } catch (e) { }
+                            if (favs.length) {
+                                const favSet = new Set(favs);
+                                let op = '>=', req = 1;
+                                try { const fpop = document.getElementById('favPopup'); if (fpop) { const opEl = fpop.querySelector('#favFilterOp'); const cntEl = fpop.querySelector('#favFilterCount'); if (opEl && ['>=', '<=', '='].includes(opEl.value)) op = opEl.value; if (cntEl) { const v = Number(cntEl.value); if (Number.isFinite(v)) req = Math.max(0, Math.min(6, Math.floor(v))); } } } catch (e) { }
+                                records = records.filter(r => { let mc = 0; for (const nn of r.nums) if (favSet.has(Number(nn))) mc++; if (op === '>=') return mc >= req; if (op === '=') return mc === req; if (op === '<=') return mc <= req; return mc >= req; });
+                            }
+                        }
+                    } catch (e) { }
                     if (!records.length) { wrap.innerHTML = "<div class='error'>Không có kỳ nào phù hợp</div>"; return; }
                     let display = records.slice();
                     if (typeof recencySel !== 'undefined' && recencySel.value === 'desc') display.reverse();
