@@ -3377,6 +3377,58 @@
             border-color: #616161;
         }
 
+        /* Purple highlight for missingpair numbers on Table T (clickable, white text) */
+        .cell67-num.cell67-mpurple {
+            background: #9c27b0;
+            color: #fff;
+            border-color: #9c27b0;
+            cursor: pointer;
+        }
+
+        /* Both missing (red) and mpurple (purple) → anti-diagonal split: red 80%, purple 20% */
+        .cell67-num.cell67-missing.cell67-mpurple {
+            background: linear-gradient(to bottom left, #d32f2f 80%, #9c27b0 80%);
+            color: transparent;
+            border-color: #7b1fa2;
+            cursor: not-allowed;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-mpurple {
+            background: #9c27b0;
+            color: #fff;
+            border-color: #9c27b0;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-missing.cell67-mpurple {
+            background: linear-gradient(to bottom left, #d32f2f 80%, #9c27b0 80%);
+            color: transparent;
+            border-color: #7b1fa2;
+        }
+
+        /* Bot table: allow natural wrapping in headers (no forced word-break) */
+        #cell67_pairTable thead th {
+            white-space: normal;
+        }
+
+        /* Neon glow animation on Table T grid when all 6 numbers are picked */
+        @keyframes cell67NeonPulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 6px 2px #00e676, 0 0 14px 4px #00e676, inset 0 0 4px 1px rgba(0, 230, 118, 0.15);
+                border-color: #00e676;
+            }
+
+            50% {
+                box-shadow: 0 0 10px 4px #76ff03, 0 0 22px 8px #76ff03, inset 0 0 6px 2px rgba(118, 255, 3, 0.2);
+                border-color: #76ff03;
+            }
+        }
+
+        .cell67-grid.cell67-neon {
+            animation: cell67NeonPulse 1.5s ease-in-out infinite;
+        }
+
         /* Cell6.7 tables */
         #cell6_7 table {
             width: 100%;
@@ -7604,6 +7656,36 @@
                 partners.forEach((p, idx) => { partnerRankMap67.set(`${x}-${p.y}`, idx + 1); });
             }
 
+            // ── MissingPair cache for individual numbers (lazy, same logic as Cell9) ──
+            const missingPairCache67 = new Map(); // num -> Set of "a-b" strings
+            function getMissingPairSet(x) {
+                if (missingPairCache67.has(x)) return missingPairCache67.get(x);
+                const records = rows.filter(r => r.nums.includes(x));
+                const seenPairs = new Set();
+                records.forEach(r => {
+                    const ns = r.nums.slice().map(Number).sort((a, b) => a - b);
+                    for (let i = 0; i < ns.length; i++)
+                        for (let j = i + 1; j < ns.length; j++)
+                            seenPairs.add(ns[i] + '-' + ns[j]);
+                });
+                const missing = new Set();
+                for (let a = 1; a <= 44; a++)
+                    for (let b = a + 1; b <= 45; b++)
+                        if (!seenPairs.has(a + '-' + b)) missing.add(a + '-' + b);
+                missingPairCache67.set(x, missing);
+                return missing;
+            }
+            // Compute intersection of missingpair(a) and missingpair(b) → set of "a-b" pair keys
+            function getMissingPairIntersection(a, b) {
+                const mpA = getMissingPairSet(a);
+                const mpB = getMissingPairSet(b);
+                const result = new Set();
+                for (const key of mpA) {
+                    if (mpB.has(key)) result.add(key);
+                }
+                return result;
+            }
+
             // ── Compute dontmatch for a single number x: sorted ascending by pair count ──
             function getDontmatch(x) {
                 const others = [];
@@ -7697,7 +7779,20 @@
             leftPanel.appendChild(gridT);
             // ── Clear button below Table T ──
             const clearBtnWrap = document.createElement('div');
-            clearBtnWrap.style.cssText = 'display:flex;justify-content:flex-end;margin-top:6px;';
+            clearBtnWrap.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;margin-top:6px;gap:8px;';
+            // ── a/b/c count spans ──
+            const countSpanA = document.createElement('span');
+            countSpanA.style.cssText = 'color:#2e7d32;font-weight:700;font-size:13px;';
+            countSpanA.textContent = '0';
+            const countSpanB = document.createElement('span');
+            countSpanB.style.cssText = 'color:#9c27b0;font-weight:700;font-size:13px;';
+            countSpanB.textContent = '0';
+            const countSpanC = document.createElement('span');
+            countSpanC.style.cssText = 'color:#d32f2f;font-weight:700;font-size:13px;';
+            countSpanC.textContent = '0';
+            clearBtnWrap.appendChild(countSpanA);
+            clearBtnWrap.appendChild(countSpanB);
+            clearBtnWrap.appendChild(countSpanC);
             const clearBtn67 = document.createElement('button');
             clearBtn67.textContent = 'Xoá';
             clearBtn67.className = 'clear-btn';
@@ -7758,9 +7853,9 @@
             bottomCard.className = 'card';
             bottomCard.id = 'cell67_bottomCard';
             let pairTableHtml = `<table id="cell67_pairTable" style="width:100%">
-                <thead><tr><th data-sort="pair" class="c67-sort-th c67-sort-active" style="cursor:pointer">Cặp</th><th data-sort="rankinpair" class="c67-sort-th" style="cursor:pointer">rankinpair</th><th data-sort="rank1" class="c67-sort-th" style="cursor:pointer">rank1</th><th data-sort="rank2" class="c67-sort-th" style="cursor:pointer">rank2</th><th data-sort="missing" class="c67-sort-th" style="cursor:pointer">Missing</th></tr></thead><tbody>`;
+                <thead><tr><th data-sort="pair" class="c67-sort-th c67-sort-active" style="cursor:pointer">Cặp</th><th data-sort="rankinpair" class="c67-sort-th" style="cursor:pointer">rankinpair</th><th data-sort="rank1" class="c67-sort-th" style="cursor:pointer">rank1</th><th data-sort="rank2" class="c67-sort-th" style="cursor:pointer">rank2</th><th data-sort="missing" class="c67-sort-th" style="cursor:pointer">Missing</th><th data-sort="missingpair" class="c67-sort-th" style="cursor:pointer">missingpair</th></tr></thead><tbody>`;
             for (let i = 0; i < 15; i++) {
-                pairTableHtml += `<tr><td></td><td></td><td></td><td></td><td></td></tr>`;
+                pairTableHtml += `<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
             }
             pairTableHtml += '</tbody></table>';
             bottomCard.innerHTML = pairTableHtml;
@@ -7876,7 +7971,9 @@
                 const cell = cellMap67[num];
                 if (!cell) return;
                 // Can't click disabled (grey/red) cells
-                if (cell.classList.contains('cell67-disabled') || cell.classList.contains('cell67-missing')) return;
+                // Block click on disabled (grey) or red cells, or cells that are BOTH red+purple (split)
+                if (cell.classList.contains('cell67-disabled')) return;
+                if (cell.classList.contains('cell67-missing')) return; // red or red+purple split → blocked
                 if (selectedSet.has(num)) {
                     // Deselect: remove from set and order, full rebuild
                     selectedSet.delete(num);
@@ -7908,19 +8005,65 @@
                 const unionMissing = new Set();
                 pairData.forEach(p => p.missing.forEach(n => unionMissing.add(n)));
 
+                // ── 2b. Compute missingpair intersection for each pair → purple set ──
+                // For each pair (a,b) in S: X_ab = intersection(missingpair(a), missingpair(b))
+                // Store X_ab per pair for display in bot table column
+                // Global purple set I = union of all unique numbers from all X_ab
+                const purpleNums = new Set();
+                if (S.length >= 2) {
+                    pairData.forEach(p => {
+                        const xSet = getMissingPairIntersection(p.a, p.b);
+                        // Filter out pairs where either number is already in unionMissing
+                        const filtered = new Set();
+                        for (const key of xSet) {
+                            const [a, b] = key.split('-').map(Number);
+                            if (!unionMissing.has(a) && !unionMissing.has(b)) filtered.add(key);
+                        }
+                        p.missingpairKeys = filtered; // Set of "a-b" strings (filtered)
+                        const nums = new Set();
+                        for (const key of filtered) {
+                            const [a, b] = key.split('-').map(Number);
+                            nums.add(a);
+                            nums.add(b);
+                        }
+                        p.missingpairNums = [...nums].sort((a, b) => a - b);
+                        p.missingpairNums.forEach(n => {
+                            if (!selectedSet.has(n)) purpleNums.add(n);
+                        });
+                    });
+                }
+                // Compute global I (all purple number union) for header display
+                const globalI = [...purpleNums].sort((a, b) => a - b);
+                // Compute global X (union of all per-pair X_ab) for header display
+                const globalXSet = new Set();
+                pairData.forEach(p => {
+                    if (p.missingpairKeys) p.missingpairKeys.forEach(k => globalXSet.add(k));
+                });
+
                 // ── 3. Update table T styling ──
+                let greenCount = 0, purpleCount = 0, redCount = 0;
                 for (let n = 1; n <= 45; n++) {
                     const c = cellMap67[n];
                     if (!c) continue;
-                    c.classList.remove('cell67-selected', 'cell67-missing', 'cell67-disabled');
+                    c.classList.remove('cell67-selected', 'cell67-missing', 'cell67-disabled', 'cell67-mpurple');
                     c.style.pointerEvents = '';
                     if (selectedSet.has(n)) {
                         c.classList.add('cell67-selected');
-                    } else if (unionMissing.has(n)) {
-                        c.classList.add('cell67-missing');
-                        c.style.pointerEvents = 'none';
+                        greenCount++;
+                    } else {
+                        const isRed = unionMissing.has(n);
+                        const isPurple = purpleNums.has(n);
+                        if (isRed) { c.classList.add('cell67-missing'); redCount++; }
+                        if (isPurple) { c.classList.add('cell67-mpurple'); purpleCount++; }
+                        // Red+purple or red-only → blocked; purple-only → still clickable
+                        if (isRed) c.style.pointerEvents = 'none';
                     }
                 }
+                // Update a/b/c counts and neon border
+                countSpanA.textContent = greenCount;
+                countSpanB.textContent = purpleCount;
+                countSpanC.textContent = redCount;
+                gridT.classList.toggle('cell67-neon', greenCount === 6);
 
                 // ── 4. Sort + Update pair/missing table (bottom right) ──
                 // Sort pairData based on active sort column + direction
@@ -7931,19 +8074,24 @@
                         p._r1 = partnerRankMap67.get(`${p.a}-${p.b}`) || 9999;
                         p._r2 = partnerRankMap67.get(`${p.b}-${p.a}`) || 9999;
                         p._mlen = p.missing.length;
+                        p._mplen = (p.missingpairNums && p.missingpairNums.length) || 0;
                     });
                     const dir = pairSortAsc ? 1 : -1; // 1=ascending, -1=descending
-                    if (pairSortCol === 'rankinpair') pairData.sort((x, y) => dir * (x._rip - y._rip));
-                    else if (pairSortCol === 'rank1') pairData.sort((x, y) => dir * (x._r1 - y._r1));
-                    else if (pairSortCol === 'rank2') pairData.sort((x, y) => dir * (x._r2 - y._r2));
+                    // For rank columns: "giảm dần" means best rank first (rank 1 on top),
+                    // so invert direction for rank columns (sort by rank importance, not rank number)
+                    const rankDir = -dir; // ascending rank number = descending rank importance
+                    if (pairSortCol === 'rankinpair') pairData.sort((x, y) => rankDir * (x._rip - y._rip));
+                    else if (pairSortCol === 'rank1') pairData.sort((x, y) => rankDir * (x._r1 - y._r1));
+                    else if (pairSortCol === 'rank2') pairData.sort((x, y) => rankDir * (x._r2 - y._r2));
                     else if (pairSortCol === 'missing') pairData.sort((x, y) => dir * (x._mlen - y._mlen));
+                    else if (pairSortCol === 'missingpair') pairData.sort((x, y) => dir * (x._mplen - y._mplen));
                 }
                 const pairTbody = document.querySelector('#cell67_pairTable tbody');
                 if (pairTbody) {
                     const rowEls = pairTbody.querySelectorAll('tr');
-                    const totalPairs = allPairsSorted67.length; // 990
+                    const totalPairs = 45 * 44 / 2; // always 990 (45C2)
                     // Determine active column index for highlight
-                    const sortColIdx = pairSortCol === 'pair' ? 0 : pairSortCol === 'rankinpair' ? 1 : pairSortCol === 'rank1' ? 2 : pairSortCol === 'rank2' ? 3 : 4;
+                    const sortColIdx = pairSortCol === 'pair' ? 0 : pairSortCol === 'rankinpair' ? 1 : pairSortCol === 'rank1' ? 2 : pairSortCol === 'rank2' ? 3 : pairSortCol === 'missingpair' ? 5 : 4;
                     for (let i = 0; i < 15; i++) {
                         const tr = rowEls[i];
                         if (!tr) continue;
@@ -7960,25 +8108,40 @@
                             // rank2: x=b, dynamic=a
                             const r2 = partnerRankMap67.get(`${p.b}-${p.a}`);
                             tr.children[3].textContent = r2 != null ? `${r2}/44` : '';
-                            tr.children[4].textContent = p.missing.join(',');
+                            tr.children[4].textContent = p.missing.join(',\u200B');
+                            // missingpair: intersection pairs displayed as (a,b) format
+                            if (p.missingpairKeys && p.missingpairKeys.size > 0) {
+                                tr.children[5].textContent = [...p.missingpairKeys].map(k => { const [a, b] = k.split('-').map(Number); return `(${a},${b})`; }).join(', ');
+                            } else {
+                                tr.children[5].textContent = '';
+                            }
                         } else {
-                            for (let c = 0; c < 5; c++) tr.children[c].textContent = '';
+                            for (let c = 0; c < 6; c++) tr.children[c].textContent = '';
                         }
-                        // Apply sort-active-col class to the sorted column cells (all 5 columns)
-                        for (let c = 0; c < 5; c++) {
+                        // Apply sort-active-col class to the sorted column cells (all 6 columns)
+                        for (let c = 0; c < 6; c++) {
                             tr.children[c].classList.toggle('c67-sort-active-col', c === sortColIdx);
                         }
                     }
                 }
 
-                // ── 5. Dynamic Missing[x] header ──
-                const missingTh = document.querySelector('#cell67_pairTable thead th:last-child');
+                // ── 5. Dynamic Missing[x] + missingpair[y] headers ──
+                const missingTh = document.querySelector('#cell67_pairTable thead th[data-sort="missing"]');
                 if (missingTh) {
                     if (unionMissing.size > 0) {
                         const sortedMissing = [...unionMissing].sort((a, b) => a - b);
-                        missingTh.innerHTML = `Missing<span style="background:#c62828;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700">[${unionMissing.size}]</span>: ${sortedMissing.join(',')}`;
+                        missingTh.innerHTML = `Missing<span style="background:#c62828;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700;margin:0 2px">[${unionMissing.size}]</span>: ${sortedMissing.join(',\u200B')}`;
                     } else {
                         missingTh.textContent = 'Missing';
+                    }
+                }
+                const mpTh = document.querySelector('#cell67_pairTable thead th[data-sort="missingpair"]');
+                if (mpTh) {
+                    if (globalXSet.size > 0) {
+                        const sortedPairs = [...globalXSet].map(k => { const [a, b] = k.split('-').map(Number); return `(${a},${b})`; }).sort();
+                        mpTh.innerHTML = `missingpair<span style="background:#9c27b0;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700;margin:0 2px">[${globalXSet.size}]</span>: ${sortedPairs.join(', ')}`;
+                    } else {
+                        mpTh.textContent = 'missingpair';
                     }
                 }
 
@@ -8018,6 +8181,7 @@
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
                     topTbody.innerHTML = `<tr${resultAttr}><td>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
                 }
+
             }
 
             // ═══ Programmatic pick: clear and select given numbers on Table T ═══
@@ -13299,7 +13463,33 @@
                     const _missingHtml9 = _missing9.length
                         ? `<div class='muted cell9-missing-line' style='flex-basis:100%;cursor:pointer;user-select:none;margin-top:2px;font-size:12px;${_c9MissingAutoSync ? 'text-decoration:line-through;opacity:0.5;' : ''}' title='Dblclick để toggle đồng bộ liên tục vào trash'>missing[${_missing9.length}]${_syncIndicator9}: ${_missing9.join(', ')}</div>`
                         : '';
-                    let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div>${_missingHtml9}<div class='grid-centered'>`;
+                    // When S has exactly 1 number, compute missingpair:
+                    // Among all draws containing S, collect every pair that appeared.
+                    // missingpair = pairs from 45C2 (990) NOT seen in those draws.
+                    let _missingPairHtml9 = '';
+                    if (combinedSet.size === 1) {
+                        const seenPairs = new Set();
+                        records.forEach(r => {
+                            const ns = r.nums.slice().map(Number).sort((a, b) => a - b);
+                            for (let i = 0; i < ns.length; i++) {
+                                for (let j = i + 1; j < ns.length; j++) {
+                                    seenPairs.add(ns[i] + '-' + ns[j]);
+                                }
+                            }
+                        });
+                        const missingPairs = [];
+                        for (let a = 1; a <= 44; a++) {
+                            for (let b = a + 1; b <= 45; b++) {
+                                if (!seenPairs.has(a + '-' + b)) {
+                                    missingPairs.push(`(${a},${b})`);
+                                }
+                            }
+                        }
+                        if (missingPairs.length) {
+                            _missingPairHtml9 = `<div class='muted' style='flex-basis:100%;margin-top:2px;font-size:12px'>missingpair[${missingPairs.length}]: ${missingPairs.join(', ')}</div>`;
+                        }
+                    }
+                    let html = `<div class='muted' style='flex-basis:100%'>${records.length} kỳ · S=${sStr} · cần ≥${requiredCount} số</div>${_missingHtml9}${_missingPairHtml9}<div class='grid-centered'>`;
                     const chunk = 15;
                     for (let i = 0; i < display.length; i += chunk) {
                         html += "<div class='card'><table style='width:100%'><thead><tr><th>Ngày</th><th>KQ</th><th>Label</th><th>rule</th><th>k</th><th>score</th></tr></thead><tbody>";
@@ -20668,7 +20858,7 @@
                 if (pairAppeared) return;
                 pairAppeared = new Map();
                 (window.rows || []).forEach(r => {
-                    const ns = Array.isArray(r.nums) ? r.nums : [];
+                    const ns = Array.isArray(r.nums) ? r.nums.map(Number) : [];
                     const sorted = ns.slice().sort((a, b) => a - b);
                     for (let i = 0; i < sorted.length; i++) {
                         for (let j = i + 1; j < sorted.length; j++) {
@@ -20693,19 +20883,23 @@
                 if (!Array.isArray(sixNums) || sixNums.length !== 6) return 0;
                 const nums = sixNums.map(Number).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
                 if (nums.length !== 6) return 0;
+                // The 6 input numbers are always "present" in the combination itself,
+                // so they can never be missing. Max k = 45 - 6 = 39.
+                const inputSet = new Set(nums);
                 const union = new Set();
                 for (let i = 0; i < nums.length; i++) {
                     for (let j = i + 1; j < nums.length; j++) {
                         const a = Math.min(nums[i], nums[j]), b = Math.max(nums[i], nums[j]);
                         const appeared = pairAppeared.get(a + '-' + b);
                         if (appeared) {
-                            for (let n = 1; n <= 45; n++) { if (!appeared.has(n)) union.add(n); }
+                            for (let n = 1; n <= 45; n++) { if (!appeared.has(n) && !inputSet.has(n)) union.add(n); }
                         } else {
-                            for (let n = 1; n <= 45; n++) union.add(n);
+                            for (let n = 1; n <= 45; n++) { if (!inputSet.has(n)) union.add(n); }
                         }
                     }
                 }
-                return union.size;
+                // Hard clamp: k can never exceed 45-6=39 (the 6 input numbers can't be missing)
+                return Math.min(union.size, 39);
             };
         })();
     </script>
