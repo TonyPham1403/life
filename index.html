@@ -7886,6 +7886,7 @@
             let cell67_dblclickResult = null; // data-result string of the last dblclick'd faded row
             let cell67_syncActive = false; // true = Get sync mode active
             let cell67_locActive = false; // true = filter faded rows by rank/count condition
+            let cell67_lastStateKey = ''; // state key for pagination reset detection
 
             // ── Build pairCounts once (same as Cell6.5 / Cell9) ──
             const pairCounts67 = new Map();
@@ -8470,7 +8471,19 @@
             }
 
             // ═══ Full rebuild after selection change ═══
+            function cell67_computeStateKey() {
+                // Only track filter/control state — NOT selected numbers.
+                // NR row values only matter when Get sync is active.
+                const nrVals = cell67_syncActive ? nrRows.map(r => r.numInp ? String(r.numInp.value || '') : '').join(',') : '';
+                return `${rfOp.value}|${rfInp.value}|${cfOp.value}|${cfInp.value}|${cell67_locActive}|${cell67_syncActive}|${nrVals}`;
+            }
             function rebuildAll() {
+                // Check if state changed → reset pagination index
+                const curKey = cell67_computeStateKey();
+                if (curKey !== cell67_lastStateKey) {
+                    cell67_expandPage = 0;
+                    cell67_lastStateKey = curKey;
+                }
                 const S = [...selectedOrder];
 
                 // ── 1. Compute all pairs from S and their missing ──
@@ -8781,7 +8794,7 @@
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
                     // Neon class for date cell when T matches a historical 6-number record exactly
                     const dateCellClass = hasExactDateMatch ? ' class="cell67-neon-date"' : '';
-                    const hpHtml = (S.length === 6) ? computeHighestPairrank(currentNums) : '';
+                    const hpHtml = (S.length === 6) ? (cell67_locActive ? computeFilteredPairrank(currentNums) : computeHighestPairrank(currentNums)) : '';
 
                     // Build top table rows
                     let topRows = `<tr${resultAttr}><td${dateCellClass}>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${hpHtml}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
@@ -8803,7 +8816,7 @@
                                 const rRule = computeRule67(r.nums);
                                 const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                                 const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                const rHp = computeHighestPairrank(rNumsSorted);
+                                const rHp = cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted);
                                 topRows += `<tr data-result="${rNumsSorted.join(',')}"><td class="cell67-neon-date">${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                             });
                         }
