@@ -3448,6 +3448,25 @@
             animation: cell67NeonPulse 1.5s ease-in-out infinite;
         }
 
+        /* Neon glow on date cell when Table T matches a historical record */
+        @keyframes cell67DateNeonPulse {
+
+            0%,
+            100% {
+                text-shadow: 0 0 6px #00e676, 0 0 14px #00e676;
+            }
+
+            50% {
+                text-shadow: 0 0 10px #76ff03, 0 0 22px #76ff03;
+            }
+        }
+
+        td.cell67-neon-date {
+            animation: cell67DateNeonPulse 1.5s ease-in-out infinite;
+            color: #00e676 !important;
+            font-weight: 800 !important;
+        }
+
         /* Cell6.7 tables */
         #cell6_7 table {
             width: 100%;
@@ -7136,6 +7155,7 @@
                     favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
                     favSel.textContent = favSel.value;
                     try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { if (typeof draw === 'function') draw(); } catch (e) { }
                 } catch (e) { }
             });
 
@@ -7146,7 +7166,10 @@
                     secEl.__favListenerAdded = true;
                     document.addEventListener('favchange', function () {
                         try {
-                            try { draw(); } catch (err) { /* ignore */ }
+                            const cur = document.getElementById('cell6_6_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                try { draw(); } catch (err) { /* ignore */ }
+                            }
                         } catch (e) { }
                     });
                 }
@@ -7307,16 +7330,18 @@
                                 }
                             } catch (e) { }
 
-                            arrGroups = arrGroups.filter(([key, list]) => {
-                                try {
-                                    const nums = key.split('-').map(Number);
-                                    let matchCount = 0;
-                                    for (const n of nums) if (fset.has(Number(n))) matchCount++;
-                                    if (op === '>=') return matchCount >= req;
-                                    if (op === '=') return matchCount === req;
-                                    if (op === '<=') return matchCount <= req;
-                                    return matchCount >= req;
-                                } catch (e) { return false; }
+                            arrGroups = arrGroups.map(([key, list]) => {
+                                const filtered = (list || []).filter(r => {
+                                    try {
+                                        let matchCount = 0;
+                                        for (const n of r.nums) if (fset.has(Number(n))) matchCount++;
+                                        if (op === '>=') return matchCount >= req;
+                                        if (op === '=') return matchCount === req;
+                                        if (op === '<=') return matchCount <= req;
+                                        return matchCount >= req;
+                                    } catch (e) { return false; }
+                                });
+                                return [key, filtered];
                             });
                         }
                     }
@@ -7717,14 +7742,74 @@
         function renderCell6_7() {
             const body = sectionShell("cell6_7", "Cell6.7 · Dò cặp", "Chọn số từ bảng 45 số để phân tích cặp và missing.");
             const controls = document.createElement("div"); controls.className = "controls";
-            // Controls placeholder — empty for now
+            controls.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;';
+            // ── Rank filter UI ──
+            const rfLabel = document.createElement('span');
+            rfLabel.textContent = 'rank';
+            rfLabel.style.cssText = 'font-weight:600;font-size:13px;';
+            const rfOp = document.createElement('select');
+            rfOp.style.cssText = 'font-size:13px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--text);';
+            ['=', '<=', '>='].forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; rfOp.appendChild(o); });
+            const rfWrap = document.createElement('div');
+            rfWrap.style.cssText = 'position:relative;display:inline-block;';
+            const rfInp = document.createElement('input');
+            rfInp.type = 'number'; rfInp.min = 1; rfInp.max = 44;
+            rfInp.style.cssText = 'width:48px;box-sizing:border-box;text-align:center;padding-right:22px;border-radius:4px;border:1px solid var(--border);font-size:13px;';
+            const rfBtnGrp = document.createElement('div');
+            rfBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
+            const rfArrowSt = 'width:14px;height:9px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:7px;line-height:9px;text-align:center;font-weight:700;';
+            const rfUp = document.createElement('button'); rfUp.type = 'button'; rfUp.innerHTML = '▲'; rfUp.style.cssText = rfArrowSt;
+            const rfDn = document.createElement('button'); rfDn.type = 'button'; rfDn.innerHTML = '▼'; rfDn.style.cssText = rfArrowSt;
+            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; rfInp.value = n; recomputeRankFilter(); });
+            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rfInp.value = n; recomputeRankFilter(); });
+            rfBtnGrp.appendChild(rfUp); rfBtnGrp.appendChild(rfDn);
+            rfWrap.appendChild(rfInp); rfWrap.appendChild(rfBtnGrp);
+            const rfResult = document.createElement('span');
+            rfResult.style.cssText = 'font-size:13px;font-weight:700;min-width:28px;text-align:center;display:inline-block;padding:2px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);color:var(--text);';
+            rfResult.textContent = '-';
+            rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilter(); });
+            rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilter(); });
+            rfOp.addEventListener('change', () => { recomputeRankFilter(); });
+            controls.appendChild(rfLabel);
+            controls.appendChild(rfOp);
+            controls.appendChild(rfWrap);
+            controls.appendChild(rfResult);
             body.parentElement.querySelector('h2').after(controls);
+
+            // ── Rank filter state + logic ──
+            let lastSourceRecords = [];
+            function recomputeRankFilter() {
+                const val = parseInt(rfInp.value, 10);
+                if (!Number.isFinite(val) || val < 1 || val > 44 || lastSourceRecords.length === 0) {
+                    rfResult.textContent = '-';
+                    return;
+                }
+                const op = rfOp.value;
+                const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
+                let count = 0;
+                for (const rec of lastSourceRecords) {
+                    const ns = rec.nums;
+                    if (!ns || ns.length < 2) continue;
+                    let found = false;
+                    for (let i = 0; i < ns.length && !found; i++) {
+                        for (let j = i + 1; j < ns.length && !found; j++) {
+                            const a = Math.min(ns[i], ns[j]), b = Math.max(ns[i], ns[j]);
+                            const r1 = partnerRankMap67.get(`${a}-${b}`);
+                            const r2 = partnerRankMap67.get(`${b}-${a}`);
+                            if ((r1 && check(r1)) || (r2 && check(r2))) found = true;
+                        }
+                    }
+                    if (found) count++;
+                }
+                rfResult.textContent = count;
+            }
 
             // ── State ──
             const selectedSet = new Set(); // numbers user has picked (ordered via array)
             const selectedOrder = [];       // insertion order
             let pairSortCol = 'pair'; // active sort column: 'pair'|'rankinpair'|'rank1'|'rank2'|'missing'
             let pairSortAsc = false; // false = descending (default first click), true = ascending (toggle)
+            let topSorted = false;   // false = show numbers in insertion order, true = sorted ascending
 
             // ── Build pairCounts once (same as Cell6.5 / Cell9) ──
             const pairCounts67 = new Map();
@@ -7753,6 +7838,16 @@
                 }
                 partners.sort((A, B) => (B.c - A.c) || (A.y - B.y));
                 partners.forEach((p, idx) => { partnerRankMap67.set(`${x}-${p.y}`, idx + 1); });
+            }
+            // reverse lookup: partnerByRank67[x][rank] = y
+            const partnerByRank67 = {};
+            for (let x = 1; x <= 45; x++) {
+                partnerByRank67[x] = {};
+                for (let y = 1; y <= 45; y++) {
+                    if (y === x) continue;
+                    const rank = partnerRankMap67.get(`${x}-${y}`);
+                    if (rank) partnerByRank67[x][rank] = y;
+                }
             }
 
             // ── MissingPair cache for individual numbers (lazy, same logic as Cell9) ──
@@ -7878,7 +7973,26 @@
             leftPanel.appendChild(gridT);
             // ── Clear button below Table T ──
             const clearBtnWrap = document.createElement('div');
-            clearBtnWrap.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;margin-top:6px;gap:8px;';
+            clearBtnWrap.style.cssText = 'display:flex;align-items:center;margin-top:6px;gap:8px;';
+            // ── "Get" button (far left, green) ──
+            const getBtn67 = document.createElement('button');
+            getBtn67.textContent = 'Get';
+            getBtn67.style.cssText = 'font-size:13px;padding:4px 14px;cursor:pointer;background:#c8e6c9;color:#1b5e20;border:1px solid #a5d6a7;border-radius:6px;font-weight:600;';
+            getBtn67.addEventListener('click', () => {
+                const nums = [];
+                nrRows.forEach(r => {
+                    const x = parseInt(r.numInp.value, 10);
+                    if (Number.isFinite(x) && x >= 1 && x <= 45) nums.push(x);
+                    const yVal = parseInt(r.resNumEl.textContent, 10);
+                    if (Number.isFinite(yVal) && yVal >= 1 && yVal <= 45) nums.push(yVal);
+                });
+                if (nums.length > 0) pickNumbers(nums.slice(0, 6));
+            });
+            clearBtnWrap.appendChild(getBtn67);
+            // ── spacer to push remaining items right ──
+            const btnSpacer = document.createElement('div');
+            btnSpacer.style.cssText = 'flex:1;';
+            clearBtnWrap.appendChild(btnSpacer);
             // ── a/b/c count spans ──
             const countSpanA = document.createElement('span');
             countSpanA.style.cssText = 'color:#2e7d32;font-weight:700;font-size:13px;';
@@ -7909,6 +8023,167 @@
             });
             clearBtnWrap.appendChild(clearBtn67);
             leftPanel.appendChild(clearBtnWrap);
+
+            // ── 3 Num/Rank input rows ──
+            const nrRows = [];
+            const nrContainer = document.createElement('div');
+            nrContainer.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:6px;';
+
+            function computeNR(row) {
+                const x = parseInt(row.numInp.value, 10);
+                const r = parseInt(row.rankInp.value, 10);
+                if (!Number.isFinite(x) || x < 1 || x > 45 || !Number.isFinite(r) || r < 1 || r > 44) {
+                    row.resNumEl.textContent = '-';
+                    row.resRankEl.textContent = '-';
+                    return;
+                }
+                const y = partnerByRank67[x] ? partnerByRank67[x][r] : undefined;
+                if (!y) { row.resNumEl.textContent = '-'; row.resRankEl.textContent = '-'; return; }
+                row.resNumEl.textContent = String(y);
+                const reverseRank = partnerRankMap67.get(`${y}-${x}`);
+                row.resRankEl.textContent = reverseRank ? String(reverseRank) + '/44' : '-';
+            }
+
+            for (let ri = 0; ri < 3; ri++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+                // ── num input with up/down wrap + drag-swap ──
+                const numInp = document.createElement('input');
+                numInp.type = 'number'; numInp.min = 1; numInp.max = 45;
+                numInp.placeholder = `#${ri + 1}`;
+                numInp.style.cssText = 'width:60px;box-sizing:border-box;padding-right:28px;text-align:center;';
+                const numWrap = document.createElement('div');
+                numWrap.style.cssText = 'position:relative;display:inline-block;';
+                numWrap.dataset.nrType = 'num';
+                numWrap.dataset.nrIdx = ri;
+                const numBtnGrp = document.createElement('div');
+                numBtnGrp.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;z-index:3;';
+                const arrowSt = 'width:18px;height:10px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:8px;line-height:10px;text-align:center;font-weight:700;';
+                const numUp = document.createElement('button'); numUp.type = 'button'; numUp.innerHTML = '▲'; numUp.style.cssText = arrowSt;
+                const numDn = document.createElement('button'); numDn.type = 'button'; numDn.innerHTML = '▼'; numDn.style.cssText = arrowSt;
+                numUp.addEventListener('click', () => { let n = parseInt(numInp.value, 10) || 0; n = n >= 45 ? 1 : n + 1; numInp.value = n; computeNR(nrRows[ri]); updateNumDrag(); });
+                numDn.addEventListener('click', () => { let n = parseInt(numInp.value, 10) || 0; n = n <= 1 ? 45 : n - 1; numInp.value = n; computeNR(nrRows[ri]); updateNumDrag(); });
+                numBtnGrp.appendChild(numUp); numBtnGrp.appendChild(numDn);
+                numWrap.appendChild(numInp); numWrap.appendChild(numBtnGrp);
+
+                // drag-swap for num
+                const updateNumDrag = () => {
+                    const v = String(numInp.value ?? '').trim();
+                    numWrap.draggable = v !== '';
+                    numWrap.style.cursor = v !== '' ? 'grab' : 'default';
+                };
+                numWrap.addEventListener('dragstart', (e) => {
+                    numWrap.__dropHandled = false;
+                    window.__nrDrag = { type: 'num', idx: ri, inp: numInp, wrap: numWrap };
+                    try { e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', numInp.value); } catch (er) { }
+                    numWrap.style.opacity = '0.5';
+                });
+                numWrap.addEventListener('dragend', () => {
+                    numWrap.style.opacity = '';
+                    if (!numWrap.__dropHandled && String(numInp.value ?? '').trim() !== '') { numInp.value = ''; computeNR(nrRows[ri]); updateNumDrag(); }
+                    numWrap.__dropHandled = false;
+                    window.__nrDrag = null;
+                });
+                numWrap.addEventListener('dragover', (e) => { e.preventDefault(); if (window.__nrDrag && window.__nrDrag.type === 'num') numWrap.style.backgroundColor = 'rgba(56,239,125,0.08)'; });
+                numWrap.addEventListener('dragleave', () => { numWrap.style.backgroundColor = ''; });
+                numWrap.addEventListener('drop', (e) => {
+                    e.preventDefault(); numWrap.style.backgroundColor = '';
+                    if (window.__nrDrag && window.__nrDrag.type === 'num' && window.__nrDrag.idx !== ri) {
+                        const srcInp = window.__nrDrag.inp;
+                        const srcVal = srcInp.value; const tgtVal = numInp.value;
+                        srcInp.value = tgtVal; numInp.value = srcVal;
+                        window.__nrDrag.wrap.__dropHandled = true;
+                        numWrap.__dropHandled = true;
+                        computeNR(nrRows[window.__nrDrag.idx]); computeNR(nrRows[ri]);
+                        nrRows.forEach((r, i) => { const v = String(r.numInp.value ?? '').trim(); const w = r.numInp.parentElement; if (w) { w.draggable = v !== ''; w.style.cursor = v !== '' ? 'grab' : 'default'; } });
+                    }
+                });
+                numInp.addEventListener('input', () => { let n = parseInt(numInp.value, 10); if (Number.isFinite(n)) { if (n < 1) numInp.value = 1; if (n > 45) numInp.value = 45; } computeNR(nrRows[ri]); updateNumDrag(); });
+                numInp.addEventListener('change', () => { let n = parseInt(numInp.value, 10); if (Number.isFinite(n)) { if (n < 1) numInp.value = 1; if (n > 45) numInp.value = 45; } computeNR(nrRows[ri]); updateNumDrag(); });
+                updateNumDrag();
+
+                // ── rank input (yellow border, smaller, with up/down + drag-swap) ──
+                const rankInp = document.createElement('input');
+                rankInp.type = 'number'; rankInp.min = 1; rankInp.max = 44;
+                rankInp.placeholder = 'rank';
+                rankInp.style.cssText = 'width:54px;box-sizing:border-box;text-align:center;padding-right:22px;border:2px solid #fbc02d;border-radius:4px;font-size:12px;';
+                const rankWrap = document.createElement('div');
+                rankWrap.style.cssText = 'position:relative;display:inline-block;';
+                rankWrap.dataset.nrType = 'rank';
+                rankWrap.dataset.nrIdx = ri;
+                const rankBtnGrp = document.createElement('div');
+                rankBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
+                const rankArrowSt = 'width:14px;height:9px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:7px;line-height:9px;text-align:center;font-weight:700;';
+                const rankUp = document.createElement('button'); rankUp.type = 'button'; rankUp.innerHTML = '▲'; rankUp.style.cssText = rankArrowSt;
+                const rankDn = document.createElement('button'); rankDn.type = 'button'; rankDn.innerHTML = '▼'; rankDn.style.cssText = rankArrowSt;
+                rankUp.addEventListener('click', () => { let n = parseInt(rankInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; rankInp.value = n; computeNR(nrRows[ri]); updateRankDrag(); });
+                rankDn.addEventListener('click', () => { let n = parseInt(rankInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rankInp.value = n; computeNR(nrRows[ri]); updateRankDrag(); });
+                rankBtnGrp.appendChild(rankUp); rankBtnGrp.appendChild(rankDn);
+                rankWrap.appendChild(rankInp); rankWrap.appendChild(rankBtnGrp);
+
+                // drag-swap for rank
+                const updateRankDrag = () => {
+                    const v = String(rankInp.value ?? '').trim();
+                    rankWrap.draggable = v !== '';
+                    rankWrap.style.cursor = v !== '' ? 'grab' : 'default';
+                };
+                rankWrap.addEventListener('dragstart', (e) => {
+                    rankWrap.__dropHandled = false;
+                    window.__nrDrag = { type: 'rank', idx: ri, inp: rankInp, wrap: rankWrap };
+                    try { e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', rankInp.value); } catch (er) { }
+                    rankWrap.style.opacity = '0.5';
+                });
+                rankWrap.addEventListener('dragend', () => {
+                    rankWrap.style.opacity = '';
+                    if (!rankWrap.__dropHandled && String(rankInp.value ?? '').trim() !== '') { rankInp.value = ''; computeNR(nrRows[ri]); updateRankDrag(); }
+                    rankWrap.__dropHandled = false;
+                    window.__nrDrag = null;
+                });
+                rankWrap.addEventListener('dragover', (e) => { e.preventDefault(); if (window.__nrDrag && window.__nrDrag.type === 'rank') rankWrap.style.backgroundColor = 'rgba(251,192,45,0.12)'; });
+                rankWrap.addEventListener('dragleave', () => { rankWrap.style.backgroundColor = ''; });
+                rankWrap.addEventListener('drop', (e) => {
+                    e.preventDefault(); rankWrap.style.backgroundColor = '';
+                    if (window.__nrDrag && window.__nrDrag.type === 'rank' && window.__nrDrag.idx !== ri) {
+                        const srcInp = window.__nrDrag.inp;
+                        const srcVal = srcInp.value; const tgtVal = rankInp.value;
+                        srcInp.value = tgtVal; rankInp.value = srcVal;
+                        window.__nrDrag.wrap.__dropHandled = true;
+                        rankWrap.__dropHandled = true;
+                        computeNR(nrRows[window.__nrDrag.idx]); computeNR(nrRows[ri]);
+                        nrRows.forEach((r, i) => { const v = String(r.rankInp.value ?? '').trim(); const w = r.rankInp.parentElement; if (w) { w.draggable = v !== ''; w.style.cursor = v !== '' ? 'grab' : 'default'; } });
+                    }
+                });
+                rankInp.addEventListener('input', () => { let n = parseInt(rankInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rankInp.value = 1; if (n > 44) rankInp.value = 44; } computeNR(nrRows[ri]); updateRankDrag(); });
+                rankInp.addEventListener('change', () => { let n = parseInt(rankInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rankInp.value = 1; if (n > 44) rankInp.value = 44; } computeNR(nrRows[ri]); updateRankDrag(); });
+                updateRankDrag();
+                const rankLabel = document.createElement('span');
+                rankLabel.textContent = '/44';
+                rankLabel.style.cssText = 'font-size:11px;color:var(--muted);';
+
+                // ── arrow separator ──
+                const arrow = document.createElement('span');
+                arrow.textContent = '→';
+                arrow.style.cssText = 'font-size:14px;color:var(--muted);';
+
+                // ── result num (green bg white text) + result rank ──
+                const resNumEl = document.createElement('span');
+                resNumEl.textContent = '-';
+                resNumEl.style.cssText = 'font-weight:700;min-width:26px;text-align:center;display:inline-block;background:#2e7d32;color:#fff;border-radius:4px;padding:2px 6px;font-size:13px;';
+                const resRankEl = document.createElement('span');
+                resRankEl.textContent = '-';
+                resRankEl.style.cssText = 'font-size:12px;color:var(--muted);min-width:36px;text-align:center;';
+
+                rowDiv.appendChild(numWrap);
+                rowDiv.appendChild(rankWrap);
+                rowDiv.appendChild(rankLabel);
+                rowDiv.appendChild(arrow);
+                rowDiv.appendChild(resNumEl);
+                rowDiv.appendChild(resRankEl);
+                nrContainer.appendChild(rowDiv);
+                nrRows.push({ numInp, rankInp, resNumEl, resRankEl });
+            }
+            leftPanel.appendChild(nrContainer);
             wrapper.appendChild(leftPanel);
 
             // ═══ RIGHT panel ═══
@@ -7989,6 +8264,20 @@
 
             wrapper.appendChild(rightPanel);
             body.appendChild(wrapper);
+
+            // ═══ Tab key: toggle ordered/sorted display in top table ═══
+            (function () {
+                const sec67 = document.getElementById('cell6_7');
+                if (!sec67) return;
+                document.addEventListener('keydown', (ev) => {
+                    if (ev.key !== 'Tab') return;
+                    // Only respond when cell6_7 is the active/visible section
+                    try { if (sec67.style.display === 'none' || sec67.offsetParent === null) return; } catch (e) { }
+                    ev.preventDefault();
+                    topSorted = !topSorted;
+                    rebuildAll();
+                });
+            })();
 
             // ═══ Shift-click on bottom pair table → navigate to Cell6.5 truy x bộ 2 ═══
             (function () {
@@ -8248,8 +8537,11 @@
                 const topTbody = document.querySelector('#cell67_topTable tbody');
                 if (topTbody) {
                     const currentNums = S.slice().sort((a, b) => a - b);
-                    const numsHtml = currentNums.map(n =>
-                        `<span class="pill" style="background:#2e7d32;color:#fff;">${n}</span>`
+                    // Show ordered (insertion order) by default; sorted when topSorted toggled via Tab
+                    const displayNums = topSorted ? currentNums.slice() : S.slice();
+                    const pillStyle = 'background:#2e7d32;color:#fff;display:inline-block;min-width:28px;text-align:center;padding:2px 6px;border-radius:6px;font-weight:700;font-size:13px;';
+                    const numsHtml = displayNums.map(n =>
+                        `<span class="pill" style="${pillStyle}">${n}</span>`
                     ).join(' ');
                     const ruleHtml = (S.length === 6) ? computeRule67(S) : '';
                     // Score: same formula as Cell6.5 unpair — __getScoreForResult → __scoreInput
@@ -8290,6 +8582,7 @@
 
                     // Determine date display: show actual date(s) for 6-number exact matches
                     let dateDisplay = '?';
+                    let hasExactDateMatch = false;
                     if (S.length === 6) {
                         const exactMatches = matchingRecords.filter(r => {
                             if (r.nums.length !== 6) return false;
@@ -8298,6 +8591,7 @@
                         });
                         if (exactMatches.length > 0) {
                             dateDisplay = exactMatches.map(r => r.date).join(', ');
+                            hasExactDateMatch = true;
                         } else if (altClickApply && altClickDate) {
                             dateDisplay = altClickDate;
                         }
@@ -8311,9 +8605,11 @@
                         kHtml67 = window.__kHtml(currentNums.join(','));
                     }
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
+                    // Neon class for date cell when T matches a historical 6-number record exactly
+                    const dateCellClass = hasExactDateMatch ? ' class="cell67-neon-date"' : '';
 
                     // Build top table rows
-                    let topRows = `<tr${resultAttr}><td>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
+                    let topRows = `<tr${resultAttr}><td${dateCellClass}>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
 
                     // When 6 numbers picked and there are exact matches, show all matching result rows
                     if (S.length === 6) {
@@ -8326,33 +8622,166 @@
                             topRows = '';
                             exactMatches.forEach(r => {
                                 const rNums = r.nums.slice().sort((a, b) => a - b);
-                                const rNumsHtml = rNums.map(n => `<span class="pill" style="background:#2e7d32;color:#fff;">${n}</span>`).join(' ');
+                                const rNumsHtml = rNums.map(n => `<span class="pill" style="${pillStyle}">${n}</span>`).join(' ');
                                 const rRule = computeRule67(r.nums);
                                 const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                                 const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                topRows += `<tr data-result="${rNums.join(',')}"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
+                                topRows += `<tr data-result="${rNums.join(',')}"><td class="cell67-neon-date">${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                             });
                         }
                     }
 
                     topTbody.innerHTML = topRows;
 
-                    // ── 7. Append "... x dòng nữa" as a row inside topTable ──
+                    // ── 7. Append "... x dòng nữa" with expand + pagination ──
                     if (S.length < 6) {
                         const matchCount = S.length > 0 ? matchingRecords.length : rows.length;
+                        const sourceRecords = S.length > 0 ? matchingRecords : rows;
+                        lastSourceRecords = sourceRecords;
+                        recomputeRankFilter();
+                        // Helper to build a faded row HTML with green highlights for numbers in T
+                        const buildFadedRow = (r) => {
+                            const rNums = r.nums.slice().sort((a, b) => a - b);
+                            const rNumsHtml = rNums.map(n => {
+                                const inT = selectedSet.has(n);
+                                const bg = inT ? '#2e7d32' : '#fffbea';
+                                const fg = inT ? '#fff' : '#000';
+                                return `<span class="pill" style="${pillStyle.replace('background:#2e7d32', 'background:' + bg).replace('color:#fff', 'color:' + fg)}">${n}</span>`;
+                            }).join(' ');
+                            const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
+                            const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
+                            const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
+                            return `<tr data-result="${rNums.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
+                        };
+
                         if (matchCount <= 5 && matchCount > 0) {
                             // Append faded rows directly into topTable tbody
-                            matchingRecords.forEach(r => {
-                                const rNums = r.nums.slice().sort((a, b) => a - b);
-                                const rNumsHtml = rNums.map(n => `<span class="pill" style="background:#fffbea;color:#000;font-weight:700;width:28px;display:inline-block;text-align:center;">${n}</span>`).join(' ');
-                                const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
-                                const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
-                                const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                topTbody.insertAdjacentHTML('beforeend', `<tr data-result="${rNums.join(',')}" style="opacity:0.45"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`);
+                            sourceRecords.forEach(r => {
+                                topTbody.insertAdjacentHTML('beforeend', buildFadedRow(r));
                             });
                         } else if (matchCount > 5) {
-                            topTbody.insertAdjacentHTML('beforeend', `<tr style="opacity:0.5"><td colspan="5" style="text-align:center;font-size:12px;color:var(--muted)">... ${matchCount} dòng nữa</td></tr>`);
+                            // Show clickable "... x dòng nữa" link
+                            const expandTr = document.createElement('tr');
+                            expandTr.style.opacity = '0.5';
+                            expandTr.style.cursor = 'pointer';
+                            const expandTd = document.createElement('td');
+                            expandTd.colSpan = 5;
+                            expandTd.style.cssText = 'text-align:center;font-size:12px;color:var(--muted)';
+                            expandTd.textContent = `... ${matchCount} dòng nữa`;
+                            expandTr.appendChild(expandTd);
+                            topTbody.appendChild(expandTr);
+
+                            // On click: expand to show up to 5 rows, or paginate if more
+                            expandTr.addEventListener('click', function expandHandler() {
+                                expandTr.remove();
+                                const PAGE_SIZE = 5;
+                                let expandPage = 0;
+                                const totalExpandPages = Math.ceil(sourceRecords.length / PAGE_SIZE);
+
+                                const collapseAll = () => {
+                                    topTbody.querySelectorAll('.cell67-faded-row, .cell67-expand-nav, .cell67-collapse-row').forEach(el => el.remove());
+                                    // Re-insert original "... x dòng nữa" row
+                                    const newExpandTr = document.createElement('tr');
+                                    newExpandTr.style.opacity = '0.5';
+                                    newExpandTr.style.cursor = 'pointer';
+                                    const newExpandTd = document.createElement('td');
+                                    newExpandTd.colSpan = 5;
+                                    newExpandTd.style.cssText = 'text-align:center;font-size:12px;color:var(--muted)';
+                                    newExpandTd.textContent = `... ${matchCount} dòng nữa`;
+                                    newExpandTr.appendChild(newExpandTd);
+                                    topTbody.appendChild(newExpandTr);
+                                    newExpandTr.addEventListener('click', function () {
+                                        newExpandTr.remove();
+                                        expandPage = 0;
+                                        renderExpandPage();
+                                    });
+                                };
+
+                                const renderExpandPage = () => {
+                                    // Remove old expanded rows, collapse row, and pagination
+                                    topTbody.querySelectorAll('.cell67-faded-row, .cell67-expand-nav, .cell67-collapse-row').forEach(el => el.remove());
+                                    const start = expandPage * PAGE_SIZE;
+                                    const slice = sourceRecords.slice(start, start + PAGE_SIZE);
+                                    slice.forEach(r => {
+                                        topTbody.insertAdjacentHTML('beforeend', buildFadedRow(r));
+                                    });
+                                    // Add collapse row ("... remaining dòng nữa") above pagination
+                                    const remaining = matchCount - PAGE_SIZE;
+                                    if (remaining > 0) {
+                                        const collTr = document.createElement('tr');
+                                        collTr.className = 'cell67-collapse-row';
+                                        collTr.style.cssText = 'opacity:0.5;cursor:pointer;';
+                                        const collTd = document.createElement('td');
+                                        collTd.colSpan = 5;
+                                        collTd.style.cssText = 'text-align:center;font-size:12px;color:var(--muted)';
+                                        collTd.textContent = `... ${remaining} dòng nữa`;
+                                        collTr.appendChild(collTd);
+                                        collTr.addEventListener('click', (e) => { e.stopPropagation(); collapseAll(); });
+                                        topTbody.appendChild(collTr);
+                                    }
+                                    // Add pagination row if more than 5 results
+                                    if (totalExpandPages > 1) {
+                                        const navTr = document.createElement('tr');
+                                        navTr.className = 'cell67-expand-nav';
+                                        const navTd = document.createElement('td');
+                                        navTd.colSpan = 5;
+                                        navTd.style.cssText = 'text-align:center;padding:4px 0;';
+                                        const prevBtn = document.createElement('button');
+                                        prevBtn.className = 'nav-btn prev';
+                                        prevBtn.textContent = '◀';
+                                        prevBtn.style.cssText = 'margin-right:12px;';
+                                        prevBtn.addEventListener('click', (e) => {
+                                            e.stopPropagation();
+                                            expandPage = (expandPage - 1 + totalExpandPages) % totalExpandPages;
+                                            renderExpandPage();
+                                        });
+                                        const nextBtn = document.createElement('button');
+                                        nextBtn.className = 'nav-btn next';
+                                        nextBtn.textContent = '▶';
+                                        nextBtn.style.cssText = 'margin-left:12px;';
+                                        nextBtn.addEventListener('click', (e) => {
+                                            e.stopPropagation();
+                                            expandPage = (expandPage + 1) % totalExpandPages;
+                                            renderExpandPage();
+                                        });
+                                        const pageInfo = document.createElement('span');
+                                        pageInfo.className = 'muted';
+                                        pageInfo.style.fontSize = '12px';
+                                        pageInfo.textContent = `${expandPage + 1} / ${totalExpandPages}`;
+                                        navTd.appendChild(prevBtn);
+                                        navTd.appendChild(pageInfo);
+                                        navTd.appendChild(nextBtn);
+                                        navTr.appendChild(navTd);
+                                        topTbody.appendChild(navTr);
+                                    }
+                                    // Attach dblclick handlers on faded rows
+                                    topTbody.querySelectorAll('.cell67-faded-row').forEach(tr => {
+                                        tr.addEventListener('dblclick', (e) => {
+                                            e.preventDefault();
+                                            const result = tr.dataset.result;
+                                            if (!result) return;
+                                            const nums = result.split(',').map(Number).filter(Number.isFinite);
+                                            if (nums.length === 6) pickNumbers(nums);
+                                        });
+                                    });
+                                };
+                                renderExpandPage();
+                            });
                         }
+                        // Attach dblclick handlers on directly-appended faded rows (<=5 case)
+                        topTbody.querySelectorAll('.cell67-faded-row').forEach(tr => {
+                            tr.addEventListener('dblclick', (e) => {
+                                e.preventDefault();
+                                const result = tr.dataset.result;
+                                if (!result) return;
+                                const nums = result.split(',').map(Number).filter(Number.isFinite);
+                                if (nums.length === 6) pickNumbers(nums);
+                            });
+                        });
+                    }
+                    if (S.length >= 6) {
+                        lastSourceRecords = [];
+                        recomputeRankFilter();
                     }
                 }
 
@@ -8427,6 +8856,8 @@
                 rebuildAll();
             };
 
+            // ── Initial render with empty T: show all historical records ──
+            rebuildAll();
         }
 
         // Cell6.5: Truy x - same grouping logic as Cell6 but filter groups to those containing a user-specified number x
@@ -9712,6 +10143,8 @@
                     favSel.value = (favSel.value === 'include') ? 'exclude' : 'include';
                     favSel.textContent = favSel.value;
                     try { document.dispatchEvent(new CustomEvent('favchange', { bubbles: true, composed: true })); } catch (e) { }
+                    try { cacheKey = null; groupCache = null; isComputing = false; } catch (e) { }
+                    try { group(); } catch (e) { }
                 } catch (e) { }
             });
 
@@ -9720,11 +10153,14 @@
                 if (!window.__cell6_5_fav_listener_added) {
                     document.addEventListener('favchange', function () {
                         try {
-                            const sec = document.getElementById('cell6_5');
-                            if (sec && typeof sec.__invalidate === 'function') { try { sec.__invalidate(); } catch (e) { } }
-                            try { cacheKey = null; groupCache = null; isComputing = false; } catch (e) { }
-                            const fn = sec && sec.__group ? sec.__group : null;
-                            if (typeof fn === 'function') fn();
+                            const cur = document.getElementById('cell6_5_favSel');
+                            if (cur && String(cur.value) === 'include') {
+                                const sec = document.getElementById('cell6_5');
+                                if (sec && typeof sec.__invalidate === 'function') { try { sec.__invalidate(); } catch (e) { } }
+                                try { cacheKey = null; groupCache = null; isComputing = false; } catch (e) { }
+                                const fn = sec && sec.__group ? sec.__group : null;
+                                if (typeof fn === 'function') fn();
+                            }
                         } catch (e) { }
                     });
                     window.__cell6_5_fav_listener_added = true;
@@ -11567,17 +12003,18 @@
                                     }
                                 } catch (e) { }
 
-                                arr = arr.filter(([key, list]) => {
-                                    try {
-                                        // count matches of fav numbers inside the combo key
-                                        const nums = key.split('-').map(Number);
-                                        let matchCount = 0;
-                                        for (const n of nums) if (fset.has(Number(n))) matchCount++;
-                                        if (op === '>=') return matchCount >= req;
-                                        if (op === '=') return matchCount === req;
-                                        if (op === '<=') return matchCount <= req;
-                                        return matchCount >= req;
-                                    } catch (e) { return false; }
+                                arr = arr.map(([key, list]) => {
+                                    const filtered = (list || []).filter(r => {
+                                        try {
+                                            let matchCount = 0;
+                                            for (const n of r.nums) if (fset.has(Number(n))) matchCount++;
+                                            if (op === '>=') return matchCount >= req;
+                                            if (op === '=') return matchCount === req;
+                                            if (op === '<=') return matchCount <= req;
+                                            return matchCount >= req;
+                                        } catch (e) { return false; }
+                                    });
+                                    return [key, filtered];
                                 });
                             }
                         }
@@ -11973,13 +12410,65 @@
                             leftRankHtml = `<span class='muted' style='font-weight:800'>${rankDisplay}</span>`;
                         }
 
-                        const headerHtml = `<div class='flex' style='justify-content:space-between;align-items:center'>` +
-                            `<strong>{${key.replace(/-/g, ',')}}</strong>` +
-                            `<div style='display:flex;align-items:center;gap:8px'>` +
-                            `${leftRankHtml}` +
-                            `<span class='badge'>${occDisplay}</span>` +
-                            `</div>` +
-                            `</div>`;
+                        const headerHtml = (() => {
+                            let pairRankSpans = '';
+                            // For bộ 2 only: add rankinpair, rank1, rank2 muted spans
+                            try {
+                                const curComb = parseInt(xSel.value, 10);
+                                if (curComb === 2) {
+                                    const parts = key.split('-').map(Number);
+                                    if (parts.length === 2 && parts.every(Number.isFinite)) {
+                                        const [numA, numB] = parts;
+                                        const pKey = `${Math.min(numA, numB)}-${Math.max(numA, numB)}`;
+                                        // Lazy-init pair rank maps (cached on the group function scope)
+                                        if (!group.__c65PairRankMap) {
+                                            const pc = new Map();
+                                            rows.forEach(r => {
+                                                const ns = Array.isArray(r.nums) ? r.nums.slice().sort((a, b) => a - b) : [];
+                                                for (let i = 0; i < ns.length; i++)
+                                                    for (let j = i + 1; j < ns.length; j++) {
+                                                        const k2 = `${ns[i]}-${ns[j]}`;
+                                                        pc.set(k2, (pc.get(k2) || 0) + 1);
+                                                    }
+                                            });
+                                            const sorted = [...pc.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+                                            const prm = new Map();
+                                            sorted.forEach(([k2, c], idx) => { prm.set(k2, idx + 1); });
+                                            const partnerRm = new Map();
+                                            for (let x = 1; x <= 45; x++) {
+                                                const partners = [];
+                                                for (let y = 1; y <= 45; y++) {
+                                                    if (y === x) continue;
+                                                    const a2 = Math.min(x, y), b2 = Math.max(x, y);
+                                                    partners.push({ y, c: pc.get(`${a2}-${b2}`) || 0 });
+                                                }
+                                                partners.sort((A, B) => (B.c - A.c) || (A.y - B.y));
+                                                partners.forEach((p, idx2) => { partnerRm.set(`${x}-${p.y}`, idx2 + 1); });
+                                            }
+                                            group.__c65PairRankMap = prm;
+                                            group.__c65PartnerRankMap = partnerRm;
+                                            group.__c65TotalPairs = 990;
+                                        }
+                                        const rip = group.__c65PairRankMap.get(pKey);
+                                        const r1 = group.__c65PartnerRankMap.get(`${numA}-${numB}`);
+                                        const r2 = group.__c65PartnerRankMap.get(`${numB}-${numA}`);
+                                        const ripStr = rip != null ? `${rip}/${group.__c65TotalPairs}` : '';
+                                        const r1Str = r1 != null ? `${r1}/44` : '';
+                                        const r2Str = r2 != null ? `${r2}/44` : '';
+                                        pairRankSpans = `<span class='muted' style='font-size:11px;margin-left:6px'>${ripStr}</span>` +
+                                            `<span class='muted' style='font-size:11px;margin-left:4px'>${r1Str}</span>` +
+                                            `<span class='muted' style='font-size:11px;margin-left:4px'>${r2Str}</span>`;
+                                    }
+                                }
+                            } catch (e) { }
+                            return `<div class='flex' style='justify-content:space-between;align-items:center'>` +
+                                `<strong>{${key.replace(/-/g, ',')}}</strong>${pairRankSpans}` +
+                                `<div style='display:flex;align-items:center;gap:8px'>` +
+                                `${leftRankHtml}` +
+                                `<span class='badge'>${occDisplay}</span>` +
+                                `</div>` +
+                                `</div>`;
+                        })();
 
                         const navHtml = `<div class='flex' style='justify-content:flex-end;gap:8px;margin-bottom:8px;'>` +
                             `<button class='nav-btn prev'>◀</button>` +
