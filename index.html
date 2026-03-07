@@ -7760,16 +7760,16 @@
             const rfArrowSt = 'width:14px;height:9px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:7px;line-height:9px;text-align:center;font-weight:700;';
             const rfUp = document.createElement('button'); rfUp.type = 'button'; rfUp.innerHTML = '▲'; rfUp.style.cssText = rfArrowSt;
             const rfDn = document.createElement('button'); rfDn.type = 'button'; rfDn.innerHTML = '▼'; rfDn.style.cssText = rfArrowSt;
-            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; rfInp.value = n; recomputeRankFilter(); });
-            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rfInp.value = n; recomputeRankFilter(); });
+            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; rfInp.value = n; recomputeRankFilterAndRebuild(); });
+            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rfInp.value = n; recomputeRankFilterAndRebuild(); });
             rfBtnGrp.appendChild(rfUp); rfBtnGrp.appendChild(rfDn);
             rfWrap.appendChild(rfInp); rfWrap.appendChild(rfBtnGrp);
             const rfResult = document.createElement('span');
             rfResult.style.cssText = 'font-size:13px;font-weight:700;min-width:28px;text-align:center;display:inline-block;padding:2px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);color:var(--text);';
             rfResult.textContent = '-';
-            rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilter(); });
-            rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilter(); });
-            rfOp.addEventListener('change', () => { recomputeRankFilter(); });
+            rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
+            rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
+            rfOp.addEventListener('change', () => { recomputeRankFilterAndRebuild(); });
             // ── Count filter UI (second row) ──
             const cfLabel = document.createElement('span');
             cfLabel.textContent = 'count';
@@ -7786,13 +7786,13 @@
             cfBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
             const cfUp = document.createElement('button'); cfUp.type = 'button'; cfUp.innerHTML = '▲'; cfUp.style.cssText = rfArrowSt;
             const cfDn = document.createElement('button'); cfDn.type = 'button'; cfDn.innerHTML = '▼'; cfDn.style.cssText = rfArrowSt;
-            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 1 : n + 1; cfInp.value = n; recomputeRankFilter(); });
-            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n <= 1 ? 15 : n - 1; cfInp.value = n; recomputeRankFilter(); });
+            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 1 : n + 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
+            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n <= 1 ? 15 : n - 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
             cfBtnGrp.appendChild(cfUp); cfBtnGrp.appendChild(cfDn);
             cfWrap.appendChild(cfInp); cfWrap.appendChild(cfBtnGrp);
-            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilter(); });
-            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilter(); });
-            cfOp.addEventListener('change', () => { recomputeRankFilter(); });
+            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfOp.addEventListener('change', () => { recomputeRankFilterAndRebuild(); });
             // Build two-row controls layout with result centered between rows
             const rowsCol = document.createElement('div');
             rowsCol.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
@@ -7805,10 +7805,50 @@
             rowsCol.appendChild(row1); rowsCol.appendChild(row2);
             controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
             controls.appendChild(rowsCol); controls.appendChild(rfResult);
+            // ── "Lọc" toggle button (filters faded rows by rank/count condition) ──
+            const locBtn = document.createElement('button');
+            locBtn.textContent = 'Lọc';
+            locBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;font-weight:600;';
+            function updateLocBtnStyle() {
+                if (cell67_locActive) {
+                    locBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#1b5e20;color:#00ff88;border:1px solid #00ff88;border-radius:6px;font-weight:600;text-shadow:0 0 8px #00ff88,0 0 16px #00ff88;';
+                } else {
+                    locBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;font-weight:600;';
+                }
+            }
+            locBtn.addEventListener('click', () => {
+                cell67_locActive = !cell67_locActive;
+                updateLocBtnStyle();
+                rebuildAll();
+            });
+            controls.appendChild(locBtn);
             body.parentElement.querySelector('h2').after(controls);
 
             // ── Rank filter state + logic ──
             let lastSourceRecords = [];
+            // Predicate: does a single record match the current rank/count filter?
+            function recordMatchesRankCountFilter(rec) {
+                const val = parseInt(rfInp.value, 10);
+                const cntVal = parseInt(cfInp.value, 10);
+                if (!Number.isFinite(val) || val < 1 || val > 44) return false;
+                if (!Number.isFinite(cntVal) || cntVal < 1 || cntVal > 15) return false;
+                const ns = rec.nums;
+                if (!ns || ns.length < 2) return false;
+                const op = rfOp.value;
+                const cntOp = cfOp.value;
+                const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
+                const checkCnt = (c) => cntOp === '=' ? c === cntVal : cntOp === '<=' ? c <= cntVal : c >= cntVal;
+                let pairHitCount = 0;
+                for (let i = 0; i < ns.length; i++) {
+                    for (let j = i + 1; j < ns.length; j++) {
+                        const a = Math.min(ns[i], ns[j]), b = Math.max(ns[i], ns[j]);
+                        const r1 = partnerRankMap67.get(`${a}-${b}`);
+                        const r2 = partnerRankMap67.get(`${b}-${a}`);
+                        if ((r1 && check(r1)) || (r2 && check(r2))) pairHitCount++;
+                    }
+                }
+                return checkCnt(pairHitCount);
+            }
             function recomputeRankFilter() {
                 const val = parseInt(rfInp.value, 10);
                 const cntVal = parseInt(cfInp.value, 10);
@@ -7820,31 +7860,19 @@
                     rfResult.textContent = '-';
                     return;
                 }
-                const op = rfOp.value;
-                const cntOp = cfOp.value;
-                const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
-                const checkCnt = (c) => cntOp === '=' ? c === cntVal : cntOp === '<=' ? c <= cntVal : c >= cntVal;
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
-                    const ns = rec.nums;
-                    if (!ns || ns.length < 2) continue;
-                    // Count how many pairs in this record satisfy the rank condition
-                    // Check rank1 OR rank2 (not AND) for each pair
-                    let pairHitCount = 0;
-                    for (let i = 0; i < ns.length; i++) {
-                        for (let j = i + 1; j < ns.length; j++) {
-                            const a = Math.min(ns[i], ns[j]), b = Math.max(ns[i], ns[j]);
-                            const r1 = partnerRankMap67.get(`${a}-${b}`);
-                            const r2 = partnerRankMap67.get(`${b}-${a}`);
-                            if ((r1 && check(r1)) || (r2 && check(r2))) pairHitCount++;
-                        }
-                    }
-                    if (checkCnt(pairHitCount)) matchCount++;
+                    if (recordMatchesRankCountFilter(rec)) matchCount++;
                 }
                 // Show count, total source records returned to the top table, and percent
                 const total = lastSourceRecords.length || 0;
                 const pct = total > 0 ? Math.round((matchCount / total) * 100) : 0;
                 rfResult.textContent = `${matchCount} / ${total} (${pct}%)`;
+            }
+            // When lọc is active and filter values change (from user input), re-render
+            function recomputeRankFilterAndRebuild() {
+                recomputeRankFilter();
+                if (cell67_locActive) rebuildAll();
             }
 
             // ── State ──
@@ -7855,6 +7883,7 @@
             let topSorted = false;   // false = show numbers in insertion order, true = sorted ascending
             let cell67_expandMemory = false; // false = collapsed (default), true = expanded; remembered across rebuilds
             let cell67_syncActive = false; // true = Get sync mode active
+            let cell67_locActive = false; // true = filter faded rows by rank/count condition
 
             // ── Build pairCounts once (same as Cell6.5 / Cell9) ──
             const pairCounts67 = new Map();
@@ -8647,6 +8676,38 @@
                         ).join('&nbsp;&nbsp;&nbsp;');
                     };
 
+                    // When lọc is active, show ALL pairs matching the rank filter from BOTH columns
+                    const computeFilteredPairrank = (sixNums) => {
+                        if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
+                        const ns = sixNums.map(Number).filter(Number.isFinite);
+                        if (ns.length !== 6) return '';
+                        const val = parseInt(rfInp.value, 10);
+                        if (!Number.isFinite(val) || val < 1 || val > 44) return '';
+                        const op = rfOp.value;
+                        const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
+                        const matched = [];
+                        for (let i = 0; i < ns.length; i++) {
+                            for (let j = i + 1; j < ns.length; j++) {
+                                const r1 = partnerRankMap67.get(`${ns[i]}-${ns[j]}`);
+                                const r2 = partnerRankMap67.get(`${ns[j]}-${ns[i]}`);
+                                if (r1 && check(r1)) matched.push({ a: ns[i], b: ns[j], rank: r1 });
+                                if (r2 && check(r2)) matched.push({ a: ns[j], b: ns[i], rank: r2 });
+                            }
+                        }
+                        if (matched.length === 0) return '';
+                        const seen = new Set();
+                        const unique = [];
+                        for (const p of matched) {
+                            const key = `${Math.min(p.a, p.b)}-${Math.max(p.a, p.b)}-${p.rank}`;
+                            if (!seen.has(key)) { seen.add(key); unique.push(p); }
+                        }
+                        unique.sort((a, b) => a.rank - b.rank || a.a - b.a || a.b - b.b);
+                        const numPillSt = 'background:#2e7d32;color:#fff;display:inline-block;min-width:22px;text-align:center;padding:1px 4px;border-radius:4px;font-weight:700;font-size:12px;';
+                        return unique.map(p =>
+                            `<span style="${numPillSt}">${p.a}</span> <span style="${numPillSt}">${p.b}</span> <span style="font-size:12px">${p.rank}/44</span>`
+                        ).join('&nbsp;&nbsp;&nbsp;');
+                    };
+
                     const numsHtml = displayNums.map(n =>
                         `<span class="pill" style="${pillStyle}">${n}</span>`
                     ).join(' ');
@@ -8750,12 +8811,14 @@
 
                     // ── 7. Append "... x dòng nữa" with expand + pagination ──
                     if (S.length < 6) {
-                        const matchCount = S.length > 0 ? matchingRecords.length : rows.length;
-                        let sourceRecords = S.length > 0 ? matchingRecords.slice() : rows.slice();
+                        let allSourceRecords = S.length > 0 ? matchingRecords.slice() : rows.slice();
                         // By default show newest→oldest when not explicitly sorted via Tab
-                        if (!topSorted) sourceRecords = sourceRecords.slice().reverse();
-                        lastSourceRecords = sourceRecords;
+                        if (!topSorted) allSourceRecords = allSourceRecords.slice().reverse();
+                        lastSourceRecords = allSourceRecords;
                         recomputeRankFilter();
+                        // When lọc is active, filter sourceRecords to only matching records
+                        let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r)) : allSourceRecords;
+                        const matchCount = sourceRecords.length;
                         // Helper to build a faded row HTML with green highlights for numbers in T
                         const buildFadedRow = (r) => {
                             const rNumsSorted = r.nums.slice().sort((a, b) => a - b);
@@ -8769,7 +8832,7 @@
                             const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
                             const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                             const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            const rHp = (r.nums.length === 6) ? computeHighestPairrank(rNumsSorted) : '';
+                            const rHp = (r.nums.length === 6) ? (cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted)) : '';
                             return `<tr data-result="${rNumsSorted.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                         };
 
