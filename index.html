@@ -7882,6 +7882,8 @@
             let pairSortAsc = false; // false = descending (default first click), true = ascending (toggle)
             let topSorted = false;   // false = show numbers in insertion order, true = sorted ascending
             let cell67_expandMemory = false; // false = collapsed (default), true = expanded; remembered across rebuilds
+            let cell67_expandPage = 0; // persistent pagination index across rebuilds
+            let cell67_dblclickResult = null; // data-result string of the last dblclick'd faded row
             let cell67_syncActive = false; // true = Get sync mode active
             let cell67_locActive = false; // true = filter faded rows by rank/count condition
 
@@ -8843,8 +8845,10 @@
                             });
                         } else if (matchCount > 5) {
                             const PAGE_SIZE = 5;
-                            let expandPage = 0;
                             const totalExpandPages = Math.ceil(sourceRecords.length / PAGE_SIZE);
+                            // Clamp persistent page to valid range
+                            if (cell67_expandPage >= totalExpandPages) cell67_expandPage = totalExpandPages - 1;
+                            if (cell67_expandPage < 0) cell67_expandPage = 0;
 
                             const collapseAll = () => {
                                 cell67_expandMemory = false;
@@ -8862,7 +8866,7 @@
                                 newExpandTr.addEventListener('click', function () {
                                     cell67_expandMemory = true;
                                     newExpandTr.remove();
-                                    expandPage = 0;
+                                    cell67_expandPage = 0;
                                     renderExpandPage();
                                 });
                             };
@@ -8870,7 +8874,7 @@
                             const renderExpandPage = () => {
                                 // Remove old expanded rows, collapse row, and pagination
                                 topTbody.querySelectorAll('.cell67-faded-row, .cell67-expand-nav, .cell67-collapse-row').forEach(el => el.remove());
-                                const start = expandPage * PAGE_SIZE;
+                                const start = cell67_expandPage * PAGE_SIZE;
                                 const slice = sourceRecords.slice(start, start + PAGE_SIZE);
                                 slice.forEach(r => {
                                     topTbody.insertAdjacentHTML('beforeend', buildFadedRow(r));
@@ -8902,7 +8906,7 @@
                                     prevBtn.style.cssText = 'margin-right:12px;';
                                     prevBtn.addEventListener('click', (e) => {
                                         e.stopPropagation();
-                                        expandPage = (expandPage - 1 + totalExpandPages) % totalExpandPages;
+                                        cell67_expandPage = (cell67_expandPage - 1 + totalExpandPages) % totalExpandPages;
                                         renderExpandPage();
                                     });
                                     const nextBtn = document.createElement('button');
@@ -8911,13 +8915,13 @@
                                     nextBtn.style.cssText = 'margin-left:12px;';
                                     nextBtn.addEventListener('click', (e) => {
                                         e.stopPropagation();
-                                        expandPage = (expandPage + 1) % totalExpandPages;
+                                        cell67_expandPage = (cell67_expandPage + 1) % totalExpandPages;
                                         renderExpandPage();
                                     });
                                     const pageInfo = document.createElement('span');
                                     pageInfo.className = 'muted';
                                     pageInfo.style.fontSize = '12px';
-                                    pageInfo.textContent = `${expandPage + 1} / ${totalExpandPages}`;
+                                    pageInfo.textContent = `${cell67_expandPage + 1} / ${totalExpandPages}`;
                                     navTd.appendChild(prevBtn);
                                     navTd.appendChild(pageInfo);
                                     navTd.appendChild(nextBtn);
@@ -8930,10 +8934,17 @@
                                         e.preventDefault();
                                         const result = tr.dataset.result;
                                         if (!result) return;
+                                        cell67_dblclickResult = result;
                                         const nums = result.split(',').map(Number).filter(Number.isFinite);
                                         if (nums.length === 6) pickNumbers(nums);
                                     });
                                 });
+                                // Apply yellow border to dblclick'd record
+                                if (cell67_dblclickResult) {
+                                    topTbody.querySelectorAll('.cell67-faded-row').forEach(tr => {
+                                        if (tr.dataset.result === cell67_dblclickResult) tr.classList.add('ctrl-selected');
+                                    });
+                                }
                             };
 
                             // Use remembered expand/collapse state
@@ -8953,7 +8964,7 @@
                                 expandTr.addEventListener('click', function () {
                                     cell67_expandMemory = true;
                                     expandTr.remove();
-                                    expandPage = 0;
+                                    cell67_expandPage = 0;
                                     renderExpandPage();
                                 });
                             }
@@ -8964,10 +8975,17 @@
                                 e.preventDefault();
                                 const result = tr.dataset.result;
                                 if (!result) return;
+                                cell67_dblclickResult = result;
                                 const nums = result.split(',').map(Number).filter(Number.isFinite);
                                 if (nums.length === 6) pickNumbers(nums);
                             });
                         });
+                        // Apply yellow border to dblclick'd record (<=5 case)
+                        if (cell67_dblclickResult) {
+                            topTbody.querySelectorAll('.cell67-faded-row').forEach(tr => {
+                                if (tr.dataset.result === cell67_dblclickResult) tr.classList.add('ctrl-selected');
+                            });
+                        }
                     }
                     if (S.length >= 6) {
                         lastSourceRecords = [];
