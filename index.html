@@ -7801,7 +7801,10 @@
                     }
                     if (found) count++;
                 }
-                rfResult.textContent = count;
+                // Show count, total source records returned to the top table, and percent
+                const total = lastSourceRecords.length || 0;
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                rfResult.textContent = `${count} / ${total} (${pct}%)`;
             }
 
             // ── State ──
