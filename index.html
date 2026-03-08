@@ -9046,6 +9046,24 @@
                                 slice.forEach(r => {
                                     topTbody.insertAdjacentHTML('beforeend', buildFadedRow(r));
                                 });
+                                // Pad with empty placeholder rows so collapse + pagination stay at fixed position
+                                const padCount = PAGE_SIZE - slice.length;
+                                for (let pi = 0; pi < padCount; pi++) {
+                                    const padTr = document.createElement('tr');
+                                    padTr.className = 'cell67-faded-row';
+                                    padTr.style.cssText = 'visibility:hidden;pointer-events:none;';
+                                    for (let ci = 0; ci < 6; ci++) {
+                                        const padTd = document.createElement('td');
+                                        if (ci === 1) {
+                                            // Match real row height: insert an invisible pill-sized span
+                                            padTd.innerHTML = '<span class="pill" style="' + pillStyle + 'visibility:hidden">0</span>';
+                                        } else {
+                                            padTd.innerHTML = '&nbsp;';
+                                        }
+                                        padTr.appendChild(padTd);
+                                    }
+                                    topTbody.appendChild(padTr);
+                                }
                                 // Add collapse row ("... remaining dòng nữa") above pagination
                                 const remaining = matchCount - PAGE_SIZE;
                                 if (remaining > 0) {
@@ -9197,7 +9215,12 @@
                 selectedSet.clear();
                 selectedOrder.length = 0;
                 const valid = nums.map(Number).filter(n => Number.isFinite(n) && n >= 1 && n <= 45);
-                valid.slice(0, 6).forEach(n => { selectedSet.add(n); selectedOrder.push(n); });
+                for (const n of valid) {
+                    if (selectedSet.has(n)) continue;
+                    if (selectedOrder.length >= 6) break;
+                    selectedSet.add(n);
+                    selectedOrder.push(n);
+                }
                 rebuildAll();
             }
 
