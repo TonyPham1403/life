@@ -3475,6 +3475,20 @@
         #cell6_7 .card {
             padding: 6px;
         }
+
+        /* Hint highlight for Table T numbers */
+        .cell67-num.cell67-hint {
+            background: #f8f333;
+            color: #000;
+            border-color: #f8f333;
+            font-weight: 900;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-hint {
+            background: #f8f333;
+            color: #000;
+            border-color: #f8f333;
+        }
     </style>
     <!-- Cell11 multi-value picker dropdown CSS -->
     <style>
@@ -8023,6 +8037,7 @@
             let cell67_dblclickResult = null; // data-result string of the last dblclick'd faded row
             let cell67_syncActive = false; // true = Get sync mode active
             let cell67_locActive = false; // true = filter faded rows by rank/count condition
+            let cell67_hintActive = false; // true = show yellow hint on Table T for highest-count number
             let cell67_lastStateKey = ''; // state key for pagination reset detection
 
             // ── Build pairCounts once (same as Cell6.5 / Cell9) ──
@@ -8217,6 +8232,23 @@
                 if (cell67_syncActive) syncFromNRRows();
             });
             clearBtnWrap.appendChild(getBtn67);
+            // ── "Hint" button (yellow, next to Get) → toggle hint highlight on Table T ──
+            const hintBtn67 = document.createElement('button');
+            hintBtn67.textContent = 'Hint';
+            hintBtn67.style.cssText = 'font-size:13px;padding:4px 14px;cursor:pointer;background:#fff9c4;color:#f9a825;border:1px solid #ffe082;border-radius:6px;font-weight:600;';
+            function updateHintBtnStyle() {
+                if (cell67_hintActive) {
+                    hintBtn67.style.cssText = 'font-size:13px;padding:4px 14px;cursor:pointer;background:#f9a825;color:#ffff00;border:1px solid #ffff00;border-radius:6px;font-weight:600;text-shadow:0 0 8px #ffff00,0 0 16px #ffff00;';
+                } else {
+                    hintBtn67.style.cssText = 'font-size:13px;padding:4px 14px;cursor:pointer;background:#fff9c4;color:#f9a825;border:1px solid #ffe082;border-radius:6px;font-weight:600;';
+                }
+            }
+            hintBtn67.addEventListener('click', () => {
+                cell67_hintActive = !cell67_hintActive;
+                updateHintBtnStyle();
+                rebuildAll();
+            });
+            clearBtnWrap.appendChild(hintBtn67);
             // ── spacer to push remaining items right ──
             const btnSpacer = document.createElement('div');
             btnSpacer.style.cssText = 'flex:1;';
@@ -9054,12 +9086,8 @@
                                     padTr.style.cssText = 'visibility:hidden;pointer-events:none;';
                                     for (let ci = 0; ci < 6; ci++) {
                                         const padTd = document.createElement('td');
-                                        if (ci === 1) {
-                                            // Match real row height: insert an invisible pill-sized span
-                                            padTd.innerHTML = '<span class="pill" style="' + pillStyle + 'visibility:hidden">0</span>';
-                                        } else {
-                                            padTd.innerHTML = '&nbsp;';
-                                        }
+                                        // Match real row height: insert invisible pill-sized span in every cell
+                                        padTd.innerHTML = '<span class="pill" style="' + pillStyle + 'visibility:hidden">0</span>';
                                         padTr.appendChild(padTd);
                                     }
                                     topTbody.appendChild(padTr);
@@ -9203,6 +9231,37 @@
                         if (n2New) spans.push(`<span style="color:#00e676;font-weight:700">${n2}</span>`);
                         else spans.push(String(n2));
                         pairTd.innerHTML = spans.join(',');
+                    }
+                }
+
+                // ── 9. Hint highlight: style the highest-count non-selected number yellow on Table T ──
+                for (let n = 1; n <= 45; n++) {
+                    const c = cellMap67[n];
+                    if (c) c.classList.remove('cell67-hint');
+                }
+                if (cell67_hintActive && S.length < 6 && lastSourceRecords.length > 0) {
+                    // Count occurrences of each number across source records (the "... x dòng nữa" set)
+                    const sourceRecs = cell67_locActive
+                        ? lastSourceRecords.filter(r => recordMatchesRankCountFilter(r))
+                        : lastSourceRecords;
+                    const freq = new Map();
+                    for (const r of sourceRecs) {
+                        for (const n of r.nums) {
+                            if (!selectedSet.has(n) && !unionMissing.has(n)) {
+                                freq.set(n, (freq.get(n) || 0) + 1);
+                            }
+                        }
+                    }
+                    // Find the number with the highest count
+                    let bestNum = -1, bestCount = -1;
+                    for (const [n, cnt] of freq) {
+                        if (cnt > bestCount || (cnt === bestCount && n < bestNum)) {
+                            bestCount = cnt;
+                            bestNum = n;
+                        }
+                    }
+                    if (bestNum >= 1 && bestNum <= 45 && cellMap67[bestNum]) {
+                        cellMap67[bestNum].classList.add('cell67-hint');
                     }
                 }
 
