@@ -8871,7 +8871,7 @@
                 if (topTbody) {
                     const currentNums = S.slice().sort((a, b) => a - b);
                     // Show ordered (insertion order) by default; sorted when topSorted toggled via Tab
-                    const displayNums = topSorted ? currentNums.slice() : S.slice().reverse();
+                    const displayNums = topSorted ? currentNums.slice() : S.slice();
                     const pillStyle = 'background:#2e7d32;color:#fff;display:inline-block;min-width:28px;text-align:center;padding:2px 6px;border-radius:6px;font-weight:700;font-size:13px;';
 
                     // ── Helper: compute highest pairrank HTML for a 6-number result ──
@@ -9051,7 +9051,7 @@
                             if (cell67_locActive && !cell67_overlapActive) exactToShow = exactToShow.filter(r => !hasPairrankOverlap(r.nums));
                             exactToShow.forEach(r => {
                                 const rNumsSorted = r.nums.slice().sort((a, b) => a - b);
-                                const rNumsDisplay = topSorted ? rNumsSorted : S.slice().reverse();
+                                const rNumsDisplay = topSorted ? rNumsSorted : S.slice();
                                 const rNumsHtml = rNumsDisplay.map(n => `<span class="pill" style="${pillStyle}">${n}</span>`).join(' ');
                                 const rRule = computeRule67(r.nums);
                                 const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
