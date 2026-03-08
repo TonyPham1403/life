@@ -7934,7 +7934,26 @@
             row2.appendChild(cfLabel); row2.appendChild(cfOp); row2.appendChild(cfWrap); row2.appendChild(cfRangeWrap);
             rowsCol.appendChild(row1); rowsCol.appendChild(row2);
             controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
-            controls.appendChild(rowsCol); controls.appendChild(rfResult);
+            controls.appendChild(rowsCol);
+            // ── "Overlap" toggle button (allow/disallow overlapping numbers in highest pairrank) ──
+            const overlapBtn = document.createElement('button');
+            overlapBtn.textContent = 'Overlap';
+            overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#1b5e20;color:#00ff88;border:1px solid #00ff88;border-radius:6px;font-weight:600;text-shadow:0 0 8px #00ff88,0 0 16px #00ff88;';
+            function updateOverlapBtnStyle() {
+                if (cell67_overlapActive) {
+                    overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#1b5e20;color:#00ff88;border:1px solid #00ff88;border-radius:6px;font-weight:600;text-shadow:0 0 8px #00ff88,0 0 16px #00ff88;';
+                } else {
+                    overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;font-weight:600;';
+                }
+            }
+            overlapBtn.addEventListener('click', () => {
+                cell67_overlapActive = !cell67_overlapActive;
+                updateOverlapBtnStyle();
+                recomputeRankFilter();
+                if (cell67_locActive) rebuildAll();
+            });
+            controls.appendChild(overlapBtn);
+            controls.appendChild(rfResult);
             // ── "Lọc" toggle button (filters faded rows by rank/count condition) ──
             const locBtn = document.createElement('button');
             locBtn.textContent = 'Lọc';
@@ -8013,7 +8032,10 @@
                 }
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
-                    if (recordMatchesRankCountFilter(rec)) matchCount++;
+                    if (!recordMatchesRankCountFilter(rec)) continue;
+                    // When overlap is OFF, also exclude overlap records from numerator
+                    if (!cell67_overlapActive && rec.nums.length === 6 && hasPairrankOverlap(rec.nums)) continue;
+                    matchCount++;
                 }
                 // Show count, total source records returned to the top table, and percent
                 const total = lastSourceRecords.length || 0;
@@ -8037,6 +8059,7 @@
             let cell67_dblclickResult = null; // data-result string of the last dblclick'd faded row
             let cell67_syncActive = false; // true = Get sync mode active
             let cell67_locActive = false; // true = filter faded rows by rank/count condition
+            let cell67_overlapActive = true; // true = allow overlapping pairs in highest pairrank
             let cell67_hintActive = false; // true = show yellow hint on Table T for highest-count number
             let cell67_lastStateKey = ''; // state key for pagination reset detection
 
@@ -8077,6 +8100,38 @@
                     const rank = partnerRankMap67.get(`${x}-${y}`);
                     if (rank) partnerByRank67[x][rank] = y;
                 }
+            }
+
+            // ── Helper: check if a 6-number result has overlapping pairs in highest pairrank ──
+            function hasPairrankOverlap(sixNums) {
+                if (!Array.isArray(sixNums) || sixNums.length !== 6) return false;
+                const ns = sixNums.map(Number).filter(Number.isFinite);
+                if (ns.length !== 6) return false;
+                let bestRank = Infinity;
+                const allP = [];
+                for (let i = 0; i < ns.length; i++) {
+                    for (let j = i + 1; j < ns.length; j++) {
+                        const r1 = partnerRankMap67.get(`${ns[i]}-${ns[j]}`);
+                        const r2 = partnerRankMap67.get(`${ns[j]}-${ns[i]}`);
+                        if (r1) { if (r1 < bestRank) bestRank = r1; allP.push({ a: ns[i], b: ns[j], rank: r1 }); }
+                        if (r2) { if (r2 < bestRank) bestRank = r2; allP.push({ a: ns[j], b: ns[i], rank: r2 }); }
+                    }
+                }
+                if (bestRank === Infinity) return false;
+                const bestP = allP.filter(p => p.rank === bestRank);
+                const seenK = new Set();
+                const uniq = [];
+                for (const p of bestP) {
+                    const k = `${Math.min(p.a, p.b)}-${Math.max(p.a, p.b)}`;
+                    if (!seenK.has(k)) { seenK.add(k); uniq.push(p); }
+                }
+                if (uniq.length <= 1) return false;
+                const usedNums = new Set();
+                for (const p of uniq) {
+                    if (usedNums.has(p.a) || usedNums.has(p.b)) return true;
+                    usedNums.add(p.a); usedNums.add(p.b);
+                }
+                return false;
             }
 
             // ── MissingPair cache for individual numbers (lazy, same logic as Cell9) ──
@@ -8820,42 +8875,39 @@
                     const pillStyle = 'background:#2e7d32;color:#fff;display:inline-block;min-width:28px;text-align:center;padding:2px 6px;border-radius:6px;font-weight:700;font-size:13px;';
 
                     // ── Helper: compute highest pairrank HTML for a 6-number result ──
+                    // Union of all pairs achieving the best (lowest) rank across BOTH rank1 and rank2 columns
                     const computeHighestPairrank = (sixNums) => {
                         if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
                         const ns = sixNums.map(Number).filter(Number.isFinite);
                         if (ns.length !== 6) return '';
-                        // Collect best rank and pairs per column (rank1 vs rank2)
-                        let bestR1 = Infinity, pairsR1 = [];
-                        let bestR2 = Infinity, pairsR2 = [];
+                        // Collect ALL (pair, rank) entries from both rank columns
+                        let bestRank = Infinity;
+                        const allPairs = [];
                         for (let i = 0; i < ns.length; i++) {
                             for (let j = i + 1; j < ns.length; j++) {
                                 const r1 = partnerRankMap67.get(`${ns[i]}-${ns[j]}`);
                                 const r2 = partnerRankMap67.get(`${ns[j]}-${ns[i]}`);
                                 if (r1) {
-                                    if (r1 < bestR1) { bestR1 = r1; pairsR1 = [{ a: ns[i], b: ns[j], rank: r1 }]; }
-                                    else if (r1 === bestR1) { pairsR1.push({ a: ns[i], b: ns[j], rank: r1 }); }
+                                    if (r1 < bestRank) bestRank = r1;
+                                    allPairs.push({ a: ns[i], b: ns[j], rank: r1 });
                                 }
                                 if (r2) {
-                                    if (r2 < bestR2) { bestR2 = r2; pairsR2 = [{ a: ns[j], b: ns[i], rank: r2 }]; }
-                                    else if (r2 === bestR2) { pairsR2.push({ a: ns[j], b: ns[i], rank: r2 }); }
+                                    if (r2 < bestRank) bestRank = r2;
+                                    allPairs.push({ a: ns[j], b: ns[i], rank: r2 });
                                 }
                             }
                         }
-                        // Pick ONE column: the one with better (lower) best rank
-                        // If tied, pick the column with more entries at that best rank
-                        let chosen;
-                        if (bestR1 < bestR2) chosen = pairsR1;
-                        else if (bestR2 < bestR1) chosen = pairsR2;
-                        else if (bestR1 === bestR2 && bestR1 < Infinity) chosen = pairsR1.length >= pairsR2.length ? pairsR1 : pairsR2;
-                        else return '';
-                        if (!chosen || chosen.length === 0) return '';
-                        // Deduplicate pairs (same a,b,rank)
+                        if (bestRank === Infinity) return '';
+                        // Keep only pairs that match the best rank
+                        const best = allPairs.filter(p => p.rank === bestRank);
+                        // Deduplicate pairs: (a,b) and (b,a) are the same pair
                         const seen = new Set();
                         const unique = [];
-                        for (const p of chosen) {
-                            const key = `${p.a}-${p.b}-${p.rank}`;
+                        for (const p of best) {
+                            const key = `${Math.min(p.a, p.b)}-${Math.max(p.a, p.b)}`;
                             if (!seen.has(key)) { seen.add(key); unique.push(p); }
                         }
+                        // Always show ALL best-ranked pairs (constant output)
                         const numPillSt = 'background:#2e7d32;color:#fff;display:inline-block;min-width:22px;text-align:center;padding:1px 4px;border-radius:4px;font-weight:700;font-size:12px;';
                         const allItems = unique.map(p =>
                             `<span style="${numPillSt}">${p.a}</span> <span style="${numPillSt}">${p.b}</span> <span style="font-size:12px">${p.rank}/44</span>`
@@ -8980,7 +9032,7 @@
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
                     // Neon class for date cell when T matches a historical 6-number record exactly
                     const dateCellClass = hasExactDateMatch ? ' class="cell67-neon-date"' : '';
-                    const hpHtml = (S.length === 6) ? (cell67_locActive ? computeFilteredPairrank(currentNums) : computeHighestPairrank(currentNums)) : '';
+                    const hpHtml = (S.length === 6) ? computeHighestPairrank(currentNums) : '';
 
                     // Build top table rows
                     let topRows = `<tr${resultAttr}><td${dateCellClass}>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${hpHtml}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
@@ -8994,7 +9046,9 @@
                         });
                         if (exactMatches.length > 0) {
                             topRows = '';
-                            const exactToShow = topSorted ? exactMatches.slice() : exactMatches.slice().reverse();
+                            let exactToShow = topSorted ? exactMatches.slice() : exactMatches.slice().reverse();
+                            // When lọc is active AND overlap is OFF, filter out overlap records
+                            if (cell67_locActive && !cell67_overlapActive) exactToShow = exactToShow.filter(r => !hasPairrankOverlap(r.nums));
                             exactToShow.forEach(r => {
                                 const rNumsSorted = r.nums.slice().sort((a, b) => a - b);
                                 const rNumsDisplay = topSorted ? rNumsSorted : S.slice().reverse();
@@ -9002,7 +9056,7 @@
                                 const rRule = computeRule67(r.nums);
                                 const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                                 const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                const rHp = cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted);
+                                const rHp = computeHighestPairrank(rNumsSorted);
                                 topRows += `<tr data-result="${rNumsSorted.join(',')}"><td class="cell67-neon-date">${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                             });
                         }
@@ -9019,6 +9073,8 @@
                         recomputeRankFilter();
                         // When lọc is active, filter sourceRecords to only matching records
                         let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r)) : allSourceRecords;
+                        // When lọc is active AND overlap is OFF, also filter out overlap records
+                        if (cell67_locActive && !cell67_overlapActive) sourceRecords = sourceRecords.filter(r => r.nums.length === 6 ? !hasPairrankOverlap(r.nums) : true);
                         const matchCount = sourceRecords.length;
                         // Helper to build a faded row HTML with green highlights for numbers in T
                         const buildFadedRow = (r) => {
@@ -9033,7 +9089,7 @@
                             const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
                             const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                             const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            const rHp = (r.nums.length === 6) ? (cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted)) : '';
+                            const rHp = (r.nums.length === 6) ? computeHighestPairrank(rNumsSorted) : '';
                             return `<tr data-result="${rNumsSorted.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                         };
 
