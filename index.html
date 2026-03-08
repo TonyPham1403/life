@@ -7749,7 +7749,8 @@
             rfLabel.style.cssText = 'font-weight:600;font-size:13px;min-width:40px;display:inline-block;text-align:right;';
             const rfOp = document.createElement('select');
             rfOp.style.cssText = 'font-size:13px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--text);';
-            ['=', '<=', '>='].forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; rfOp.appendChild(o); });
+            ['=', '[]'].forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; rfOp.appendChild(o); });
+            // Single value input (for = mode)
             const rfWrap = document.createElement('div');
             rfWrap.style.cssText = 'position:relative;display:inline-block;';
             const rfInp = document.createElement('input');
@@ -7764,44 +7765,159 @@
             rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rfInp.value = n; recomputeRankFilterAndRebuild(); });
             rfBtnGrp.appendChild(rfUp); rfBtnGrp.appendChild(rfDn);
             rfWrap.appendChild(rfInp); rfWrap.appendChild(rfBtnGrp);
+            // Range inputs for rank [] mode
+            const rfRangeWrap = document.createElement('div');
+            rfRangeWrap.style.cssText = 'display:none;align-items:center;gap:3px;';
+            // Helper: wrap a range input with up/down buttons like the = mode input
+            function makeRangeInputWrap(inp, minVal, maxVal, peerInpFn, isA) {
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'position:relative;display:inline-block;';
+                inp.style.cssText = 'width:56px;box-sizing:border-box;text-align:center;padding-right:22px;border-radius:4px;border:1px solid var(--border);font-size:13px;';
+                const btnGrp = document.createElement('div');
+                btnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
+                const up = document.createElement('button'); up.type = 'button'; up.innerHTML = '▲'; up.style.cssText = rfArrowSt;
+                const dn = document.createElement('button'); dn.type = 'button'; dn.innerHTML = '▼'; dn.style.cssText = rfArrowSt;
+                up.addEventListener('click', () => {
+                    let n = parseInt(inp.value, 10) || 0;
+                    n = n >= maxVal ? minVal : n + 1;
+                    const peer = peerInpFn();
+                    const pv = parseInt(peer.value, 10);
+                    if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
+                    if (!isA && Number.isFinite(pv) && n < pv) { /* b going below a via wrap is ok — wrap to minVal */ }
+                    inp.value = n; recomputeRankFilterAndRebuild();
+                });
+                dn.addEventListener('click', () => {
+                    let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
+                    n = n <= minVal ? maxVal : n - 1;
+                    const peer = peerInpFn();
+                    const pv = parseInt(peer.value, 10);
+                    if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
+                    inp.value = n; recomputeRankFilterAndRebuild();
+                });
+                btnGrp.appendChild(up); btnGrp.appendChild(dn);
+                wrap.appendChild(inp); wrap.appendChild(btnGrp);
+                return wrap;
+            }
+            // Brief red flash helper (always restores original border after 400ms)
+            function flashRedBrief(inp) {
+                const orig = inp.style.border;
+                inp.style.border = '2px solid #f44336';
+                if (inp.__flashTimer) clearTimeout(inp.__flashTimer);
+                inp.__flashTimer = setTimeout(() => { inp.style.border = orig; inp.__flashTimer = null; }, 400);
+            }
+            const rfRangeA = document.createElement('input');
+            rfRangeA.type = 'number'; rfRangeA.min = 1; rfRangeA.max = 44; rfRangeA.value = '1';
+            const rfRangeB = document.createElement('input');
+            rfRangeB.type = 'number'; rfRangeB.min = 1; rfRangeB.max = 44; rfRangeB.value = '1';
+            const rfRangeAWrap = makeRangeInputWrap(rfRangeA, 1, 44, () => rfRangeB, true);
+            const rfRangeBWrap = makeRangeInputWrap(rfRangeB, 1, 44, () => rfRangeA, false);
+            // Validation + flash for rank range inputs
+            function rfRangeValidateA() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { rfRangeA.value = 1; a = 1; } if (a > 44) { rfRangeA.value = 44; a = 44; } if (Number.isFinite(b) && a > b) { flashRedBrief(rfRangeA); rfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
+            function rfRangeValidateB() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { rfRangeB.value = 1; b = 1; } if (b > 44) { rfRangeB.value = 44; b = 44; } if (Number.isFinite(a) && b < a) { flashRedBrief(rfRangeB); rfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
+            rfRangeA.addEventListener('input', rfRangeValidateA);
+            rfRangeA.addEventListener('change', rfRangeValidateA);
+            rfRangeB.addEventListener('input', rfRangeValidateB);
+            rfRangeB.addEventListener('change', rfRangeValidateB);
+            // Arrow left/right navigation between a and b (cycling)
+            rfRangeA.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); rfRangeB.focus(); rfRangeB.select(); } });
+            rfRangeB.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); rfRangeA.focus(); rfRangeA.select(); } });
+            rfRangeWrap.appendChild(rfRangeAWrap); rfRangeWrap.appendChild(rfRangeBWrap);
             const rfResult = document.createElement('span');
             rfResult.style.cssText = 'font-size:13px;font-weight:700;min-width:28px;text-align:center;display:inline-block;padding:2px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);color:var(--text);';
             rfResult.textContent = '-';
             rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
             rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
-            rfOp.addEventListener('change', () => { recomputeRankFilterAndRebuild(); });
+            rfOp.addEventListener('change', () => {
+                if (rfOp.value === '[]') { rfWrap.style.display = 'none'; rfRangeWrap.style.display = 'flex'; rfRangeA.value = '1'; rfRangeB.value = '1'; setTimeout(() => rfRangeB.focus(), 0); }
+                else { rfWrap.style.display = ''; rfRangeWrap.style.display = 'none'; }
+                recomputeRankFilterAndRebuild();
+            });
             // ── Count filter UI (second row) ──
             const cfLabel = document.createElement('span');
             cfLabel.textContent = 'count';
             cfLabel.style.cssText = 'font-weight:600;font-size:13px;min-width:40px;display:inline-block;text-align:right;';
             const cfOp = document.createElement('select');
             cfOp.style.cssText = 'font-size:13px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--text);';
-            ['=', '<=', '>='].forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; cfOp.appendChild(o); });
+            ['=', '[]'].forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; cfOp.appendChild(o); });
+            // Single value input (for = mode)
             const cfWrap = document.createElement('div');
             cfWrap.style.cssText = 'position:relative;display:inline-block;';
             const cfInp = document.createElement('input');
-            cfInp.type = 'number'; cfInp.min = 1; cfInp.max = 15; cfInp.value = '1';
+            cfInp.type = 'number'; cfInp.min = 0; cfInp.max = 15; cfInp.value = '1';
             cfInp.style.cssText = 'width:56px;box-sizing:border-box;text-align:center;padding-right:22px;border-radius:4px;border:1px solid var(--border);font-size:13px;';
             const cfBtnGrp = document.createElement('div');
             cfBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
             const cfUp = document.createElement('button'); cfUp.type = 'button'; cfUp.innerHTML = '▲'; cfUp.style.cssText = rfArrowSt;
             const cfDn = document.createElement('button'); cfDn.type = 'button'; cfDn.innerHTML = '▼'; cfDn.style.cssText = rfArrowSt;
-            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 1 : n + 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
-            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n <= 1 ? 15 : n - 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
+            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 0 : n + 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
+            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10); if (!Number.isFinite(n)) n = 0; n = n <= 0 ? 15 : n - 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
             cfBtnGrp.appendChild(cfUp); cfBtnGrp.appendChild(cfDn);
             cfWrap.appendChild(cfInp); cfWrap.appendChild(cfBtnGrp);
-            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
-            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
-            cfOp.addEventListener('change', () => { recomputeRankFilterAndRebuild(); });
+            // Range inputs for count [] mode
+            const cfRangeWrap = document.createElement('div');
+            cfRangeWrap.style.cssText = 'display:none;align-items:center;gap:3px;';
+            // Helper: wrap a count range input with up/down buttons
+            function makeCfRangeInputWrap(inp, minVal, maxVal, peerInpFn, isA) {
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'position:relative;display:inline-block;';
+                inp.style.cssText = 'width:56px;box-sizing:border-box;text-align:center;padding-right:22px;border-radius:4px;border:1px solid var(--border);font-size:13px;';
+                const btnGrp = document.createElement('div');
+                btnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
+                const up = document.createElement('button'); up.type = 'button'; up.innerHTML = '▲'; up.style.cssText = rfArrowSt;
+                const dn = document.createElement('button'); dn.type = 'button'; dn.innerHTML = '▼'; dn.style.cssText = rfArrowSt;
+                up.addEventListener('click', () => {
+                    let n = parseInt(inp.value, 10) || 0;
+                    n = n >= maxVal ? minVal : n + 1;
+                    const peer = peerInpFn();
+                    const pv = parseInt(peer.value, 10);
+                    if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
+                    inp.value = n; recomputeRankFilterAndRebuild();
+                });
+                dn.addEventListener('click', () => {
+                    let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
+                    n = n <= minVal ? maxVal : n - 1;
+                    const peer = peerInpFn();
+                    const pv = parseInt(peer.value, 10);
+                    if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
+                    inp.value = n; recomputeRankFilterAndRebuild();
+                });
+                btnGrp.appendChild(up); btnGrp.appendChild(dn);
+                wrap.appendChild(inp); wrap.appendChild(btnGrp);
+                return wrap;
+            }
+            const cfRangeA = document.createElement('input');
+            cfRangeA.type = 'number'; cfRangeA.min = 0; cfRangeA.max = 15; cfRangeA.value = '1';
+            const cfRangeB = document.createElement('input');
+            cfRangeB.type = 'number'; cfRangeB.min = 0; cfRangeB.max = 15; cfRangeB.value = '1';
+            const cfRangeAWrap = makeCfRangeInputWrap(cfRangeA, 0, 15, () => cfRangeB, true);
+            const cfRangeBWrap = makeCfRangeInputWrap(cfRangeB, 0, 15, () => cfRangeA, false);
+            // Validation + flash for count range inputs
+            function cfRangeValidateA() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 0) { cfRangeA.value = 0; a = 0; } if (a > 15) { cfRangeA.value = 15; a = 15; } if (Number.isFinite(b) && a > b) { flashRedBrief(cfRangeA); cfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
+            function cfRangeValidateB() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 0) { cfRangeB.value = 0; b = 0; } if (b > 15) { cfRangeB.value = 15; b = 15; } if (Number.isFinite(a) && b < a) { flashRedBrief(cfRangeB); cfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
+            cfRangeA.addEventListener('input', cfRangeValidateA);
+            cfRangeA.addEventListener('change', cfRangeValidateA);
+            cfRangeB.addEventListener('input', cfRangeValidateB);
+            cfRangeB.addEventListener('change', cfRangeValidateB);
+            // Arrow left/right navigation between a and b (cycling)
+            cfRangeA.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeB.focus(); cfRangeB.select(); } });
+            cfRangeB.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeA.focus(); cfRangeA.select(); } });
+            cfRangeWrap.appendChild(cfRangeAWrap); cfRangeWrap.appendChild(cfRangeBWrap);
+            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfOp.addEventListener('change', () => {
+                if (cfOp.value === '[]') { cfWrap.style.display = 'none'; cfRangeWrap.style.display = 'flex'; cfRangeA.value = '1'; cfRangeB.value = '1'; setTimeout(() => cfRangeB.focus(), 0); }
+                else { cfWrap.style.display = ''; cfRangeWrap.style.display = 'none'; }
+                recomputeRankFilterAndRebuild();
+            });
             // Build two-row controls layout with result centered between rows
             const rowsCol = document.createElement('div');
             rowsCol.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
             const row1 = document.createElement('div');
             row1.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
-            row1.appendChild(rfLabel); row1.appendChild(rfOp); row1.appendChild(rfWrap);
+            row1.appendChild(rfLabel); row1.appendChild(rfOp); row1.appendChild(rfWrap); row1.appendChild(rfRangeWrap);
             const row2 = document.createElement('div');
             row2.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
-            row2.appendChild(cfLabel); row2.appendChild(cfOp); row2.appendChild(cfWrap);
+            row2.appendChild(cfLabel); row2.appendChild(cfOp); row2.appendChild(cfWrap); row2.appendChild(cfRangeWrap);
             rowsCol.appendChild(row1); rowsCol.appendChild(row2);
             controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
             controls.appendChild(rowsCol); controls.appendChild(rfResult);
@@ -7828,16 +7944,30 @@
             let lastSourceRecords = [];
             // Predicate: does a single record match the current rank/count filter?
             function recordMatchesRankCountFilter(rec) {
-                const val = parseInt(rfInp.value, 10);
-                const cntVal = parseInt(cfInp.value, 10);
-                if (!Number.isFinite(val) || val < 1 || val > 44) return false;
-                if (!Number.isFinite(cntVal) || cntVal < 1 || cntVal > 15) return false;
-                const ns = rec.nums;
-                if (!ns || ns.length < 2) return false;
                 const op = rfOp.value;
                 const cntOp = cfOp.value;
-                const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
-                const checkCnt = (c) => cntOp === '=' ? c === cntVal : cntOp === '<=' ? c <= cntVal : c >= cntVal;
+                let check;
+                if (op === '[]') {
+                    const rA = parseInt(rfRangeA.value, 10), rB = parseInt(rfRangeB.value, 10);
+                    if (!Number.isFinite(rA) || !Number.isFinite(rB) || rA < 1 || rB > 44 || rA > rB) return false;
+                    check = (r) => r >= rA && r <= rB;
+                } else {
+                    const val = parseInt(rfInp.value, 10);
+                    if (!Number.isFinite(val) || val < 1 || val > 44) return false;
+                    check = (r) => r === val;
+                }
+                let checkCnt;
+                if (cntOp === '[]') {
+                    const cA = parseInt(cfRangeA.value, 10), cB = parseInt(cfRangeB.value, 10);
+                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) return false;
+                    checkCnt = (c) => c >= cA && c <= cB;
+                } else {
+                    const cntVal = parseInt(cfInp.value, 10);
+                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) return false;
+                    checkCnt = (c) => c === cntVal;
+                }
+                const ns = rec.nums;
+                if (!ns || ns.length < 2) return false;
                 let pairHitCount = 0;
                 for (let i = 0; i < ns.length; i++) {
                     for (let j = i + 1; j < ns.length; j++) {
@@ -7850,15 +7980,22 @@
                 return checkCnt(pairHitCount);
             }
             function recomputeRankFilter() {
-                const val = parseInt(rfInp.value, 10);
-                const cntVal = parseInt(cfInp.value, 10);
-                if (!Number.isFinite(val) || val < 1 || val > 44 || lastSourceRecords.length === 0) {
-                    rfResult.textContent = '-';
-                    return;
+                if (lastSourceRecords.length === 0) { rfResult.textContent = '-'; return; }
+                const op = rfOp.value;
+                if (op === '[]') {
+                    const rA = parseInt(rfRangeA.value, 10), rB = parseInt(rfRangeB.value, 10);
+                    if (!Number.isFinite(rA) || !Number.isFinite(rB) || rA < 1 || rB > 44 || rA > rB) { rfResult.textContent = '-'; return; }
+                } else {
+                    const val = parseInt(rfInp.value, 10);
+                    if (!Number.isFinite(val) || val < 1 || val > 44) { rfResult.textContent = '-'; return; }
                 }
-                if (!Number.isFinite(cntVal) || cntVal < 1 || cntVal > 15) {
-                    rfResult.textContent = '-';
-                    return;
+                const cntOp = cfOp.value;
+                if (cntOp === '[]') {
+                    const cA = parseInt(cfRangeA.value, 10), cB = parseInt(cfRangeB.value, 10);
+                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) { rfResult.textContent = '-'; return; }
+                } else {
+                    const cntVal = parseInt(cfInp.value, 10);
+                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) { rfResult.textContent = '-'; return; }
                 }
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
@@ -8139,7 +8276,7 @@
                 syncFromNRRows();
             }
 
-            for (let ri = 0; ri < 3; ri++) {
+            for (let ri = 0; ri < 5; ri++) {
                 const rowDiv = document.createElement('div');
                 rowDiv.style.cssText = 'display:flex;align-items:center;gap:6px;';
 
@@ -8475,7 +8612,9 @@
                 // Only track filter/control state — NOT selected numbers.
                 // NR row values only matter when Get sync is active.
                 const nrVals = cell67_syncActive ? nrRows.map(r => r.numInp ? String(r.numInp.value || '') : '').join(',') : '';
-                return `${rfOp.value}|${rfInp.value}|${cfOp.value}|${cfInp.value}|${cell67_locActive}|${cell67_syncActive}|${nrVals}`;
+                const rfRange = rfOp.value === '[]' ? `${rfRangeA.value}-${rfRangeB.value}` : rfInp.value;
+                const cfRange = cfOp.value === '[]' ? `${cfRangeA.value}-${cfRangeB.value}` : cfInp.value;
+                return `${rfOp.value}|${rfRange}|${cfOp.value}|${cfRange}|${cell67_locActive}|${cell67_syncActive}|${nrVals}`;
             }
             function rebuildAll() {
                 // Check if state changed → reset pagination index
@@ -8686,9 +8825,13 @@
                             if (!seen.has(key)) { seen.add(key); unique.push(p); }
                         }
                         const numPillSt = 'background:#2e7d32;color:#fff;display:inline-block;min-width:22px;text-align:center;padding:1px 4px;border-radius:4px;font-weight:700;font-size:12px;';
-                        return unique.map(p =>
+                        const allItems = unique.map(p =>
                             `<span style="${numPillSt}">${p.a}</span> <span style="${numPillSt}">${p.b}</span> <span style="font-size:12px">${p.rank}/44</span>`
-                        ).join('&nbsp;&nbsp;&nbsp;');
+                        );
+                        if (allItems.length >= 6) {
+                            return allItems.slice(0, 5).join('&nbsp;&nbsp;&nbsp;') + `&nbsp;&nbsp;&nbsp;<span style="font-size:11px;color:var(--muted)" title="${allItems.length - 5} more">…+${allItems.length - 5}</span>`;
+                        }
+                        return allItems.join('&nbsp;&nbsp;&nbsp;');
                     };
 
                     // When lọc is active, show ALL pairs matching the rank filter from BOTH columns
@@ -8696,10 +8839,17 @@
                         if (!Array.isArray(sixNums) || sixNums.length !== 6) return '';
                         const ns = sixNums.map(Number).filter(Number.isFinite);
                         if (ns.length !== 6) return '';
-                        const val = parseInt(rfInp.value, 10);
-                        if (!Number.isFinite(val) || val < 1 || val > 44) return '';
                         const op = rfOp.value;
-                        const check = (r) => op === '=' ? r === val : op === '<=' ? r <= val : r >= val;
+                        let check;
+                        if (op === '[]') {
+                            const rA = parseInt(rfRangeA.value, 10), rB = parseInt(rfRangeB.value, 10);
+                            if (!Number.isFinite(rA) || !Number.isFinite(rB) || rA < 1 || rB > 44 || rA > rB) return '';
+                            check = (r) => r >= rA && r <= rB;
+                        } else {
+                            const val = parseInt(rfInp.value, 10);
+                            if (!Number.isFinite(val) || val < 1 || val > 44) return '';
+                            check = (r) => r === val;
+                        }
                         const matched = [];
                         for (let i = 0; i < ns.length; i++) {
                             for (let j = i + 1; j < ns.length; j++) {
@@ -8718,9 +8868,13 @@
                         }
                         unique.sort((a, b) => a.rank - b.rank || a.a - b.a || a.b - b.b);
                         const numPillSt = 'background:#2e7d32;color:#fff;display:inline-block;min-width:22px;text-align:center;padding:1px 4px;border-radius:4px;font-weight:700;font-size:12px;';
-                        return unique.map(p =>
+                        const allItems = unique.map(p =>
                             `<span style="${numPillSt}">${p.a}</span> <span style="${numPillSt}">${p.b}</span> <span style="font-size:12px">${p.rank}/44</span>`
-                        ).join('&nbsp;&nbsp;&nbsp;');
+                        );
+                        if (allItems.length >= 6) {
+                            return allItems.slice(0, 5).join('&nbsp;&nbsp;&nbsp;') + `&nbsp;&nbsp;&nbsp;<span style="font-size:11px;color:var(--muted)" title="${allItems.length - 5} more">…+${allItems.length - 5}</span>`;
+                        }
+                        return allItems.join('&nbsp;&nbsp;&nbsp;');
                     };
 
                     const numsHtml = displayNums.map(n =>
