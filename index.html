@@ -3496,6 +3496,19 @@
             outline: 2px solid #f44336 !important;
             background-color: rgba(244, 67, 54, 0.15) !important;
         }
+
+        /* Source-missing highlight on Table T (dblclick toggle from lead) */
+        .cell67-num.cell67-srcmiss {
+            background: #d32f2f;
+            color: #fff;
+            border-color: #d32f2f;
+        }
+
+        [data-theme="dark"] .cell67-num.cell67-srcmiss {
+            background: #d32f2f;
+            color: #fff;
+            border-color: #d32f2f;
+        }
     </style>
     <!-- Cell11 multi-value picker dropdown CSS -->
     <style>
@@ -7761,7 +7774,14 @@
         }
         // Cell6.7: Dò cặp — pick numbers one-by-one and analyse pairs + missing
         function renderCell6_7() {
-            const body = sectionShell("cell6_7", "Cell6.7 · Dò cặp", "Chọn số từ bảng 45 số để phân tích cặp và missing.");
+            const body = sectionShell("cell6_7", "Cell6.7 · Dò cặp", "");
+            // Create lead element manually (sectionShell skips it for empty string)
+            const leadEl67 = document.createElement('p');
+            leadEl67.className = 'lead';
+            const sec67 = document.getElementById('cell6_7');
+            sec67.insertBefore(leadEl67, body);
+            let cell67_srcMissingActive = false; // dblclick toggle for red-styling source-missing numbers
+            let cell67_srcMissingNums = []; // cached missing numbers for dblclick handler
             const controls = document.createElement("div"); controls.className = "controls";
             controls.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;';
             // ── Rank filter UI ──
@@ -9291,7 +9311,7 @@
                 for (let n = 1; n <= 45; n++) {
                     const c = cellMap67[n];
                     if (!c) continue;
-                    c.classList.remove('cell67-selected', 'cell67-missing', 'cell67-disabled', 'cell67-mpurple');
+                    c.classList.remove('cell67-selected', 'cell67-missing', 'cell67-disabled', 'cell67-mpurple', 'cell67-srcmiss');
                     c.style.pointerEvents = '';
                     if (selectedSet.has(n)) {
                         c.classList.add('cell67-selected');
@@ -9877,6 +9897,51 @@
                     }
                 }
 
+                // ── 10. Compute source-missing: {1..45} minus union of all numbers in sourceRecords ──
+                if (leadEl67) {
+                    // Compute sourceRecs for the lead update (same logic as step 7/9)
+                    let srcRecsForLead = [];
+                    if (S.length < 6 && lastSourceRecords.length > 0) {
+                        srcRecsForLead = cell67_locActive
+                            ? lastSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r))
+                            : hpFilterActive ? lastSourceRecords.filter(r => recordMatchesHPFilter(r))
+                                : lastSourceRecords;
+                        if (cell67_locActive && !cell67_overlapActive) {
+                            srcRecsForLead = srcRecsForLead.filter(r => r.nums.length === 6 ? !hasPairrankOverlap(r.nums) : true);
+                        }
+                    }
+                    const unionSrcNums = new Set();
+                    srcRecsForLead.forEach(r => r.nums.forEach(n => unionSrcNums.add(n)));
+                    const srcMissing = [];
+                    for (let n = 1; n <= 45; n++) {
+                        if (!unionSrcNums.has(n)) srcMissing.push(n);
+                    }
+                    cell67_srcMissingNums = srcMissing;
+                    // Build HTML for the lead element
+                    if (srcMissing.length > 0 && srcMissing.length < 45) {
+                        const countBadge = `<span class="cell67-srcmiss-count" style="background:#c62828;color:#fff;padding:1px 5px;border-radius:3px;font-weight:700;margin:0 2px;cursor:pointer">[${srcMissing.length}]</span>`;
+                        const numsStr = `<span class="cell67-srcmiss-nums" style="cursor:pointer;${cell67_srcMissingActive ? 'color:#f44336;font-weight:700' : ''}">${srcMissing.join(',')}</span>`;
+                        leadEl67.innerHTML = `<span class="cell67-srcmiss-label" style="cursor:pointer;user-select:none" title="Dblclick để tô đỏ trên bảng T">missing${cell67_srcMissingActive ? countBadge : countBadge}: ${numsStr}</span>`;
+                    } else if (srcMissing.length === 0) {
+                        leadEl67.textContent = 'missing[0]: (không có)';
+                    } else {
+                        leadEl67.textContent = 'missing[45]: 1,2,...,45';
+                    }
+                    // Apply/remove cell67-srcmiss class on Table T
+                    for (let n = 1; n <= 45; n++) {
+                        const c = cellMap67[n];
+                        if (c) c.classList.remove('cell67-srcmiss');
+                    }
+                    if (cell67_srcMissingActive) {
+                        for (const n of srcMissing) {
+                            const c = cellMap67[n];
+                            if (c && !selectedSet.has(n) && !unionMissing.has(n)) {
+                                c.classList.add('cell67-srcmiss');
+                            }
+                        }
+                    }
+                }
+
             }
 
             // ═══ Programmatic pick: clear and select given numbers on Table T ═══
@@ -9952,6 +10017,16 @@
                 updateAltClickLabel();
                 rebuildAll();
             };
+
+            // ── Dblclick handler on lead element: toggle source-missing red styling ──
+            if (leadEl67) {
+                leadEl67.style.cursor = 'pointer';
+                leadEl67.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    cell67_srcMissingActive = !cell67_srcMissingActive;
+                    rebuildAll();
+                });
+            }
 
             // ── Initial render with empty T: show all historical records ──
             rebuildAll();
