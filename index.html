@@ -7933,8 +7933,362 @@
             row2.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
             row2.appendChild(cfLabel); row2.appendChild(cfOp); row2.appendChild(cfWrap); row2.appendChild(cfRangeWrap);
             rowsCol.appendChild(row1); rowsCol.appendChild(row2);
-            controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
+            controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap;';
             controls.appendChild(rowsCol);
+
+            // ══════════════════════════════════════════════════════════════
+            // ── HP (Highest PairRank) Filter Component ──
+            // ══════════════════════════════════════════════════════════════
+            const hpIncludeGroups = [new Set()]; // Array of Set<number>  — always starts with G1
+            const hpExclude = new Set(); // Set<number>
+            let hpFilterActive = true; // HP is always on
+
+            // Helper: get numbers appearing in highest pairrank pairs for a 6-number result
+            function getHighestPairrankNums(sixNums) {
+                const result = new Set();
+                if (!Array.isArray(sixNums) || sixNums.length !== 6) return result;
+                const ns = sixNums.map(Number).filter(Number.isFinite);
+                if (ns.length !== 6) return result;
+                let bestRank = Infinity;
+                const allP = [];
+                for (let i = 0; i < ns.length; i++) {
+                    for (let j = i + 1; j < ns.length; j++) {
+                        const r1 = partnerRankMap67.get(`${ns[i]}-${ns[j]}`);
+                        const r2 = partnerRankMap67.get(`${ns[j]}-${ns[i]}`);
+                        if (r1) { if (r1 < bestRank) bestRank = r1; allP.push({ a: ns[i], b: ns[j], rank: r1 }); }
+                        if (r2) { if (r2 < bestRank) bestRank = r2; allP.push({ a: ns[j], b: ns[i], rank: r2 }); }
+                    }
+                }
+                if (bestRank === Infinity) return result;
+                const best = allP.filter(p => p.rank === bestRank);
+                for (const p of best) { result.add(p.a); result.add(p.b); }
+                return result;
+            }
+
+            // Predicate: does a record pass the HP filter?
+            function recordMatchesHPFilter(rec) {
+                if (!hpFilterActive) return true;
+                if (hpIncludeGroups.length === 0 && hpExclude.size === 0) return true;
+                const ns = rec.nums;
+                if (!ns || ns.length !== 6) return true; // skip non-6-number records
+                const hpNums = getHighestPairrankNums(ns);
+                if (hpNums.size === 0) return true;
+                // Exclude check: reject if ANY HP number is in exclude set
+                for (const n of hpNums) { if (hpExclude.has(n)) return false; }
+                // Include check: for each group, at least one item must be in HP numbers (AND of ORs)
+                for (const group of hpIncludeGroups) {
+                    if (group.size === 0) continue; // empty group = ignored
+                    let found = false;
+                    for (const n of group) { if (hpNums.has(n)) { found = true; break; } }
+                    if (!found) return false;
+                }
+                return true;
+            }
+
+            // ── HP UI container: HP label on the left, content on the right ──
+            const hpContainer = document.createElement('div');
+            hpContainer.style.cssText = 'display:inline-flex;flex-direction:row;gap:6px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--card);font-size:12px;min-width:120px;position:relative;align-items:stretch;';
+
+            const hpLabel = document.createElement('span');
+            hpLabel.textContent = 'HP';
+            hpLabel.style.cssText = 'font-weight:700;font-size:13px;user-select:none;color:#00ff88;text-shadow:0 0 8px #00ff88;display:flex;align-items:center;';
+            hpLabel.title = 'HP filter (always active)';
+            hpContainer.appendChild(hpLabel);
+
+            const hpContent = document.createElement('div');
+            hpContent.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+            hpContainer.appendChild(hpContent);
+
+            // ── Include area ──
+            const hpIncludeArea = document.createElement('div');
+            hpIncludeArea.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+            const hpIncludeHeader = document.createElement('div');
+            hpIncludeHeader.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const hpIncludeLabel = document.createElement('span');
+            hpIncludeLabel.textContent = 'Include';
+            hpIncludeLabel.style.cssText = 'font-size:11px;color:#2e7d32;font-weight:600;';
+            const hpAddGroupBtn = document.createElement('button');
+            hpAddGroupBtn.type = 'button';
+            hpAddGroupBtn.textContent = '+';
+            hpAddGroupBtn.title = 'Add Include group';
+            hpAddGroupBtn.style.cssText = 'width:18px;height:18px;padding:0;border-radius:50%;border:1px solid #2e7d32;background:#c8e6c9;color:#1b5e20;font-weight:700;font-size:11px;cursor:pointer;line-height:16px;text-align:center;';
+            hpAddGroupBtn.addEventListener('click', () => {
+                hpIncludeGroups.push(new Set());
+                hpRenderInclude();
+            });
+            hpIncludeHeader.appendChild(hpIncludeLabel);
+            hpIncludeHeader.appendChild(hpAddGroupBtn);
+            hpIncludeArea.appendChild(hpIncludeHeader);
+            const hpIncludeBody = document.createElement('div');
+            hpIncludeBody.style.cssText = 'display:flex;flex-direction:row;gap:4px;flex-wrap:wrap;';
+            hpIncludeArea.appendChild(hpIncludeBody);
+            hpContent.appendChild(hpIncludeArea);
+
+            // ── Exclude area ──
+            const hpExcludeArea = document.createElement('div');
+            hpExcludeArea.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+            const hpExcludeHeader = document.createElement('div');
+            hpExcludeHeader.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const hpExcludeLabel = document.createElement('span');
+            hpExcludeLabel.textContent = 'Exclude';
+            hpExcludeLabel.style.cssText = 'font-size:11px;color:#c62828;font-weight:600;';
+            hpExcludeHeader.appendChild(hpExcludeLabel);
+            hpExcludeArea.appendChild(hpExcludeHeader);
+            const hpExcludeBody = document.createElement('div');
+            hpExcludeBody.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px;min-height:20px;padding:2px;border:1px dashed rgba(198,40,40,0.3);border-radius:4px;cursor:pointer;';
+            hpExcludeBody.title = 'Click to add/remove exclude numbers';
+            hpExcludeArea.appendChild(hpExcludeBody);
+            hpContent.appendChild(hpExcludeArea);
+
+            // ── Shared HP mv-dropdown (45-number picker) ──
+            const hpMvDropdown = document.createElement('div');
+            hpMvDropdown.className = 'cell11-mv-dropdown';
+            hpMvDropdown.style.cssText += 'max-width:220px;';
+            document.body.appendChild(hpMvDropdown);
+            let hpMvTarget = null; // { type: 'include'|'exclude', groupIdx?: number }
+            let hpMvAnchorEl = null;
+
+            function hpGetAllUsedNums() {
+                // Returns Map: number → reason string
+                const used = new Map();
+                hpExclude.forEach(n => used.set(n, 'Đã chọn ở Exclude'));
+                hpIncludeGroups.forEach((g, gi) => {
+                    g.forEach(n => {
+                        if (!used.has(n)) used.set(n, `Đã có ở Nhóm ${gi + 1}`);
+                    });
+                });
+                return used;
+            }
+
+            function hpBuildMvGrid() {
+                hpMvDropdown.innerHTML = '';
+                const grid = document.createElement('div');
+                grid.className = 'cell11-mv-grid';
+                const colGroups = [
+                    [1, 2, 3, 4, 5, 6, 7, 8],
+                    [9, 10, 11, 12, 13, 14, 15, 16],
+                    [17, 18, 19, 20, 21, 22, 23, 24],
+                    [25, 26, 27, 28, 29, 30, 31],
+                    [32, 33, 34, 35, 36, 37, 38],
+                    [39, 40, 41, 42, 43, 44, 45]
+                ];
+                const allUsed = hpGetAllUsedNums();
+                const maxRows = 8;
+                const isInclude = hpMvTarget && hpMvTarget.type === 'include';
+                const isExclude = hpMvTarget && hpMvTarget.type === 'exclude';
+                const currentSet = isInclude ? hpIncludeGroups[hpMvTarget.groupIdx] :
+                    isExclude ? hpExclude : null;
+                for (let row = maxRows - 1; row >= 0; row--) {
+                    for (let col = 0; col < 6; col++) {
+                        const num = colGroups[col][row];
+                        if (num === undefined) {
+                            const empty = document.createElement('div');
+                            empty.style.cssText = 'width:28px;height:24px;';
+                            grid.appendChild(empty);
+                            continue;
+                        }
+                        const cell = document.createElement('div');
+                        cell.className = 'mv-cell';
+                        cell.textContent = String(num);
+                        cell.dataset.num = num;
+                        const inCurrent = currentSet && currentSet.has(num);
+                        const usedReason = allUsed.get(num);
+                        const usedElsewhere = usedReason && !inCurrent;
+                        if (inCurrent) {
+                            cell.classList.add('mv-selected');
+                            if (isExclude) {
+                                cell.style.background = '#c62828';
+                                cell.style.borderColor = '#c62828';
+                            }
+                        }
+                        if (usedElsewhere) {
+                            cell.style.opacity = '0.2';
+                            cell.style.pointerEvents = 'none';
+                            cell.style.background = '#333';
+                            cell.style.color = '#666';
+                            cell.style.borderColor = '#444';
+                            cell.title = usedReason;
+                        } else {
+                            cell.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                if (!currentSet) return;
+                                if (currentSet.has(num)) {
+                                    currentSet.delete(num);
+                                } else {
+                                    currentSet.add(num);
+                                }
+                                hpBuildMvGrid(); // rebuild grid to update states
+                                hpRenderInclude();
+                                hpRenderExclude();
+                                recomputeRankFilterAndRebuild();
+                            });
+                        }
+                        grid.appendChild(cell);
+                    }
+                }
+                hpMvDropdown.appendChild(grid);
+            }
+
+            function hpShowMvDropdown(anchorEl, target) {
+                hpMvTarget = target;
+                hpMvAnchorEl = anchorEl;
+                hpBuildMvGrid();
+                hpMvDropdown.classList.add('show');
+                hpRepositionDropdown();
+            }
+
+            function hpHideMvDropdown() {
+                hpMvDropdown.classList.remove('show');
+                hpMvTarget = null;
+                hpMvAnchorEl = null;
+            }
+
+            function hpRepositionDropdown() {
+                if (!hpMvAnchorEl || !hpMvDropdown.classList.contains('show')) return;
+                const rect = hpMvAnchorEl.getBoundingClientRect();
+                hpMvDropdown.style.left = rect.left + 'px';
+                hpMvDropdown.style.top = (rect.bottom + 4) + 'px';
+            }
+
+            // Close HP dropdown on outside click
+            document.addEventListener('mousedown', (e) => {
+                if (!hpMvDropdown.classList.contains('show')) return;
+                if (hpMvDropdown.contains(e.target)) return;
+                if (hpMvAnchorEl && hpMvAnchorEl.contains(e.target)) return;
+                hpHideMvDropdown();
+            });
+            window.addEventListener('scroll', hpRepositionDropdown, true);
+            window.addEventListener('resize', hpRepositionDropdown);
+
+            // ── Render Include groups ──
+            function hpRenderInclude() {
+                hpIncludeBody.innerHTML = '';
+                hpIncludeGroups.forEach((group, gi) => {
+                    const gDiv = document.createElement('div');
+                    gDiv.style.cssText = 'display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:2px 3px;border:1px dashed rgba(46,125,50,0.3);border-radius:4px;min-height:20px;cursor:pointer;position:relative;';
+                    gDiv.draggable = true;
+                    gDiv.title = `Nhóm ${gi + 1} — kéo ra ngoài để xóa nhóm`;
+
+                    const gLabel = document.createElement('span');
+                    gLabel.textContent = `G${gi + 1}`;
+                    gLabel.style.cssText = 'font-size:10px;color:#2e7d32;font-weight:600;margin-right:2px;pointer-events:none;';
+                    gDiv.appendChild(gLabel);
+
+                    // Render selected numbers as green chips (draggable to remove from group)
+                    [...group].sort((a, b) => a - b).forEach(n => {
+                        const chip = document.createElement('span');
+                        chip.textContent = n;
+                        chip.draggable = true;
+                        chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 3px;border-radius:3px;background:#2e7d32;color:#fff;font-size:11px;font-weight:700;font-family:monospace;cursor:grab;';
+                        chip.title = `Kéo ra ngoài để loại ${n} khỏi nhóm`;
+                        // Drag chip to remove from group
+                        chip.addEventListener('dragstart', (e) => {
+                            e.stopPropagation(); // don't trigger group drag
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', `hp-chip-${gi}-${n}`);
+                            chip.style.opacity = '0.4';
+                            chip.__hpChipDrag = true;
+                            chip.__hpChipRemove = false;
+                        });
+                        chip.addEventListener('dragend', (e) => {
+                            e.stopPropagation();
+                            chip.style.opacity = '';
+                            if (chip.__hpChipRemove) {
+                                group.delete(n);
+                                hpHideMvDropdown();
+                                hpRenderInclude();
+                                recomputeRankFilterAndRebuild();
+                            }
+                            chip.__hpChipDrag = false;
+                            chip.__hpChipRemove = false;
+                        });
+                        gDiv.appendChild(chip);
+                    });
+
+                    // Click anywhere on group to open picker
+                    gDiv.addEventListener('click', (e) => {
+                        hpShowMvDropdown(gDiv, { type: 'include', groupIdx: gi });
+                    });
+
+                    // Drag-to-remove: remove group when dragged out
+                    gDiv.addEventListener('dragstart', (e) => {
+                        // Only trigger if not a chip drag
+                        if (e.target !== gDiv) return;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', `hp-include-group-${gi}`);
+                        gDiv.style.opacity = '0.4';
+                        gDiv.__hpDragGroup = true;
+                    });
+                    gDiv.addEventListener('dragend', (e) => {
+                        if (e.target !== gDiv) return;
+                        gDiv.style.opacity = '';
+                        // If dropped outside the include area, remove the group
+                        if (gDiv.__hpDragRemove) {
+                            hpIncludeGroups.splice(gi, 1);
+                            // Ensure at least G1 always exists
+                            if (hpIncludeGroups.length === 0) hpIncludeGroups.push(new Set());
+                            hpHideMvDropdown();
+                            hpRenderInclude();
+                            recomputeRankFilterAndRebuild();
+                        }
+                        gDiv.__hpDragGroup = false;
+                        gDiv.__hpDragRemove = false;
+                    });
+
+                    hpIncludeBody.appendChild(gDiv);
+                });
+
+                // Enable drop detection: if group is dragged outside includeBody, mark for removal
+                hpIncludeBody.addEventListener('dragover', (e) => { e.preventDefault(); });
+            }
+
+            // Detect drag leaving include area → mark group or chip for removal
+            document.addEventListener('dragover', (e) => {
+                const groups = hpIncludeBody.querySelectorAll('div[draggable="true"]');
+                groups.forEach(g => {
+                    if (g.__hpDragGroup) {
+                        const rect = hpIncludeBody.getBoundingClientRect();
+                        const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                            e.clientY >= rect.top && e.clientY <= rect.bottom;
+                        g.__hpDragRemove = !inside;
+                    }
+                });
+                // Chip drag: mark for removal when outside the parent group
+                const chips = hpIncludeBody.querySelectorAll('span[draggable="true"]');
+                chips.forEach(c => {
+                    if (c.__hpChipDrag) {
+                        const parentG = c.parentElement;
+                        if (parentG) {
+                            const rect = parentG.getBoundingClientRect();
+                            const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                                e.clientY >= rect.top && e.clientY <= rect.bottom;
+                            c.__hpChipRemove = !inside;
+                        }
+                    }
+                });
+            });
+
+            // ── Render Exclude chips ──
+            function hpRenderExclude() {
+                hpExcludeBody.innerHTML = '';
+                [...hpExclude].sort((a, b) => a - b).forEach(n => {
+                    const chip = document.createElement('span');
+                    chip.textContent = n;
+                    chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 3px;border-radius:3px;background:#c62828;color:#fff;font-size:11px;font-weight:700;font-family:monospace;';
+                    hpExcludeBody.appendChild(chip);
+                });
+            }
+
+            // Click exclude body to open picker
+            hpExcludeBody.addEventListener('click', (e) => {
+                hpShowMvDropdown(hpExcludeBody, { type: 'exclude' });
+            });
+
+            controls.appendChild(hpContainer);
+
+            // Initial render of G1
+            hpRenderInclude();
+
             // ── "Overlap" toggle button (allow/disallow overlapping numbers in highest pairrank) ──
             const overlapBtn = document.createElement('button');
             overlapBtn.textContent = 'Overlap';
@@ -8033,6 +8387,7 @@
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
                     if (!recordMatchesRankCountFilter(rec)) continue;
+                    if (!recordMatchesHPFilter(rec)) continue;
                     // When overlap is OFF, also exclude overlap records from numerator
                     if (!cell67_overlapActive && rec.nums.length === 6 && hasPairrankOverlap(rec.nums)) continue;
                     matchCount++;
@@ -8045,7 +8400,7 @@
             // When lọc is active and filter values change (from user input), re-render
             function recomputeRankFilterAndRebuild() {
                 recomputeRankFilter();
-                if (cell67_locActive) rebuildAll();
+                if (cell67_locActive || hpFilterActive) rebuildAll();
             }
 
             // ── State ──
@@ -8502,6 +8857,26 @@
                 nrContainer.appendChild(rowDiv);
                 nrRows.push({ numInp, rankInp, resNumEl, resRankEl });
             }
+            // ── Arrow key navigation across all 5 get rows (num + rank inputs, wrapping) ──
+            (function setupNRArrowNav() {
+                // Build flat list of all navigable inputs: [row0.num, row0.rank, row1.num, row1.rank, ...]
+                const allInputs = [];
+                nrRows.forEach(r => { allInputs.push(r.numInp); allInputs.push(r.rankInp); });
+                const total = allInputs.length; // 10
+                allInputs.forEach((inp, idx) => {
+                    inp.addEventListener('keydown', (e) => {
+                        if (e.key === 'ArrowRight') {
+                            e.preventDefault();
+                            const next = allInputs[(idx + 1) % total];
+                            next.focus(); next.select();
+                        } else if (e.key === 'ArrowLeft') {
+                            e.preventDefault();
+                            const prev = allInputs[(idx - 1 + total) % total];
+                            prev.focus(); prev.select();
+                        }
+                    });
+                });
+            })();
             leftPanel.appendChild(nrContainer);
             wrapper.appendChild(leftPanel);
 
@@ -9049,6 +9424,8 @@
                             let exactToShow = topSorted ? exactMatches.slice() : exactMatches.slice().reverse();
                             // When lọc is active AND overlap is OFF, filter out overlap records
                             if (cell67_locActive && !cell67_overlapActive) exactToShow = exactToShow.filter(r => !hasPairrankOverlap(r.nums));
+                            // When lọc is active, apply HP filter to exact matches
+                            if (cell67_locActive || hpFilterActive) exactToShow = exactToShow.filter(r => recordMatchesHPFilter(r));
                             exactToShow.forEach(r => {
                                 const rNumsSorted = r.nums.slice().sort((a, b) => a - b);
                                 const rNumsDisplay = topSorted ? rNumsSorted : S.slice();
@@ -9072,7 +9449,9 @@
                         lastSourceRecords = allSourceRecords;
                         recomputeRankFilter();
                         // When lọc is active, filter sourceRecords to only matching records
-                        let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r)) : allSourceRecords;
+                        let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r)) : allSourceRecords;
+                        // Apply HP filter even when lọc is off, if HP is active
+                        if (!cell67_locActive && hpFilterActive) sourceRecords = sourceRecords.filter(r => recordMatchesHPFilter(r));
                         // When lọc is active AND overlap is OFF, also filter out overlap records
                         if (cell67_locActive && !cell67_overlapActive) sourceRecords = sourceRecords.filter(r => r.nums.length === 6 ? !hasPairrankOverlap(r.nums) : true);
                         const matchCount = sourceRecords.length;
@@ -9189,8 +9568,36 @@
                                     });
                                     const pageInfo = document.createElement('span');
                                     pageInfo.className = 'muted';
-                                    pageInfo.style.fontSize = '12px';
+                                    pageInfo.style.cssText = 'font-size:12px;cursor:pointer;user-select:none;';
+                                    pageInfo.title = 'Click to go to a specific page';
                                     pageInfo.textContent = `${cell67_expandPage + 1} / ${totalExpandPages}`;
+                                    pageInfo.addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        const inp = document.createElement('input');
+                                        inp.type = 'number';
+                                        inp.min = 1;
+                                        inp.max = totalExpandPages;
+                                        inp.value = cell67_expandPage + 1;
+                                        inp.style.cssText = 'width:40px;text-align:center;font-size:12px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--text);padding:1px 2px;';
+                                        pageInfo.textContent = '';
+                                        pageInfo.appendChild(inp);
+                                        const suffix = document.createTextNode(` / ${totalExpandPages}`);
+                                        pageInfo.appendChild(suffix);
+                                        inp.focus();
+                                        inp.select();
+                                        const commit = () => {
+                                            let v = parseInt(inp.value, 10);
+                                            if (!Number.isFinite(v) || v < 1) v = 1;
+                                            if (v > totalExpandPages) v = totalExpandPages;
+                                            cell67_expandPage = v - 1;
+                                            renderExpandPage();
+                                        };
+                                        inp.addEventListener('keydown', (ke) => {
+                                            if (ke.key === 'Enter') { ke.preventDefault(); commit(); }
+                                            if (ke.key === 'Escape') { ke.preventDefault(); renderExpandPage(); }
+                                        });
+                                        inp.addEventListener('blur', commit);
+                                    });
                                     navTd.appendChild(prevBtn);
                                     navTd.appendChild(pageInfo);
                                     navTd.appendChild(nextBtn);
@@ -9298,8 +9705,9 @@
                 if (cell67_hintActive && S.length < 6 && lastSourceRecords.length > 0) {
                     // Count occurrences of each number across source records (the "... x dòng nữa" set)
                     const sourceRecs = cell67_locActive
-                        ? lastSourceRecords.filter(r => recordMatchesRankCountFilter(r))
-                        : lastSourceRecords;
+                        ? lastSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r))
+                        : hpFilterActive ? lastSourceRecords.filter(r => recordMatchesHPFilter(r))
+                            : lastSourceRecords;
                     const freq = new Map();
                     for (const r of sourceRecs) {
                         for (const n of r.nums) {
