@@ -3489,6 +3489,13 @@
             color: #000;
             border-color: #f8f333;
         }
+
+        /* Red flash class for tryChangeValue blocking */
+        .flash-red {
+            border: 2px solid #f44336 !important;
+            outline: 2px solid #f44336 !important;
+            background-color: rgba(244, 67, 54, 0.15) !important;
+        }
     </style>
     <!-- Cell11 multi-value picker dropdown CSS -->
     <style>
@@ -7775,8 +7782,8 @@
             const rfArrowSt = 'width:14px;height:9px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:7px;line-height:9px;text-align:center;font-weight:700;';
             const rfUp = document.createElement('button'); rfUp.type = 'button'; rfUp.innerHTML = '▲'; rfUp.style.cssText = rfArrowSt;
             const rfDn = document.createElement('button'); rfDn.type = 'button'; rfDn.innerHTML = '▼'; rfDn.style.cssText = rfArrowSt;
-            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; rfInp.value = n; recomputeRankFilterAndRebuild(); });
-            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; rfInp.value = n; recomputeRankFilterAndRebuild(); });
+            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; tryChangeValue(rfInp, n); });
+            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; tryChangeValue(rfInp, n); });
             rfBtnGrp.appendChild(rfUp); rfBtnGrp.appendChild(rfDn);
             rfWrap.appendChild(rfInp); rfWrap.appendChild(rfBtnGrp);
             // Range inputs for rank [] mode
@@ -7797,27 +7804,48 @@
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
-                    if (!isA && Number.isFinite(pv) && n < pv) { /* b going below a via wrap is ok — wrap to minVal */ }
-                    inp.value = n; recomputeRankFilterAndRebuild();
+                    if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
+                    tryChangeValue(inp, n);
                 });
                 dn.addEventListener('click', () => {
                     let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
                     n = n <= minVal ? maxVal : n - 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
+                    if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
                     if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
-                    inp.value = n; recomputeRankFilterAndRebuild();
+                    tryChangeValue(inp, n);
                 });
                 btnGrp.appendChild(up); btnGrp.appendChild(dn);
                 wrap.appendChild(inp); wrap.appendChild(btnGrp);
+                // Intercept keyboard ArrowUp/ArrowDown to route through tryChangeValue
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowUp') { e.preventDefault(); up.click(); }
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); dn.click(); }
+                });
                 return wrap;
             }
-            // Brief red flash helper (always restores original border after 400ms)
+            // Brief red flash helper — uses CSS class for reliability
             function flashRedBrief(inp) {
-                const orig = inp.style.border;
-                inp.style.border = '2px solid #f44336';
+                inp.classList.add('flash-red');
                 if (inp.__flashTimer) clearTimeout(inp.__flashTimer);
-                inp.__flashTimer = setTimeout(() => { inp.style.border = orig; inp.__flashTimer = null; }, 400);
+                inp.__flashTimer = setTimeout(() => { inp.classList.remove('flash-red'); inp.__flashTimer = null; }, 600);
+            }
+            // Helper: try changing an input value; if matchCount doesn't change, revert and flash red
+            function tryChangeValue(inp, newVal) {
+                const oldVal = inp.value;
+                const oldCount = recomputeRankFilter();   // count with current (old) value
+                inp.value = newVal;
+                const newCount = recomputeRankFilter();   // count with candidate (new) value
+                // Block if matchCount is identical (but allow when both invalid = -1)
+                if (newCount === oldCount && oldCount !== -1) {
+                    inp.value = oldVal;
+                    recomputeRankFilter();                 // restore display
+                    flashRedBrief(inp);
+                    return false;
+                }
+                if (cell67_locActive) rebuildAll();
+                return true;
             }
             const rfRangeA = document.createElement('input');
             rfRangeA.type = 'number'; rfRangeA.min = 1; rfRangeA.max = 44; rfRangeA.value = '1';
@@ -7841,6 +7869,10 @@
             rfResult.textContent = '-';
             rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
             rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
+            rfInp.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp') { e.preventDefault(); rfUp.click(); }
+                else if (e.key === 'ArrowDown') { e.preventDefault(); rfDn.click(); }
+            });
             rfOp.addEventListener('change', () => {
                 if (rfOp.value === '[]') { rfWrap.style.display = 'none'; rfRangeWrap.style.display = 'flex'; rfRangeA.value = '1'; rfRangeB.value = '1'; setTimeout(() => rfRangeB.focus(), 0); }
                 else { rfWrap.style.display = ''; rfRangeWrap.style.display = 'none'; }
@@ -7863,8 +7895,8 @@
             cfBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
             const cfUp = document.createElement('button'); cfUp.type = 'button'; cfUp.innerHTML = '▲'; cfUp.style.cssText = rfArrowSt;
             const cfDn = document.createElement('button'); cfDn.type = 'button'; cfDn.innerHTML = '▼'; cfDn.style.cssText = rfArrowSt;
-            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 0 : n + 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
-            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10); if (!Number.isFinite(n)) n = 0; n = n <= 0 ? 15 : n - 1; cfInp.value = n; recomputeRankFilterAndRebuild(); });
+            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 0 : n + 1; tryChangeValue(cfInp, n); });
+            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10); if (!Number.isFinite(n)) n = 0; n = n <= 0 ? 15 : n - 1; tryChangeValue(cfInp, n); });
             cfBtnGrp.appendChild(cfUp); cfBtnGrp.appendChild(cfDn);
             cfWrap.appendChild(cfInp); cfWrap.appendChild(cfBtnGrp);
             // Range inputs for count [] mode
@@ -7885,18 +7917,25 @@
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
-                    inp.value = n; recomputeRankFilterAndRebuild();
+                    if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
+                    tryChangeValue(inp, n);
                 });
                 dn.addEventListener('click', () => {
                     let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
                     n = n <= minVal ? maxVal : n - 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
+                    if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
                     if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
-                    inp.value = n; recomputeRankFilterAndRebuild();
+                    tryChangeValue(inp, n);
                 });
                 btnGrp.appendChild(up); btnGrp.appendChild(dn);
                 wrap.appendChild(inp); wrap.appendChild(btnGrp);
+                // Intercept keyboard ArrowUp/ArrowDown to route through tryChangeValue
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowUp') { e.preventDefault(); up.click(); }
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); dn.click(); }
+                });
                 return wrap;
             }
             const cfRangeA = document.createElement('input');
@@ -7918,6 +7957,10 @@
             cfRangeWrap.appendChild(cfRangeAWrap); cfRangeWrap.appendChild(cfRangeBWrap);
             cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
             cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp') { e.preventDefault(); cfUp.click(); }
+                else if (e.key === 'ArrowDown') { e.preventDefault(); cfDn.click(); }
+            });
             cfOp.addEventListener('change', () => {
                 if (cfOp.value === '[]') { cfWrap.style.display = 'none'; cfRangeWrap.style.display = 'flex'; cfRangeA.value = '1'; cfRangeB.value = '1'; setTimeout(() => cfRangeB.focus(), 0); }
                 else { cfWrap.style.display = ''; cfRangeWrap.style.display = 'none'; }
@@ -8189,11 +8232,29 @@
                             chip.style.opacity = '0.4';
                             chip.__hpChipDrag = true;
                             chip.__hpChipRemove = false;
+                            chip.__hpChipTarget = null;
+                            chip.__hpChipSrcGroup = gi;
+                            chip.__hpChipNum = n;
                         });
                         chip.addEventListener('dragend', (e) => {
                             e.stopPropagation();
                             chip.style.opacity = '';
-                            if (chip.__hpChipRemove) {
+                            hpExcludeBody.style.outline = '';
+                            hpIncludeBody.querySelectorAll('div[draggable="true"]').forEach(g => g.style.outline = '');
+                            const tgt = chip.__hpChipTarget;
+                            if (tgt && tgt.type === 'exclude') {
+                                group.delete(n);
+                                hpExclude.add(n);
+                                hpHideMvDropdown();
+                                hpRenderInclude(); hpRenderExclude();
+                                recomputeRankFilterAndRebuild();
+                            } else if (tgt && tgt.type === 'include' && tgt.groupIdx !== gi) {
+                                group.delete(n);
+                                hpIncludeGroups[tgt.groupIdx].add(n);
+                                hpHideMvDropdown();
+                                hpRenderInclude();
+                                recomputeRankFilterAndRebuild();
+                            } else if (chip.__hpChipRemove) {
                                 group.delete(n);
                                 hpHideMvDropdown();
                                 hpRenderInclude();
@@ -8201,6 +8262,7 @@
                             }
                             chip.__hpChipDrag = false;
                             chip.__hpChipRemove = false;
+                            chip.__hpChipTarget = null;
                         });
                         gDiv.appendChild(chip);
                     });
@@ -8240,11 +8302,28 @@
 
                 // Enable drop detection: if group is dragged outside includeBody, mark for removal
                 hpIncludeBody.addEventListener('dragover', (e) => { e.preventDefault(); });
+                hpExcludeBody.addEventListener('dragover', (e) => { e.preventDefault(); });
             }
 
-            // Detect drag leaving include area → mark group or chip for removal
+            // Detect drag leaving include area → mark group or chip for removal / cross-zone target
             document.addEventListener('dragover', (e) => {
                 const groups = hpIncludeBody.querySelectorAll('div[draggable="true"]');
+                const exclRect = hpExcludeBody.getBoundingClientRect();
+                const isOverExclude = e.clientX >= exclRect.left && e.clientX <= exclRect.right &&
+                    e.clientY >= exclRect.top && e.clientY <= exclRect.bottom;
+                // Precompute include group rects
+                const groupRects = [];
+                groups.forEach((g, idx) => {
+                    const r = g.getBoundingClientRect();
+                    groupRects.push({ el: g, idx, rect: r });
+                });
+                function findIncludeGroupAt(cx, cy) {
+                    for (const gr of groupRects) {
+                        if (cx >= gr.rect.left && cx <= gr.rect.right && cy >= gr.rect.top && cy <= gr.rect.bottom)
+                            return gr.idx;
+                    }
+                    return -1;
+                }
                 groups.forEach(g => {
                     if (g.__hpDragGroup) {
                         const rect = hpIncludeBody.getBoundingClientRect();
@@ -8253,27 +8332,52 @@
                         g.__hpDragRemove = !inside;
                     }
                 });
-                // Chip drag: mark for removal when outside the parent group
+                // Include chip drag: detect cross-zone target (exclude body or different include group)
                 const chips = hpIncludeBody.querySelectorAll('span[draggable="true"]');
                 chips.forEach(c => {
                     if (c.__hpChipDrag) {
                         const parentG = c.parentElement;
-                        if (parentG) {
-                            const rect = parentG.getBoundingClientRect();
-                            const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
-                                e.clientY >= rect.top && e.clientY <= rect.bottom;
-                            c.__hpChipRemove = !inside;
+                        // Reset highlight
+                        hpExcludeBody.style.outline = '';
+                        groups.forEach(g => g.style.outline = '');
+                        if (isOverExclude) {
+                            c.__hpChipTarget = { type: 'exclude' };
+                            c.__hpChipRemove = false;
+                            hpExcludeBody.style.outline = '2px dashed #c62828';
+                        } else {
+                            const gi = findIncludeGroupAt(e.clientX, e.clientY);
+                            if (gi >= 0 && gi !== c.__hpChipSrcGroup) {
+                                c.__hpChipTarget = { type: 'include', groupIdx: gi };
+                                c.__hpChipRemove = false;
+                                if (groupRects[gi]) groupRects[gi].el.style.outline = '2px dashed #2e7d32';
+                            } else if (parentG) {
+                                c.__hpChipTarget = null;
+                                const rect = parentG.getBoundingClientRect();
+                                const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                                    e.clientY >= rect.top && e.clientY <= rect.bottom;
+                                c.__hpChipRemove = !inside;
+                            }
                         }
                     }
                 });
-                // Exclude chip drag: mark for removal when outside exclude body
+                // Exclude chip drag: detect cross-zone target (include group) or removal
                 const exclChips = hpExcludeBody.querySelectorAll('span[draggable="true"]');
                 exclChips.forEach(c => {
                     if (c.__hpExclChipDrag) {
-                        const rect = hpExcludeBody.getBoundingClientRect();
-                        const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
-                            e.clientY >= rect.top && e.clientY <= rect.bottom;
-                        c.__hpExclChipRemove = !inside;
+                        // Reset highlight
+                        groups.forEach(g => g.style.outline = '');
+                        const gi = findIncludeGroupAt(e.clientX, e.clientY);
+                        if (gi >= 0) {
+                            c.__hpExclChipTarget = { type: 'include', groupIdx: gi };
+                            c.__hpExclChipRemove = false;
+                            if (groupRects[gi]) groupRects[gi].el.style.outline = '2px dashed #2e7d32';
+                        } else {
+                            c.__hpExclChipTarget = null;
+                            const rect = hpExcludeBody.getBoundingClientRect();
+                            const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                                e.clientY >= rect.top && e.clientY <= rect.bottom;
+                            c.__hpExclChipRemove = !inside;
+                        }
                     }
                 });
             });
@@ -8294,11 +8398,21 @@
                         chip.style.opacity = '0.4';
                         chip.__hpExclChipDrag = true;
                         chip.__hpExclChipRemove = false;
+                        chip.__hpExclChipTarget = null;
+                        chip.__hpExclChipNum = n;
                     });
                     chip.addEventListener('dragend', (e) => {
                         e.stopPropagation();
                         chip.style.opacity = '';
-                        if (chip.__hpExclChipRemove) {
+                        hpIncludeBody.querySelectorAll('div[draggable="true"]').forEach(g => g.style.outline = '');
+                        const tgt = chip.__hpExclChipTarget;
+                        if (tgt && tgt.type === 'include') {
+                            hpExclude.delete(n);
+                            hpIncludeGroups[tgt.groupIdx].add(n);
+                            hpHideMvDropdown();
+                            hpRenderInclude(); hpRenderExclude();
+                            recomputeRankFilterAndRebuild();
+                        } else if (chip.__hpExclChipRemove) {
                             hpExclude.delete(n);
                             hpHideMvDropdown();
                             hpRenderExclude();
@@ -8306,6 +8420,7 @@
                         }
                         chip.__hpExclChipDrag = false;
                         chip.__hpExclChipRemove = false;
+                        chip.__hpExclChipTarget = null;
                     });
                     hpExcludeBody.appendChild(chip);
                 });
@@ -8401,22 +8516,22 @@
                 return checkCnt(pairHitCount);
             }
             function recomputeRankFilter() {
-                if (lastSourceRecords.length === 0) { rfResult.textContent = '-'; return; }
+                if (lastSourceRecords.length === 0) { rfResult.textContent = '-'; return -1; }
                 const op = rfOp.value;
                 if (op === '[]') {
                     const rA = parseInt(rfRangeA.value, 10), rB = parseInt(rfRangeB.value, 10);
-                    if (!Number.isFinite(rA) || !Number.isFinite(rB) || rA < 1 || rB > 44 || rA > rB) { rfResult.textContent = '-'; return; }
+                    if (!Number.isFinite(rA) || !Number.isFinite(rB) || rA < 1 || rB > 44 || rA > rB) { rfResult.textContent = '-'; return -1; }
                 } else {
                     const val = parseInt(rfInp.value, 10);
-                    if (!Number.isFinite(val) || val < 1 || val > 44) { rfResult.textContent = '-'; return; }
+                    if (!Number.isFinite(val) || val < 1 || val > 44) { rfResult.textContent = '-'; return -1; }
                 }
                 const cntOp = cfOp.value;
                 if (cntOp === '[]') {
                     const cA = parseInt(cfRangeA.value, 10), cB = parseInt(cfRangeB.value, 10);
-                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) { rfResult.textContent = '-'; return; }
+                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) { rfResult.textContent = '-'; return -1; }
                 } else {
                     const cntVal = parseInt(cfInp.value, 10);
-                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) { rfResult.textContent = '-'; return; }
+                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) { rfResult.textContent = '-'; return -1; }
                 }
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
@@ -8430,6 +8545,7 @@
                 const total = lastSourceRecords.length || 0;
                 const pct = total > 0 ? Math.round((matchCount / total) * 100) : 0;
                 rfResult.textContent = `${matchCount} / ${total} (${pct}%)`;
+                return matchCount;
             }
             // When lọc is active and filter values change (from user input), re-render
             function recomputeRankFilterAndRebuild() {
