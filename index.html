@@ -7866,14 +7866,35 @@
                     flashRedBrief(inp);
                     return false;
                 }
-                if (cell67_locActive) rebuildAll();
+                if (cell67_locActive) { _skipAutoB = true; rebuildAll(); }
                 return true;
             }
-            // Reset count values to 1 (called when rank changes)
+            // Auto-calculate max b: set a=1, b=1, then increment b until
+            // recomputeRankFilter() stops changing (meaning b reached its max)
+            let _skipAutoB = false;
+            function recalcMaxCountB() {
+                if (cfOp.value !== '[]') return;
+                if (lastSourceRecords.length === 0) return;
+                cfRangeA.value = '1';
+                cfRangeB.value = '1';
+                let prevCount = recomputeRankFilter();
+                for (let b = 2; b <= 15; b++) {
+                    cfRangeB.value = String(b);
+                    const newCount = recomputeRankFilter();
+                    if (newCount === prevCount && prevCount !== -1) {
+                        cfRangeB.value = String(b - 1);
+                        recomputeRankFilter();
+                        break;
+                    }
+                    prevCount = newCount;
+                }
+            }
+            // Reset count values (called when rank changes)
             function resetCountValues() {
                 cfInp.value = '1';
                 cfRangeA.value = '1';
                 cfRangeB.value = '1';
+                recalcMaxCountB();
             }
             const rfRangeA = document.createElement('input');
             rfRangeA.type = 'number'; rfRangeA.min = 1; rfRangeA.max = 44; rfRangeA.value = '1';
@@ -7975,8 +7996,8 @@
             const cfRangeAWrap = makeCfRangeInputWrap(cfRangeA, 1, 15, () => cfRangeB, true);
             const cfRangeBWrap = makeCfRangeInputWrap(cfRangeB, 1, 15, () => cfRangeA, false);
             // Validation + flash for count range inputs
-            function cfRangeValidateA() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { cfRangeA.value = 1; a = 1; } if (a > 15) { cfRangeA.value = 15; a = 15; } if (Number.isFinite(b) && a > b) { flashRedBrief(cfRangeA); cfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
-            function cfRangeValidateB() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { cfRangeB.value = 1; b = 1; } if (b > 15) { cfRangeB.value = 15; b = 15; } if (Number.isFinite(a) && b < a) { flashRedBrief(cfRangeB); cfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
+            function cfRangeValidateA() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { cfRangeA.value = 1; a = 1; } if (a > 15) { cfRangeA.value = 15; a = 15; } if (Number.isFinite(b) && a > b) { flashRedBrief(cfRangeA); cfRangeA.value = b; } } _skipAutoB = true; recomputeRankFilterAndRebuild(); }
+            function cfRangeValidateB() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { cfRangeB.value = 1; b = 1; } if (b > 15) { cfRangeB.value = 15; b = 15; } if (Number.isFinite(a) && b < a) { flashRedBrief(cfRangeB); cfRangeB.value = a; } } _skipAutoB = true; recomputeRankFilterAndRebuild(); }
             cfRangeA.addEventListener('input', cfRangeValidateA);
             cfRangeA.addEventListener('change', cfRangeValidateA);
             cfRangeB.addEventListener('input', cfRangeValidateB);
@@ -7985,8 +8006,8 @@
             cfRangeA.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeB.focus(); cfRangeB.select(); } });
             cfRangeB.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeA.focus(); cfRangeA.select(); } });
             cfRangeWrap.appendChild(cfRangeAWrap); cfRangeWrap.appendChild(cfRangeBWrap);
-            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
-            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } _skipAutoB = true; recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } _skipAutoB = true; recomputeRankFilterAndRebuild(); });
             cfInp.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowUp') { e.preventDefault(); cfUp.click(); }
                 else if (e.key === 'ArrowDown') { e.preventDefault(); cfDn.click(); }
@@ -7994,6 +8015,7 @@
             cfOp.addEventListener('change', () => {
                 if (cfOp.value === '[]') { cfWrap.style.display = 'none'; cfRangeWrap.style.display = 'flex'; cfRangeA.value = '1'; cfRangeB.value = '1'; setTimeout(() => cfRangeB.focus(), 0); }
                 else { cfWrap.style.display = ''; cfRangeWrap.style.display = 'none'; }
+                recalcMaxCountB();
                 recomputeRankFilterAndRebuild();
             });
             // Build two-row controls layout with result centered between rows
@@ -8482,6 +8504,7 @@
             overlapBtn.addEventListener('click', () => {
                 cell67_overlapActive = !cell67_overlapActive;
                 updateOverlapBtnStyle();
+                recalcMaxCountB();
                 recomputeRankFilter();
                 if (cell67_locActive) rebuildAll();
             });
@@ -9621,12 +9644,39 @@
 
                     topTbody.innerHTML = topRows;
 
+                    // ── 6c. dblclick on incomplete top row to copy to clipboard ──
+                    if (S.length > 0 && S.length < 6) {
+                        const firstRow = topTbody.querySelector('tr:first-child');
+                        if (firstRow) {
+                            firstRow.style.cursor = 'pointer';
+                            firstRow.title = 'Nhấn đúp để copy vào clipboard';
+                            firstRow.addEventListener('dblclick', (e) => {
+                                e.preventDefault();
+                                // Build 6-position CSV: fill positions sequentially, empty positions are blank
+                                const positions = [];
+                                for (let i = 0; i < 6; i++) {
+                                    positions.push(i < S.length ? String(S[i]) : '');
+                                }
+                                const csv = positions.join(',');
+                                const flashOk = () => { firstRow.classList.add('copied-row'); setTimeout(() => firstRow.classList.remove('copied-row'), 600); };
+                                const fallback = () => { try { const ta = document.createElement('textarea'); ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.value = csv; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); flashOk(); } catch (_) { } };
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(csv).then(flashOk).catch(fallback);
+                                } else {
+                                    fallback();
+                                }
+                            });
+                        }
+                    }
+
                     // ── 7. Append "... x dòng nữa" with expand + pagination ──
                     if (S.length < 6) {
                         let allSourceRecords = S.length > 0 ? matchingRecords.slice() : rows.slice();
                         // By default show newest→oldest when not explicitly sorted via Tab
                         if (!topSorted) allSourceRecords = allSourceRecords.slice().reverse();
                         lastSourceRecords = allSourceRecords;
+                        if (!_skipAutoB) recalcMaxCountB();
+                        _skipAutoB = false;
                         recomputeRankFilter();
                         // When lọc is active, filter sourceRecords to only matching records
                         let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r)) : allSourceRecords;
@@ -9647,7 +9697,7 @@
                             const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                             const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
                             const rHp = (r.nums.length === 6) ? (cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted)) : '';
-                            return `<tr data-result="${rNumsSorted.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
+                            return `<tr data-result="${rNumsSorted.join(',')}" data-orig="${r.nums.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                         };
 
                         if (matchCount <= 5 && matchCount > 0) {
@@ -9789,7 +9839,8 @@
                                         const result = tr.dataset.result;
                                         if (!result) return;
                                         cell67_dblclickResult = result;
-                                        const nums = result.split(',').map(Number).filter(Number.isFinite);
+                                        const orig = tr.dataset.orig || result;
+                                        const nums = orig.split(',').map(Number).filter(Number.isFinite);
                                         if (nums.length === 6) pickNumbers(nums);
                                     });
                                 });
@@ -9830,7 +9881,8 @@
                                 const result = tr.dataset.result;
                                 if (!result) return;
                                 cell67_dblclickResult = result;
-                                const nums = result.split(',').map(Number).filter(Number.isFinite);
+                                const orig = tr.dataset.orig || result;
+                                const nums = orig.split(',').map(Number).filter(Number.isFinite);
                                 if (nums.length === 6) pickNumbers(nums);
                             });
                         });
@@ -9843,6 +9895,8 @@
                     }
                     if (S.length >= 6) {
                         lastSourceRecords = [];
+                        if (!_skipAutoB) recalcMaxCountB();
+                        _skipAutoB = false;
                         recomputeRankFilter();
                     }
                 }
@@ -23587,7 +23641,9 @@
 
             function validateLine(s) {
                 const parts = s.split(',').map(x => x.trim());
-                if (parts.length !== 6) return null;
+                if (parts.length < 1 || parts.length > 6) return null;
+                // Pad to 6 positions if fewer than 6 parts
+                while (parts.length < 6) parts.push('');
                 const result = parts.map(p => {
                     if (p === '' || p === '__') return null;
                     const n = parseInt(p, 10);
@@ -23595,6 +23651,7 @@
                     return n;
                 });
                 const filled = result.filter(v => v !== null);
+                if (filled.length === 0) return null;
                 if (new Set(filled).size !== filled.length) return null;
                 return result;
             }
