@@ -7802,8 +7802,8 @@
             const rfArrowSt = 'width:14px;height:9px;border-radius:2px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;padding:0;font-size:7px;line-height:9px;text-align:center;font-weight:700;';
             const rfUp = document.createElement('button'); rfUp.type = 'button'; rfUp.innerHTML = '▲'; rfUp.style.cssText = rfArrowSt;
             const rfDn = document.createElement('button'); rfDn.type = 'button'; rfDn.innerHTML = '▼'; rfDn.style.cssText = rfArrowSt;
-            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n >= 44 ? 1 : n + 1; tryChangeValue(rfInp, n); });
-            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 0; n = n <= 1 ? 44 : n - 1; tryChangeValue(rfInp, n); });
+            rfUp.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 1; if (n >= 44) { flashRedBrief(rfInp); return; } rfInp.value = n + 1; resetCountValues(); recomputeRankFilterAndRebuild(); });
+            rfDn.addEventListener('click', () => { let n = parseInt(rfInp.value, 10) || 1; if (n <= 1) { flashRedBrief(rfInp); return; } rfInp.value = n - 1; resetCountValues(); recomputeRankFilterAndRebuild(); });
             rfBtnGrp.appendChild(rfUp); rfBtnGrp.appendChild(rfDn);
             rfWrap.appendChild(rfInp); rfWrap.appendChild(rfBtnGrp);
             // Range inputs for rank [] mode
@@ -7819,26 +7819,28 @@
                 const up = document.createElement('button'); up.type = 'button'; up.innerHTML = '▲'; up.style.cssText = rfArrowSt;
                 const dn = document.createElement('button'); dn.type = 'button'; dn.innerHTML = '▼'; dn.style.cssText = rfArrowSt;
                 up.addEventListener('click', () => {
-                    let n = parseInt(inp.value, 10) || 0;
-                    n = n >= maxVal ? minVal : n + 1;
+                    let n = parseInt(inp.value, 10) || 1;
+                    if (n >= maxVal) { flashRedBrief(inp); return; }
+                    n = n + 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
                     if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
-                    tryChangeValue(inp, n);
+                    inp.value = n; resetCountValues(); recomputeRankFilterAndRebuild();
                 });
                 dn.addEventListener('click', () => {
-                    let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
-                    n = n <= minVal ? maxVal : n - 1;
+                    let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = 1;
+                    if (n <= minVal) { flashRedBrief(inp); return; }
+                    n = n - 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
                     if (!isA && Number.isFinite(pv) && n < pv) { flashRedBrief(inp); return; }
-                    tryChangeValue(inp, n);
+                    inp.value = n; resetCountValues(); recomputeRankFilterAndRebuild();
                 });
                 btnGrp.appendChild(up); btnGrp.appendChild(dn);
                 wrap.appendChild(inp); wrap.appendChild(btnGrp);
-                // Intercept keyboard ArrowUp/ArrowDown to route through tryChangeValue
+                // Intercept keyboard ArrowUp/ArrowDown
                 inp.addEventListener('keydown', (e) => {
                     if (e.key === 'ArrowUp') { e.preventDefault(); up.click(); }
                     else if (e.key === 'ArrowDown') { e.preventDefault(); dn.click(); }
@@ -7867,6 +7869,12 @@
                 if (cell67_locActive) rebuildAll();
                 return true;
             }
+            // Reset count values to 1 (called when rank changes)
+            function resetCountValues() {
+                cfInp.value = '1';
+                cfRangeA.value = '1';
+                cfRangeB.value = '1';
+            }
             const rfRangeA = document.createElement('input');
             rfRangeA.type = 'number'; rfRangeA.min = 1; rfRangeA.max = 44; rfRangeA.value = '1';
             const rfRangeB = document.createElement('input');
@@ -7874,8 +7882,8 @@
             const rfRangeAWrap = makeRangeInputWrap(rfRangeA, 1, 44, () => rfRangeB, true);
             const rfRangeBWrap = makeRangeInputWrap(rfRangeB, 1, 44, () => rfRangeA, false);
             // Validation + flash for rank range inputs
-            function rfRangeValidateA() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { rfRangeA.value = 1; a = 1; } if (a > 44) { rfRangeA.value = 44; a = 44; } if (Number.isFinite(b) && a > b) { flashRedBrief(rfRangeA); rfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
-            function rfRangeValidateB() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { rfRangeB.value = 1; b = 1; } if (b > 44) { rfRangeB.value = 44; b = 44; } if (Number.isFinite(a) && b < a) { flashRedBrief(rfRangeB); rfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
+            function rfRangeValidateA() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { rfRangeA.value = 1; a = 1; } if (a > 44) { rfRangeA.value = 44; a = 44; } if (Number.isFinite(b) && a > b) { flashRedBrief(rfRangeA); rfRangeA.value = b; } } resetCountValues(); recomputeRankFilterAndRebuild(); }
+            function rfRangeValidateB() { let a = parseInt(rfRangeA.value, 10), b = parseInt(rfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { rfRangeB.value = 1; b = 1; } if (b > 44) { rfRangeB.value = 44; b = 44; } if (Number.isFinite(a) && b < a) { flashRedBrief(rfRangeB); rfRangeB.value = a; } } resetCountValues(); recomputeRankFilterAndRebuild(); }
             rfRangeA.addEventListener('input', rfRangeValidateA);
             rfRangeA.addEventListener('change', rfRangeValidateA);
             rfRangeB.addEventListener('input', rfRangeValidateB);
@@ -7887,8 +7895,8 @@
             const rfResult = document.createElement('span');
             rfResult.style.cssText = 'font-size:13px;font-weight:700;min-width:28px;text-align:center;display:inline-block;padding:2px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);color:var(--text);';
             rfResult.textContent = '-';
-            rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
-            rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } recomputeRankFilterAndRebuild(); });
+            rfInp.addEventListener('input', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } resetCountValues(); recomputeRankFilterAndRebuild(); });
+            rfInp.addEventListener('change', () => { let n = parseInt(rfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) rfInp.value = 1; if (n > 44) rfInp.value = 44; } resetCountValues(); recomputeRankFilterAndRebuild(); });
             rfInp.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowUp') { e.preventDefault(); rfUp.click(); }
                 else if (e.key === 'ArrowDown') { e.preventDefault(); rfDn.click(); }
@@ -7896,7 +7904,7 @@
             rfOp.addEventListener('change', () => {
                 if (rfOp.value === '[]') { rfWrap.style.display = 'none'; rfRangeWrap.style.display = 'flex'; rfRangeA.value = '1'; rfRangeB.value = '1'; setTimeout(() => rfRangeB.focus(), 0); }
                 else { rfWrap.style.display = ''; rfRangeWrap.style.display = 'none'; }
-                recomputeRankFilterAndRebuild();
+                resetCountValues(); recomputeRankFilterAndRebuild();
             });
             // ── Count filter UI (second row) ──
             const cfLabel = document.createElement('span');
@@ -7909,14 +7917,14 @@
             const cfWrap = document.createElement('div');
             cfWrap.style.cssText = 'position:relative;display:inline-block;';
             const cfInp = document.createElement('input');
-            cfInp.type = 'number'; cfInp.min = 0; cfInp.max = 15; cfInp.value = '1';
+            cfInp.type = 'number'; cfInp.min = 1; cfInp.max = 15; cfInp.value = '1';
             cfInp.style.cssText = 'width:56px;box-sizing:border-box;text-align:center;padding-right:22px;border-radius:4px;border:1px solid var(--border);font-size:13px;';
             const cfBtnGrp = document.createElement('div');
             cfBtnGrp.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1px;z-index:3;';
             const cfUp = document.createElement('button'); cfUp.type = 'button'; cfUp.innerHTML = '▲'; cfUp.style.cssText = rfArrowSt;
             const cfDn = document.createElement('button'); cfDn.type = 'button'; cfDn.innerHTML = '▼'; cfDn.style.cssText = rfArrowSt;
-            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 0; n = n >= 15 ? 0 : n + 1; tryChangeValue(cfInp, n); });
-            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10); if (!Number.isFinite(n)) n = 0; n = n <= 0 ? 15 : n - 1; tryChangeValue(cfInp, n); });
+            cfUp.addEventListener('click', () => { let n = parseInt(cfInp.value, 10) || 1; if (n >= 15) { flashRedBrief(cfInp); return; } tryChangeValue(cfInp, n + 1); });
+            cfDn.addEventListener('click', () => { let n = parseInt(cfInp.value, 10); if (!Number.isFinite(n)) n = 1; if (n <= 1) { flashRedBrief(cfInp); return; } tryChangeValue(cfInp, n - 1); });
             cfBtnGrp.appendChild(cfUp); cfBtnGrp.appendChild(cfDn);
             cfWrap.appendChild(cfInp); cfWrap.appendChild(cfBtnGrp);
             // Range inputs for count [] mode
@@ -7932,8 +7940,9 @@
                 const up = document.createElement('button'); up.type = 'button'; up.innerHTML = '▲'; up.style.cssText = rfArrowSt;
                 const dn = document.createElement('button'); dn.type = 'button'; dn.innerHTML = '▼'; dn.style.cssText = rfArrowSt;
                 up.addEventListener('click', () => {
-                    let n = parseInt(inp.value, 10) || 0;
-                    n = n >= maxVal ? minVal : n + 1;
+                    let n = parseInt(inp.value, 10) || 1;
+                    if (n >= maxVal) { flashRedBrief(inp); return; }
+                    n = n + 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
@@ -7942,7 +7951,8 @@
                 });
                 dn.addEventListener('click', () => {
                     let n = parseInt(inp.value, 10); if (!Number.isFinite(n)) n = minVal;
-                    n = n <= minVal ? maxVal : n - 1;
+                    if (n <= minVal) { flashRedBrief(inp); return; }
+                    n = n - 1;
                     const peer = peerInpFn();
                     const pv = parseInt(peer.value, 10);
                     if (isA && Number.isFinite(pv) && n > pv) { flashRedBrief(inp); return; }
@@ -7951,7 +7961,7 @@
                 });
                 btnGrp.appendChild(up); btnGrp.appendChild(dn);
                 wrap.appendChild(inp); wrap.appendChild(btnGrp);
-                // Intercept keyboard ArrowUp/ArrowDown to route through tryChangeValue
+                // Intercept keyboard ArrowUp/ArrowDown
                 inp.addEventListener('keydown', (e) => {
                     if (e.key === 'ArrowUp') { e.preventDefault(); up.click(); }
                     else if (e.key === 'ArrowDown') { e.preventDefault(); dn.click(); }
@@ -7959,14 +7969,14 @@
                 return wrap;
             }
             const cfRangeA = document.createElement('input');
-            cfRangeA.type = 'number'; cfRangeA.min = 0; cfRangeA.max = 15; cfRangeA.value = '1';
+            cfRangeA.type = 'number'; cfRangeA.min = 1; cfRangeA.max = 15; cfRangeA.value = '1';
             const cfRangeB = document.createElement('input');
-            cfRangeB.type = 'number'; cfRangeB.min = 0; cfRangeB.max = 15; cfRangeB.value = '1';
-            const cfRangeAWrap = makeCfRangeInputWrap(cfRangeA, 0, 15, () => cfRangeB, true);
-            const cfRangeBWrap = makeCfRangeInputWrap(cfRangeB, 0, 15, () => cfRangeA, false);
+            cfRangeB.type = 'number'; cfRangeB.min = 1; cfRangeB.max = 15; cfRangeB.value = '1';
+            const cfRangeAWrap = makeCfRangeInputWrap(cfRangeA, 1, 15, () => cfRangeB, true);
+            const cfRangeBWrap = makeCfRangeInputWrap(cfRangeB, 1, 15, () => cfRangeA, false);
             // Validation + flash for count range inputs
-            function cfRangeValidateA() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 0) { cfRangeA.value = 0; a = 0; } if (a > 15) { cfRangeA.value = 15; a = 15; } if (Number.isFinite(b) && a > b) { flashRedBrief(cfRangeA); cfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
-            function cfRangeValidateB() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 0) { cfRangeB.value = 0; b = 0; } if (b > 15) { cfRangeB.value = 15; b = 15; } if (Number.isFinite(a) && b < a) { flashRedBrief(cfRangeB); cfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
+            function cfRangeValidateA() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(a)) { if (a < 1) { cfRangeA.value = 1; a = 1; } if (a > 15) { cfRangeA.value = 15; a = 15; } if (Number.isFinite(b) && a > b) { flashRedBrief(cfRangeA); cfRangeA.value = b; } } recomputeRankFilterAndRebuild(); }
+            function cfRangeValidateB() { let a = parseInt(cfRangeA.value, 10), b = parseInt(cfRangeB.value, 10); if (Number.isFinite(b)) { if (b < 1) { cfRangeB.value = 1; b = 1; } if (b > 15) { cfRangeB.value = 15; b = 15; } if (Number.isFinite(a) && b < a) { flashRedBrief(cfRangeB); cfRangeB.value = a; } } recomputeRankFilterAndRebuild(); }
             cfRangeA.addEventListener('input', cfRangeValidateA);
             cfRangeA.addEventListener('change', cfRangeValidateA);
             cfRangeB.addEventListener('input', cfRangeValidateB);
@@ -7975,8 +7985,8 @@
             cfRangeA.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeB.focus(); cfRangeB.select(); } });
             cfRangeB.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cfRangeA.focus(); cfRangeA.select(); } });
             cfRangeWrap.appendChild(cfRangeAWrap); cfRangeWrap.appendChild(cfRangeBWrap);
-            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
-            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 0) cfInp.value = 0; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('input', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
+            cfInp.addEventListener('change', () => { let n = parseInt(cfInp.value, 10); if (Number.isFinite(n)) { if (n < 1) cfInp.value = 1; if (n > 15) cfInp.value = 15; } recomputeRankFilterAndRebuild(); });
             cfInp.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowUp') { e.preventDefault(); cfUp.click(); }
                 else if (e.key === 'ArrowDown') { e.preventDefault(); cfDn.click(); }
@@ -8515,11 +8525,11 @@
                 let checkCnt;
                 if (cntOp === '[]') {
                     const cA = parseInt(cfRangeA.value, 10), cB = parseInt(cfRangeB.value, 10);
-                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) return false;
+                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 1 || cB > 15 || cA > cB) return false;
                     checkCnt = (c) => c >= cA && c <= cB;
                 } else {
                     const cntVal = parseInt(cfInp.value, 10);
-                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) return false;
+                    if (!Number.isFinite(cntVal) || cntVal < 1 || cntVal > 15) return false;
                     checkCnt = (c) => c === cntVal;
                 }
                 const ns = rec.nums;
@@ -8548,10 +8558,10 @@
                 const cntOp = cfOp.value;
                 if (cntOp === '[]') {
                     const cA = parseInt(cfRangeA.value, 10), cB = parseInt(cfRangeB.value, 10);
-                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 0 || cB > 15 || cA > cB) { rfResult.textContent = '-'; return -1; }
+                    if (!Number.isFinite(cA) || !Number.isFinite(cB) || cA < 1 || cB > 15 || cA > cB) { rfResult.textContent = '-'; return -1; }
                 } else {
                     const cntVal = parseInt(cfInp.value, 10);
-                    if (!Number.isFinite(cntVal) || cntVal < 0 || cntVal > 15) { rfResult.textContent = '-'; return -1; }
+                    if (!Number.isFinite(cntVal) || cntVal < 1 || cntVal > 15) { rfResult.textContent = '-'; return -1; }
                 }
                 let matchCount = 0;
                 for (const rec of lastSourceRecords) {
@@ -9577,7 +9587,7 @@
                     const resultAttr = S.length === 6 ? ` data-result="${currentNums.join(',')}"` : '';
                     // Neon class for date cell when T matches a historical 6-number record exactly
                     const dateCellClass = hasExactDateMatch ? ' class="cell67-neon-date"' : '';
-                    const hpHtml = (S.length === 6) ? computeHighestPairrank(currentNums) : '';
+                    const hpHtml = (S.length === 6) ? (cell67_locActive ? computeFilteredPairrank(currentNums) : computeHighestPairrank(currentNums)) : '';
 
                     // Build top table rows
                     let topRows = `<tr${resultAttr}><td${dateCellClass}>${dateDisplay}</td><td style="white-space:nowrap">${numsHtml || ''}</td><td style="white-space:nowrap">${hpHtml}</td><td style="white-space:nowrap">${ruleHtml}</td><td style="text-align:center">${kHtml67}</td><td style="text-align:center">${scoreStr}</td></tr>`;
@@ -9603,7 +9613,7 @@
                                 const rRule = computeRule67(r.nums);
                                 const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                                 const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                                const rHp = computeHighestPairrank(rNumsSorted);
+                                const rHp = cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted);
                                 topRows += `<tr data-result="${rNumsSorted.join(',')}"><td class="cell67-neon-date">${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                             });
                         }
@@ -9636,7 +9646,7 @@
                             const rRule = (r.nums.length === 6) ? computeRule67(r.nums) : '';
                             const rK = typeof window.__kHtml === 'function' ? window.__kHtml(r.nums.join(',')) : '';
                             const rScore = window.__scoreHtml ? window.__scoreHtml(r.nums.join(',')) : '';
-                            const rHp = (r.nums.length === 6) ? computeHighestPairrank(rNumsSorted) : '';
+                            const rHp = (r.nums.length === 6) ? (cell67_locActive ? computeFilteredPairrank(rNumsSorted) : computeHighestPairrank(rNumsSorted)) : '';
                             return `<tr data-result="${rNumsSorted.join(',')}" class="cell67-faded-row" style="opacity:0.45;cursor:pointer" title="Nhấn đúp để thay thế bảng T"><td>${r.date}</td><td style="white-space:nowrap">${rNumsHtml}</td><td style="white-space:nowrap">${rHp}</td><td style="white-space:nowrap">${rRule}</td><td style="text-align:center">${rK}</td><td style="text-align:center">${rScore}</td></tr>`;
                         };
 
@@ -9904,8 +9914,7 @@
                     if (S.length < 6 && lastSourceRecords.length > 0) {
                         srcRecsForLead = cell67_locActive
                             ? lastSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r))
-                            : hpFilterActive ? lastSourceRecords.filter(r => recordMatchesHPFilter(r))
-                                : lastSourceRecords;
+                            : lastSourceRecords;
                         if (cell67_locActive && !cell67_overlapActive) {
                             srcRecsForLead = srcRecsForLead.filter(r => r.nums.length === 6 ? !hasPairrankOverlap(r.nums) : true);
                         }
@@ -9921,7 +9930,7 @@
                     if (srcMissing.length > 0 && srcMissing.length < 45) {
                         const countBadge = `<span class="cell67-srcmiss-count" style="background:#c62828;color:#fff;padding:1px 5px;border-radius:3px;font-weight:700;margin:0 2px;cursor:pointer">[${srcMissing.length}]</span>`;
                         const numsStr = `<span class="cell67-srcmiss-nums" style="cursor:pointer;${cell67_srcMissingActive ? 'color:#f44336;font-weight:700' : ''}">${srcMissing.join(',')}</span>`;
-                        leadEl67.innerHTML = `<span class="cell67-srcmiss-label" style="cursor:pointer;user-select:none" title="Dblclick để tô đỏ trên bảng T">missing${cell67_srcMissingActive ? countBadge : countBadge}: ${numsStr}</span>`;
+                        leadEl67.innerHTML = `<span class="cell67-srcmiss-label" style="cursor:pointer;user-select:none" title="Click để tô đỏ trên bảng T">missing${cell67_srcMissingActive ? countBadge : countBadge}: ${numsStr}</span>`;
                     } else if (srcMissing.length === 0) {
                         leadEl67.textContent = 'missing[0]: (không có)';
                     } else {
@@ -10021,7 +10030,7 @@
             // ── Dblclick handler on lead element: toggle source-missing red styling ──
             if (leadEl67) {
                 leadEl67.style.cursor = 'pointer';
-                leadEl67.addEventListener('dblclick', (e) => {
+                leadEl67.addEventListener('click', (e) => {
                     e.preventDefault();
                     cell67_srcMissingActive = !cell67_srcMissingActive;
                     rebuildAll();
