@@ -8266,6 +8266,16 @@
                         }
                     }
                 });
+                // Exclude chip drag: mark for removal when outside exclude body
+                const exclChips = hpExcludeBody.querySelectorAll('span[draggable="true"]');
+                exclChips.forEach(c => {
+                    if (c.__hpExclChipDrag) {
+                        const rect = hpExcludeBody.getBoundingClientRect();
+                        const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                            e.clientY >= rect.top && e.clientY <= rect.bottom;
+                        c.__hpExclChipRemove = !inside;
+                    }
+                });
             });
 
             // ── Render Exclude chips ──
@@ -8274,7 +8284,29 @@
                 [...hpExclude].sort((a, b) => a - b).forEach(n => {
                     const chip = document.createElement('span');
                     chip.textContent = n;
-                    chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 3px;border-radius:3px;background:#c62828;color:#fff;font-size:11px;font-weight:700;font-family:monospace;';
+                    chip.draggable = true;
+                    chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 3px;border-radius:3px;background:#c62828;color:#fff;font-size:11px;font-weight:700;font-family:monospace;cursor:grab;';
+                    chip.title = `Kéo ra ngoài để loại ${n} khỏi Exclude`;
+                    chip.addEventListener('dragstart', (e) => {
+                        e.stopPropagation();
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', `hp-excl-chip-${n}`);
+                        chip.style.opacity = '0.4';
+                        chip.__hpExclChipDrag = true;
+                        chip.__hpExclChipRemove = false;
+                    });
+                    chip.addEventListener('dragend', (e) => {
+                        e.stopPropagation();
+                        chip.style.opacity = '';
+                        if (chip.__hpExclChipRemove) {
+                            hpExclude.delete(n);
+                            hpHideMvDropdown();
+                            hpRenderExclude();
+                            recomputeRankFilterAndRebuild();
+                        }
+                        chip.__hpExclChipDrag = false;
+                        chip.__hpExclChipRemove = false;
+                    });
                     hpExcludeBody.appendChild(chip);
                 });
             }
@@ -8295,9 +8327,11 @@
             overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#1b5e20;color:#00ff88;border:1px solid #00ff88;border-radius:6px;font-weight:600;text-shadow:0 0 8px #00ff88,0 0 16px #00ff88;';
             function updateOverlapBtnStyle() {
                 if (cell67_overlapActive) {
+                    overlapBtn.textContent = 'Overlap';
                     overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#1b5e20;color:#00ff88;border:1px solid #00ff88;border-radius:6px;font-weight:600;text-shadow:0 0 8px #00ff88,0 0 16px #00ff88;';
                 } else {
-                    overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;font-weight:600;';
+                    overlapBtn.textContent = 'Separate';
+                    overlapBtn.style.cssText = 'font-size:13px;padding:4px 10px;cursor:pointer;background:#555;color:#fff;border:1px solid #777;border-radius:6px;font-weight:600;';
                 }
             }
             overlapBtn.addEventListener('click', () => {
@@ -8400,7 +8434,7 @@
             // When lọc is active and filter values change (from user input), re-render
             function recomputeRankFilterAndRebuild() {
                 recomputeRankFilter();
-                if (cell67_locActive || hpFilterActive) rebuildAll();
+                if (cell67_locActive) rebuildAll();
             }
 
             // ── State ──
@@ -9425,7 +9459,7 @@
                             // When lọc is active AND overlap is OFF, filter out overlap records
                             if (cell67_locActive && !cell67_overlapActive) exactToShow = exactToShow.filter(r => !hasPairrankOverlap(r.nums));
                             // When lọc is active, apply HP filter to exact matches
-                            if (cell67_locActive || hpFilterActive) exactToShow = exactToShow.filter(r => recordMatchesHPFilter(r));
+                            if (cell67_locActive) exactToShow = exactToShow.filter(r => recordMatchesHPFilter(r));
                             exactToShow.forEach(r => {
                                 const rNumsSorted = r.nums.slice().sort((a, b) => a - b);
                                 const rNumsDisplay = topSorted ? rNumsSorted : S.slice();
@@ -9450,8 +9484,6 @@
                         recomputeRankFilter();
                         // When lọc is active, filter sourceRecords to only matching records
                         let sourceRecords = cell67_locActive ? allSourceRecords.filter(r => recordMatchesRankCountFilter(r) && recordMatchesHPFilter(r)) : allSourceRecords;
-                        // Apply HP filter even when lọc is off, if HP is active
-                        if (!cell67_locActive && hpFilterActive) sourceRecords = sourceRecords.filter(r => recordMatchesHPFilter(r));
                         // When lọc is active AND overlap is OFF, also filter out overlap records
                         if (cell67_locActive && !cell67_overlapActive) sourceRecords = sourceRecords.filter(r => r.nums.length === 6 ? !hasPairrankOverlap(r.nums) : true);
                         const matchCount = sourceRecords.length;
